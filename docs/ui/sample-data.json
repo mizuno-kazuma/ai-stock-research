@@ -1,0 +1,875 @@
+{
+  "_meta": {
+    "purpose": "Realistic mock data for rendering every screen of the AI stock research tool. Use these values verbatim so the generated UI looks like the real product.",
+    "as_of": "2026-08-22",
+    "generated_at": "2026-08-22T09:47:00Z",
+    "timezone": "Asia/Tokyo",
+    "note": "All prices in the live series are delayed reference values, not execution prices. The JP research price series is 12 weeks behind because of the J-Quants free plan."
+  },
+
+  "settings": {
+    "ui.direction_colors": "jp",
+    "ui.theme": "dark",
+    "ui.default_market": "auto",
+    "ui.number_format": "jp",
+    "ui.density": "standard",
+    "llm.daily_cap_usd": 1.5,
+    "llm.monthly_cap_usd": 20.0,
+    "llm.kill_switch": false,
+    "llm.alert_threshold_pct": 80,
+    "data.jquants_plan": "free",
+    "data.tdnet_enabled": false,
+    "data.universe": "market_cap_30b_plus",
+    "analysis.default_horizon": "H20",
+    "analysis.max_recommendations": 12,
+    "analysis.max_per_sector": 3,
+    "analysis.exclude_realized_vol_above": 0.40,
+    "analysis.exclude_pre_earnings_days": 3,
+    "analysis.min_adv_jpy": 100000000,
+    "analysis.min_market_cap_jpy": 30000000000,
+    "analysis.weight_approval_mode": "manual",
+    "notify.web_push_enabled": false,
+    "notify.webhook_url": null,
+    "notify.quiet_hours": { "from": "22:00", "to": "07:00" }
+  },
+
+  "system_health": {
+    "status": "degraded",
+    "app_version": "0.9.2",
+    "commit": "a3f91c2",
+    "python_version": "3.12.7",
+    "node_version": "22.14.0",
+    "wsl_distro": "Ubuntu 24.04 (WSL2)",
+    "networking_mode": "mirrored",
+    "tailscale": { "location": "windows_host", "ip": "100.92.14.203", "serve_enabled": true },
+    "python_utf8_mode": true,
+    "locale": "C.UTF-8",
+    "data_dir": "/home/user/ai-stock/data",
+    "data_dir_on_windows_mount": false,
+    "storage_bytes": {
+      "duckdb": 25890000000,
+      "parquet": 13744000000,
+      "sqlite": 86000000,
+      "lancedb": 1288000000,
+      "free": 442000000000
+    },
+    "scheduler": {
+      "alive": true,
+      "next_run": { "job_name": "collector_jp", "scheduled_at": "2026-08-23T06:00:00+09:00" },
+      "process_uptime_sec": 224400,
+      "last_host_reboot": "2026-08-20T03:14:00+09:00",
+      "last_host_reboot_cause": "windows_update",
+      "auto_resumed_jobs": 2
+    },
+    "last_backup": { "finished_at": "2026-08-22T03:00:12+09:00", "status": "success", "target": "/mnt/d/ai-stock-backup" },
+    "test_results": [
+      { "id": "T-LEAK-01", "label_ja": "禁止された交差検証手法を使用していない", "status": "pass", "ran_at": "2026-08-22T02:41:00+09:00" },
+      { "id": "T-LEAK-02", "label_ja": "参考現在値をモデルに渡していない", "status": "pass", "ran_at": "2026-08-22T02:41:00+09:00" },
+      { "id": "T-LEAK-03", "label_ja": "学習期間と検証期間が重複していない", "status": "pass", "ran_at": "2026-08-22T02:41:00+09:00" },
+      { "id": "T-LEAK-04", "label_ja": "合成ランダムデータでRank ICがゼロ近傍", "status": "pass", "detail_ja": "IC=0.004, n=248", "ran_at": "2026-08-22T02:41:00+09:00" },
+      { "id": "T-LEAK-05", "label_ja": "バックテストのエントリーが翌営業日始値", "status": "pass", "ran_at": "2026-08-22T02:41:00+09:00" },
+      { "id": "T-PIT-01", "label_ja": "財務データは開示日基準で参照", "status": "pass", "ran_at": "2026-08-22T02:41:00+09:00" }
+    ]
+  },
+
+  "data_freshness": [
+    { "source": "jquants", "label_ja": "J-Quants", "latest_as_of": "2026-05-30", "expected_as_of": "2026-05-30", "status": "ok", "note_ja": "無料プランの12週遅延によるものです", "rate_limit": "5 req/min", "credential": "configured" },
+    { "source": "yfinance_jp", "label_ja": "yfinance (日本株)", "latest_as_of": "2026-08-22T15:10:00+09:00", "expected_as_of": "2026-08-22T15:10:00+09:00", "status": "ok", "credential": "not_required" },
+    { "source": "yfinance_us", "label_ja": "yfinance (米国株)", "latest_as_of": "2026-08-22T05:10:00+09:00", "expected_as_of": "2026-08-22T05:10:00+09:00", "status": "ok", "credential": "not_required" },
+    { "source": "edinet", "label_ja": "EDINET", "latest_as_of": "2026-08-22T15:04:00+09:00", "expected_as_of": "2026-08-22T15:04:00+09:00", "status": "ok", "credential": "configured" },
+    { "source": "tdnet", "label_ja": "TDnet", "latest_as_of": null, "expected_as_of": null, "status": "disabled", "note_ja": "設定で無効になっています", "credential": "not_required" },
+    { "source": "sec_edgar", "label_ja": "SEC EDGAR", "latest_as_of": "2026-08-21", "expected_as_of": "2026-08-21", "status": "ok", "credential": "user_agent_set" },
+    { "source": "fred", "label_ja": "FRED", "latest_as_of": "2026-08-21", "expected_as_of": "2026-08-21", "status": "ok", "credential": "configured" }
+  ],
+
+  "dashboard": {
+    "as_of": "2026-08-22",
+    "market": "JP",
+    "index": { "symbol": "TOPIX", "label_ja": "TOPIX", "value": 2847.32, "change_pct": 0.0084, "change_abs": 23.71, "as_of": "2026-08-21", "source_ja": "終値" },
+    "index_us": { "symbol": "SPX", "label_ja": "S&P 500", "value": 5612.48, "change_pct": -0.0032, "change_abs": -18.04, "as_of": "2026-08-21", "source_ja": "終値" },
+    "fx_summary": { "pair": "USDJPY", "value": 152.34, "change_pct": 0.0041, "change_abs": 0.62, "as_of": "2026-08-22T18:35:00+09:00" },
+    "portfolio_summary": { "market_value_jpy": 8472150, "unrealized_pl_jpy": 495120, "unrealized_pl_pct": 0.062, "daily_pl_jpy": 38420, "daily_pl_pct": 0.0046 },
+    "warnings": [
+      { "code": "TDNET_DISABLED", "severity": "info", "message_ja": "適時開示（TDnet）の取得は設定で無効になっています。" }
+    ]
+  },
+
+  "jobs": [
+    {
+      "job_run_id": 1284, "job_name": "collector_jp", "label_ja": "データ収集", "status": "partial",
+      "started_at": "2026-08-22T06:00:04+09:00", "finished_at": "2026-08-22T06:06:56+09:00", "duration_sec": 412,
+      "trigger": "schedule", "attempt": 1,
+      "output_summary_ja": "価格 1,994銘柄 · 開示 12件 · 為替 1系列",
+      "failed_steps": ["tdnet"],
+      "checkpoint": { "phase": "tdnet", "cursor": "2026-08-22T06:03:11", "completed": 42, "total": 61 },
+      "phases": [
+        { "name": "prices_jquants", "label_ja": "J-Quants 価格", "status": "success", "duration_sec": 134, "detail_ja": "1,994銘柄 / 新規 1,994行" },
+        { "name": "prices_yfinance", "label_ja": "yfinance 参考現在値", "status": "success", "duration_sec": 108, "detail_ja": "1,994銘柄 / 欠損 12銘柄" },
+        { "name": "edinet_list", "label_ja": "EDINET 書類一覧", "status": "success", "duration_sec": 22, "detail_ja": "書類一覧 148件 / 対象 12件" },
+        { "name": "edinet_docs", "label_ja": "EDINET 書類取得", "status": "success", "duration_sec": 112, "detail_ja": "PDF 12件 (18.2MB)" },
+        { "name": "tdnet", "label_ja": "TDnet", "status": "failed", "duration_sec": 34, "detail_ja": "HTTP 503 (3回試行)" },
+        { "name": "fred", "label_ja": "FRED", "status": "success", "duration_sec": 8, "detail_ja": "6系列 / 改定 1件" },
+        { "name": "sec_edgar", "label_ja": "SEC EDGAR", "status": "skipped", "duration_sec": 0, "detail_ja": "市場がJPのためスキップ" }
+      ],
+      "metrics": { "rows_upserted": 14208, "raw_files_written": 61, "raw_bytes": 12412844, "rate_limit_waits": 18, "rate_limit_wait_sec": 212, "retries": 4, "schema_drift_detected": 0, "data_gaps_found": 12 }
+    },
+    { "job_run_id": 1285, "job_name": "analyst", "label_ja": "分析", "status": "success", "started_at": "2026-08-22T06:12:00+09:00", "finished_at": "2026-08-22T06:16:08+09:00", "duration_sec": 248, "trigger": "schedule", "attempt": 1, "output_summary_ja": "特徴量 42項目 x 1,842銘柄 · GARCH 収束 · 為替予測 3モデル", "failed_steps": [], "metrics": { "features_written": 77364, "garch_converged": true, "fx_models_fitted": 3, "coverage_pct": 0.924 } },
+    { "job_run_id": 1286, "job_name": "researcher", "label_ja": "資料読解", "status": "partial", "started_at": "2026-08-22T06:25:00+09:00", "finished_at": "2026-08-22T06:31:14+09:00", "duration_sec": 374, "trigger": "schedule", "attempt": 1, "output_summary_ja": "資料 8件を要約 · 定性スコア 34銘柄 · $0.18", "failed_steps": ["summarize:S100XYZ3"], "metrics": { "docs_summarized": 8, "cache_hits": 24, "cache_misses": 8, "qual_scored_tickers": 34, "cost_usd": 0.18 } },
+    { "job_run_id": 1287, "job_name": "strategist", "label_ja": "推奨生成", "status": "success", "started_at": "2026-08-22T06:35:00+09:00", "finished_at": "2026-08-22T06:38:41+09:00", "duration_sec": 221, "trigger": "schedule", "attempt": 1, "output_summary_ja": "候補 34件 → 推奨 12件 · $0.21", "failed_steps": [], "metrics": { "candidates": 34, "generated": 12, "cost_usd": 0.21, "memory_ids_used": [7, 12, 18] } },
+    { "job_run_id": 1288, "job_name": "critic", "label_ja": "レビュー", "status": "success", "started_at": "2026-08-22T06:42:00+09:00", "finished_at": "2026-08-22T06:44:52+09:00", "duration_sec": 172, "trigger": "schedule", "attempt": 1, "output_summary_ja": "承認 10件 · 修正 2件 · 却下 2件 · $0.09", "failed_steps": [], "metrics": { "approved": 10, "revised": 2, "rejected": 2, "cost_usd": 0.09 } },
+    { "job_run_id": 1289, "job_name": "evaluator", "label_ja": "実績評価", "status": "success", "started_at": "2026-08-22T06:47:00+09:00", "finished_at": "2026-08-22T06:47:38+09:00", "duration_sec": 38, "trigger": "schedule", "attempt": 1, "output_summary_ja": "実績確定 18件 · 教訓 1件追加 · 重み提案 1件", "failed_steps": [], "metrics": { "outcomes_finalized": 18, "memory_added": 1, "weight_proposals": 1 } },
+    { "job_run_id": 1279, "job_name": "collector_jp", "label_ja": "データ収集", "status": "interrupted", "started_at": "2026-08-20T03:10:00+09:00", "finished_at": null, "duration_sec": 240, "trigger": "schedule", "attempt": 1, "output_summary_ja": "Windows Update による再起動で中断", "failed_steps": [], "checkpoint": { "phase": "prices_yfinance", "cursor": "7180", "completed": 1204, "total": 1994 } },
+    { "job_run_id": 1280, "job_name": "collector_jp", "label_ja": "データ収集", "status": "success", "started_at": "2026-08-20T03:22:00+09:00", "finished_at": "2026-08-20T03:26:31+09:00", "duration_sec": 271, "trigger": "auto_resume", "attempt": 2, "output_summary_ja": "チェックポイントから再開し完了（790銘柄を追加取得）", "failed_steps": [] }
+  ],
+
+  "alerts": [
+    { "alert_id": 4412, "severity": "warning", "category": "data", "title_ja": "J-Quantsの価格データが5営業日更新されていません", "created_at": "2026-08-22T06:12:00+09:00", "is_read": false, "link": "/settings#data" },
+    { "alert_id": 4413, "severity": "info", "category": "filing", "title_ja": "6758 ソニーグループが業績予想の修正を開示しました", "created_at": "2026-08-22T15:04:00+09:00", "is_read": false, "link": "/filings?doc_id=EDINET-S100XA12" },
+    { "alert_id": 4414, "severity": "warning", "category": "cost", "title_ja": "LLMの日次予算の80%（$1.20 / $1.50）に達しました", "created_at": "2026-08-22T06:31:00+09:00", "is_read": false, "link": "/agent?tab=cost" },
+    { "alert_id": 4415, "severity": "info", "category": "earnings", "title_ja": "7203 トヨタ自動車の決算発表が3営業日後です", "created_at": "2026-08-22T06:47:00+09:00", "is_read": false, "link": "/stocks/JP/7203" },
+    { "alert_id": 4416, "severity": "danger", "category": "data", "title_ja": "TDnetの取得が3日連続で失敗しています", "created_at": "2026-08-22T06:14:00+09:00", "is_read": true, "link": "/agent?job_run_id=1284" },
+    { "alert_id": 4417, "severity": "warning", "category": "recommendation", "title_ja": "保有銘柄 6758 の見立てが「縮小検討」に変わりました", "created_at": "2026-08-22T06:44:00+09:00", "is_read": false, "link": "/recommendations?rec_id=01J8XKQ3M4N5P6R7S8T9V0W1X5" }
+  ],
+
+  "recommendations": [
+    {
+      "rec_id": "01J8XKQ3M4N5P6R7S8T9V0W1X2",
+      "generated_at": "2026-08-22T06:38:12+09:00",
+      "as_of": "2026-08-22",
+      "ticker": "7203", "market": "JP", "name_local": "トヨタ自動車", "name_en": "Toyota Motor Corporation",
+      "sector_code": "3050", "sector_name": "輸送用機器",
+      "action": "watch", "horizon": "H20", "conviction": "medium", "conviction_score": 0.58,
+      "quant_score": 78.4, "qual_score": 0.70, "qual_delta": 8.4, "total_score": 86.8, "ml_pred": 0.021,
+      "expected_ret": 0.024, "expected_ret_lo": -0.031, "expected_ret_hi": 0.079,
+      "hit_rate_prior": 0.58, "n_prior_samples": 34,
+      "thesis_ja": "北米向け販売が会社計画を上回り、2027年3月期の営業利益予想が5.0%上方修正された（8月8日開示、決算短信 p.3）。セクター内でPERは下位25%圏にあり、ROICは12.4%で同セクター中位を上回る。会社の為替前提が1ドル148円のため、152円台の現状は上振れ要因となる。",
+      "bear_case_ja": "上方修正の主因は為替効果で、数量ベースの改善は前年同期比+1.2%にとどまる（決算短信 p.7）。円高に転じた場合、上方修正分の大半が消える構造にある。加えて北米では競合の値引き圧力が続いており、下期の販売奨励金の増加リスクが開示されている（有価証券報告書 p.24）。セクター内モメンタムは強いが、これは過去3ヶ月の円安を織り込んだ結果であり、為替が反転すれば同じ経路で逆回転する。",
+      "invalidation_ja": "1ドル145円を下回る、または月次販売台数が2ヶ月連続で前年割れとなった場合、上方修正の前提が崩れるため本推奨は無効とする。",
+      "reason_codes": ["VAL_CHEAP_VS_SECTOR", "REV_UP_GUIDANCE", "MOM_STRONG_12M", "FX_TAILWIND", "LLM_NEW_RISK_DISCLOSED", "EVENT_EARNINGS_SOON"],
+      "factor_scores": { "value": 1.42, "quality": 0.88, "momentum": 1.05, "growth": 0.31, "revision": 1.67, "volatility": -0.24, "liquidity": 0.92 },
+      "entry_ref_price": 3125, "entry_ref_source": "yfinance", "entry_ref_note_ja": "15分遅延・2026年8月22日 15:10 取得。約定価格には使用できません。",
+      "target_ref_price": 3420, "stop_ref_price": 2890,
+      "citations": [
+        { "doc_id": "EDINET-S100XA07", "doc_type": "earnings_flash", "title": "2027年3月期 第1四半期決算短信〔IFRS〕(連結)", "filed_at": "2026-08-08", "page": 3, "quote": "北米市場における販売が計画を上回ったことから、通期の営業利益予想を5.0%上方修正いたします", "verification": "verified" },
+        { "doc_id": "EDINET-S100XA07", "doc_type": "earnings_flash", "title": "2027年3月期 第1四半期決算短信〔IFRS〕(連結)", "filed_at": "2026-08-08", "page": 7, "quote": "販売台数ベースでは前年同期比1.2%の増加にとどまっており", "verification": "verified" },
+        { "doc_id": "EDINET-S100W412", "doc_type": "annual_report", "title": "第122期 有価証券報告書", "filed_at": "2026-06-24", "page": 24, "quote": "北米市場における競争環境の激化により、販売奨励金が増加する可能性があります", "verification": "verified" },
+        { "doc_id": "EDINET-S100XA07", "doc_type": "earnings_flash", "title": "2027年3月期 第1四半期決算短信〔IFRS〕(連結)", "filed_at": "2026-08-08", "page": 3, "quote": "為替前提は1米ドル148円としております", "verification": "verified_fuzzy" }
+      ],
+      "data_freshness": [
+        { "source": "jquants", "latest_as_of": "2026-05-30" },
+        { "source": "yfinance_jp", "latest_as_of": "2026-08-22T15:10:00+09:00" },
+        { "source": "edinet", "latest_as_of": "2026-08-08" }
+      ],
+      "past_performance": { "n": 34, "hit_rate": 0.58, "avg_excess_return": 0.019, "max_drawdown": -0.084, "period_ja": "2024年9月 - 2026年7月" },
+      "critic_verdict": "approved", "critic_notes_ja": null,
+      "memory_ids_used": [7, 12],
+      "flags": []
+    },
+    {
+      "rec_id": "01J8XKQ3M4N5P6R7S8T9V0W1X3",
+      "generated_at": "2026-08-22T06:38:20+09:00", "as_of": "2026-08-22",
+      "ticker": "6501", "market": "JP", "name_local": "日立製作所", "name_en": "Hitachi, Ltd.",
+      "sector_code": "3650", "sector_name": "電気機器",
+      "action": "accumulate", "horizon": "H20", "conviction": "high", "conviction_score": 0.74,
+      "quant_score": 82.1, "qual_score": 0.55, "qual_delta": 6.6, "total_score": 88.7, "ml_pred": 0.034,
+      "expected_ret": 0.031, "expected_ret_lo": -0.018, "expected_ret_hi": 0.084,
+      "hit_rate_prior": 0.61, "n_prior_samples": 42,
+      "thesis_ja": "デジタルシステム&サービス部門の受注が前年同期比+14%と加速し、通期の調整後EBITAマージン目標が11.5%から12.2%へ引き上げられた（8月1日開示、決算短信 p.2）。ROICは14.8%で同セクター上位10%圏にあり、EV/EBITDAは9.1倍でセクター中央値の11.4倍を下回る。",
+      "bear_case_ja": "受注の伸びは大型の官公庁案件2件に依存しており、これを除くと前年同期比+4%にとどまる（決算説明資料 p.11）。マージン目標の引き上げは価格転嫁の継続が前提で、資材価格が再上昇すれば達成は難しい。また株価は過去12ヶ月で+38%上昇しており、割安さは相対評価に依存している。絶対的なPER 18.4倍は過去5年レンジの上限圏にある。",
+      "invalidation_ja": "四半期受注が前年同期比でマイナスに転じた場合、または調整後EBITAマージンが11.5%を下回った場合は前提が崩れる。",
+      "reason_codes": ["QLT_HIGH_ROIC", "GRW_ACCELERATING", "REV_UP_GUIDANCE", "MOM_NEAR_52W_HIGH", "VAL_CHEAP_VS_SECTOR"],
+      "factor_scores": { "value": 0.64, "quality": 1.88, "momentum": 1.42, "growth": 1.51, "revision": 1.22, "volatility": -0.08, "liquidity": 1.14 },
+      "entry_ref_price": 4218, "entry_ref_source": "yfinance", "entry_ref_note_ja": "15分遅延・2026年8月22日 15:10 取得。約定価格には使用できません。",
+      "target_ref_price": 4640, "stop_ref_price": 3880,
+      "citations": [
+        { "doc_id": "EDINET-S100X902", "doc_type": "earnings_flash", "title": "2027年3月期 第1四半期決算短信〔IFRS〕(連結)", "filed_at": "2026-08-01", "page": 2, "quote": "調整後EBITAマージンの通期見通しを11.5%から12.2%に引き上げます", "verification": "verified" },
+        { "doc_id": "EDINET-S100X903", "doc_type": "other", "title": "2027年3月期 第1四半期 決算説明資料", "filed_at": "2026-08-01", "page": 11, "quote": "大型案件2件を除く受注成長率は4%となります", "verification": "verified" }
+      ],
+      "data_freshness": [
+        { "source": "jquants", "latest_as_of": "2026-05-30" },
+        { "source": "yfinance_jp", "latest_as_of": "2026-08-22T15:10:00+09:00" },
+        { "source": "edinet", "latest_as_of": "2026-08-01" }
+      ],
+      "past_performance": { "n": 42, "hit_rate": 0.61, "avg_excess_return": 0.024, "max_drawdown": -0.071, "period_ja": "2024年9月 - 2026年7月" },
+      "critic_verdict": "approved", "critic_notes_ja": null,
+      "memory_ids_used": [12],
+      "flags": []
+    },
+    {
+      "rec_id": "01J8XKQ3M4N5P6R7S8T9V0W1X4",
+      "generated_at": "2026-08-22T06:38:29+09:00", "as_of": "2026-08-22",
+      "ticker": "NVDA", "market": "US", "name_local": "NVIDIA Corporation", "name_en": "NVIDIA Corporation",
+      "sector_code": "45", "sector_name": "Information Technology",
+      "action": "watch", "horizon": "H20", "conviction": "low", "conviction_score": 0.34,
+      "quant_score": 71.2, "qual_score": 0.28, "qual_delta": 3.4, "total_score": 74.6, "ml_pred": 0.012,
+      "expected_ret": 0.014, "expected_ret_lo": -0.062, "expected_ret_hi": 0.091,
+      "hit_rate_prior": 0.52, "n_prior_samples": 11,
+      "thesis_ja": "データセンター部門の売上が前四半期比+9%と伸び、次世代製品の供給制約が緩和したとの説明があった（10-Q, p.18）。予想EPSに対する成長率は依然高い。",
+      "bear_case_ja": "予想PER 38.4倍は過去3年の中位を上回り、成長率の鈍化を織り込んでいない。売上の上位2顧客への依存度が34%と開示されており（10-Q, p.24）、1社の設備投資計画の変更で見通しが大きく変わる。実現ボラティリティは42%で、20営業日の予測区間は-6.2%から+9.1%と広く、方向性の判断材料としては弱い。類似条件のサンプルは11件しかなく、的中率52%は参考値にすぎない。",
+      "invalidation_ja": "データセンター部門の前四半期比成長が5%を下回った場合、または上位顧客の設備投資計画の下方修正が開示された場合。",
+      "reason_codes": ["GRW_ACCELERATING", "MOM_STRONG_12M", "VOL_HIGH_REGIME", "MODEL_LOW_CONFIDENCE"],
+      "factor_scores": { "value": -1.24, "quality": 1.62, "momentum": 1.88, "growth": 2.14, "revision": 0.42, "volatility": -1.42, "liquidity": 1.94 },
+      "entry_ref_price": 184.62, "entry_ref_source": "yfinance", "entry_ref_note_ja": "15分遅延・2026年8月22日 05:10 取得。約定価格には使用できません。",
+      "target_ref_price": 201.5, "stop_ref_price": 168.0,
+      "citations": [
+        { "doc_id": "EDGAR-0001045810-26-000142", "doc_type": "10-Q", "title": "Quarterly report for the quarterly period ended 2026-07-26", "filed_at": "2026-08-21", "page": 18, "quote": "Data Center revenue increased 9% sequentially, reflecting improved supply of our next-generation platform", "verification": "verified" },
+        { "doc_id": "EDGAR-0001045810-26-000142", "doc_type": "10-Q", "title": "Quarterly report for the quarterly period ended 2026-07-26", "filed_at": "2026-08-21", "page": 24, "quote": "Two customers accounted for 34% of total revenue", "verification": "verified" }
+      ],
+      "data_freshness": [
+        { "source": "yfinance_us", "latest_as_of": "2026-08-22T05:10:00+09:00" },
+        { "source": "sec_edgar", "latest_as_of": "2026-08-21" }
+      ],
+      "past_performance": { "n": 11, "hit_rate": 0.52, "avg_excess_return": 0.006, "max_drawdown": -0.184, "period_ja": "2025年6月 - 2026年7月" },
+      "critic_verdict": "revised",
+      "critic_notes_ja": "確信度を「中」から「低」に引き下げた。類似条件のサンプルが11件しかなく、確信度「中」を支える根拠が不足している。",
+      "memory_ids_used": [18],
+      "flags": ["LOW_SAMPLE"]
+    },
+    {
+      "rec_id": "01J8XKQ3M4N5P6R7S8T9V0W1X5",
+      "generated_at": "2026-08-22T06:38:35+09:00", "as_of": "2026-08-22",
+      "ticker": "6758", "market": "JP", "name_local": "ソニーグループ", "name_en": "Sony Group Corporation",
+      "sector_code": "3650", "sector_name": "電気機器",
+      "action": "reduce", "horizon": "H20", "conviction": "medium", "conviction_score": 0.61,
+      "quant_score": 44.2, "qual_score": -0.62, "qual_delta": -7.4, "total_score": 36.8, "ml_pred": -0.018,
+      "expected_ret": -0.022, "expected_ret_lo": -0.078, "expected_ret_hi": 0.031,
+      "hit_rate_prior": 0.55, "n_prior_samples": 27,
+      "thesis_ja": "音楽・映画部門は計画を上回って推移しており、これが下方修正幅を一部相殺している。株価は開示後に-4.2%下落しており、悪材料の一部は織り込まれた可能性がある。",
+      "bear_case_ja": "通期営業利益予想が8.0%下方修正され、主因はゲーム部門のハードウェア販売が計画を12%下回ったことと説明されている（8月22日開示、業績予想の修正 p.2）。下方修正の理由が外部環境ではなく自社の販売計画未達であり、下期の回復に向けた具体的な施策が示されていない。会社予想の改定方向は下向きで、これはこのモデルで最も予測力の高いファクターにあたる。半導体調達コストの上昇圧力も開示されている（p.4）。",
+      "invalidation_ja": "ゲーム部門の月次販売が計画に復帰した、または下期の施策が具体的に開示された場合は見直す。",
+      "reason_codes": ["REV_DOWN_GUIDANCE", "LLM_NEW_RISK_DISCLOSED", "MOM_BELOW_MA200", "QLT_HIGH_ROIC"],
+      "factor_scores": { "value": 0.18, "quality": 1.24, "momentum": -1.32, "growth": -0.44, "revision": -1.88, "volatility": -0.52, "liquidity": 1.42 },
+      "entry_ref_price": 3684, "entry_ref_source": "yfinance", "entry_ref_note_ja": "15分遅延・2026年8月22日 15:10 取得。約定価格には使用できません。",
+      "target_ref_price": null, "stop_ref_price": null,
+      "citations": [
+        { "doc_id": "EDINET-S100XA12", "doc_type": "guidance_revision", "title": "2027年3月期 通期業績予想の修正に関するお知らせ", "filed_at": "2026-08-22", "page": 2, "quote": "ゲーム&ネットワークサービス分野において、ハードウェアの販売台数が計画を下回ったことから", "verification": "verified" },
+        { "doc_id": "EDINET-S100XA12", "doc_type": "guidance_revision", "title": "2027年3月期 通期業績予想の修正に関するお知らせ", "filed_at": "2026-08-22", "page": 4, "quote": "半導体等の部材調達コストの上昇が継続する見込みであり", "verification": "verified" }
+      ],
+      "data_freshness": [
+        { "source": "jquants", "latest_as_of": "2026-05-30" },
+        { "source": "yfinance_jp", "latest_as_of": "2026-08-22T15:10:00+09:00" },
+        { "source": "edinet", "latest_as_of": "2026-08-22" }
+      ],
+      "past_performance": { "n": 27, "hit_rate": 0.55, "avg_excess_return": 0.011, "max_drawdown": -0.092, "period_ja": "2024年10月 - 2026年7月" },
+      "critic_verdict": "approved", "critic_notes_ja": null,
+      "memory_ids_used": [7],
+      "flags": ["HELD_POSITION"]
+    },
+    {
+      "rec_id": "01J8XKQ3M4N5P6R7S8T9V0W1X6",
+      "generated_at": "2026-08-22T06:38:44+09:00", "as_of": "2026-08-22",
+      "ticker": "8306", "market": "JP", "name_local": "三菱UFJフィナンシャル・グループ", "name_en": "Mitsubishi UFJ Financial Group, Inc.",
+      "sector_code": "7050", "sector_name": "銀行業",
+      "action": "watch", "horizon": "H5", "conviction": "low", "conviction_score": 0.31,
+      "quant_score": 68.8, "qual_score": null, "qual_delta": null, "total_score": 68.8, "ml_pred": 0.008,
+      "expected_ret": 0.009, "expected_ret_lo": -0.024, "expected_ret_hi": 0.042,
+      "hit_rate_prior": null, "n_prior_samples": 8,
+      "thesis_ja": "PBR 0.94倍で解散価値を下回り、自己株式取得の発表後も水準は変わっていない。金利上昇局面での資金利益の改善余地が大きい。",
+      "bear_case_ja": "定性評価がLLMの日次予算到達により生成できておらず、開示資料の内容は反映されていない。定量スコアのみに基づく推奨である。PBRの低さは長期にわたって解消しておらず、それ自体が上昇要因になった実績は乏しい。類似条件のサンプルは8件で、的中率を提示できる水準にない。",
+      "invalidation_ja": "政策金利の据え置きが長期化する見通しが強まった場合、資金利益改善の前提が崩れる。",
+      "reason_codes": ["VAL_CHEAP_VS_HISTORY", "MOM_ABOVE_MA200", "MODEL_LOW_CONFIDENCE", "DATA_STALE"],
+      "factor_scores": { "value": 1.88, "quality": 0.22, "momentum": 0.64, "growth": 0.08, "revision": 0.31, "volatility": 0.42, "liquidity": 1.68 },
+      "entry_ref_price": 2148, "entry_ref_source": "yfinance", "entry_ref_note_ja": "15分遅延・2026年8月22日 15:10 取得。約定価格には使用できません。",
+      "target_ref_price": null, "stop_ref_price": null,
+      "citations": [
+        { "doc_id": "EDINET-S100X714", "doc_type": "earnings_flash", "title": "2027年3月期 第1四半期決算短信〔日本基準〕(連結)", "filed_at": "2026-08-04", "page": 1, "quote": "自己株式の取得に係る事項を決定いたしました", "verification": "verified" }
+      ],
+      "data_freshness": [
+        { "source": "jquants", "latest_as_of": "2026-05-30" },
+        { "source": "yfinance_jp", "latest_as_of": "2026-08-22T15:10:00+09:00" },
+        { "source": "edinet", "latest_as_of": "2026-08-04" }
+      ],
+      "past_performance": { "n": 8, "hit_rate": null, "avg_excess_return": null, "max_drawdown": null, "period_ja": "2026年3月 - 2026年7月" },
+      "critic_verdict": "revised",
+      "critic_notes_ja": "定性評価が欠落しているため確信度を「低」に固定した。類似条件のサンプルが8件のため的中率は表示しない。",
+      "memory_ids_used": [],
+      "flags": ["NO_QUAL_SCORE", "LOW_SAMPLE"]
+    },
+    {
+      "rec_id": "01J8XKQ3M4N5P6R7S8T9V0W1X7",
+      "generated_at": "2026-08-22T06:38:51+09:00", "as_of": "2026-08-22",
+      "ticker": "9984", "market": "JP", "name_local": "ソフトバンクグループ", "name_en": "SoftBank Group Corp.",
+      "sector_code": "5250", "sector_name": "情報・通信業",
+      "action": "avoid", "horizon": "H20", "conviction": "low", "conviction_score": 0.28,
+      "quant_score": 52.4, "qual_score": 0.12, "qual_delta": 1.4, "total_score": 53.8, "ml_pred": -0.004,
+      "expected_ret": -0.006, "expected_ret_lo": -0.112, "expected_ret_hi": 0.098,
+      "hit_rate_prior": 0.48, "n_prior_samples": 21,
+      "thesis_ja": "保有株式の含み益が拡大しており、NAVに対するディスカウントは過去平均を上回る水準にある。",
+      "bear_case_ja": "実現ボラティリティ 48%に対して予測区間が-11.2%から+9.8%と極端に広く、20営業日の方向性について有意な情報がない。非公開投資の評価が四半期ごとに大きく変動し、財務データの比較可能性が低い。引用可能な定量的な開示が限られ、論拠の裏付けが弱い。",
+      "invalidation_ja": "予測区間の幅が現在の水準を維持する限り、この銘柄について方向性の推奨は行わない。",
+      "reason_codes": ["VOL_HIGH_REGIME", "MODEL_LOW_CONFIDENCE", "VAL_CHEAP_VS_HISTORY"],
+      "factor_scores": { "value": 1.12, "quality": -0.88, "momentum": 0.34, "growth": null, "revision": null, "volatility": -2.14, "liquidity": 1.72 },
+      "entry_ref_price": 11840, "entry_ref_source": "yfinance", "entry_ref_note_ja": "15分遅延・2026年8月22日 15:10 取得。約定価格には使用できません。",
+      "target_ref_price": null, "stop_ref_price": null,
+      "citations": [
+        { "doc_id": "EDINET-S100X811", "doc_type": "quarterly_report", "title": "2027年3月期 第1四半期報告書", "filed_at": "2026-08-12", "page": 6, "quote": "保有株式の公正価値は前四半期末比で増加しております", "verification": "verified" }
+      ],
+      "data_freshness": [
+        { "source": "jquants", "latest_as_of": "2026-05-30" },
+        { "source": "yfinance_jp", "latest_as_of": "2026-08-22T15:10:00+09:00" },
+        { "source": "edinet", "latest_as_of": "2026-08-12" }
+      ],
+      "past_performance": { "n": 21, "hit_rate": 0.48, "avg_excess_return": -0.004, "max_drawdown": -0.212, "period_ja": "2024年11月 - 2026年7月" },
+      "critic_verdict": "approved", "critic_notes_ja": null,
+      "memory_ids_used": [18],
+      "flags": []
+    },
+    {
+      "rec_id": "01J8XKQ3M4N5P6R7S8T9V0W1X8",
+      "generated_at": "2026-08-22T06:38:58+09:00", "as_of": "2026-08-22",
+      "ticker": "4063", "market": "JP", "name_local": "信越化学工業", "name_en": "Shin-Etsu Chemical Co., Ltd.",
+      "sector_code": "3200", "sector_name": "化学",
+      "action": "watch", "horizon": "H20", "conviction": "medium", "conviction_score": 0.54,
+      "quant_score": 74.6, "qual_score": 0.41, "qual_delta": 4.9, "total_score": 79.5, "ml_pred": 0.019,
+      "expected_ret": 0.018, "expected_ret_lo": -0.028, "expected_ret_hi": 0.066,
+      "hit_rate_prior": 0.56, "n_prior_samples": 29,
+      "thesis_ja": "塩ビ樹脂の需給が改善し、半導体シリコン部門の稼働率が前四半期の82%から89%へ回復した（決算短信 p.4）。純有利子負債はマイナスで財務の柔軟性が高い。",
+      "bear_case_ja": "稼働率の回復は在庫調整の一巡による一時的な要因を含み、最終需要の回復を確認できる開示はない（決算説明資料 p.8）。塩ビ樹脂価格は北米の住宅着工に連動し、金利が高止まりする局面では反落しやすい。株価は過去3ヶ月で+16%上昇しており、改善の初期段階は織り込まれている。",
+      "invalidation_ja": "半導体シリコン部門の稼働率が85%を下回った場合、または北米住宅着工が3ヶ月連続で減少した場合。",
+      "reason_codes": ["QLT_LOW_LEVERAGE", "GRW_ACCELERATING", "VAL_CHEAP_VS_SECTOR", "QLT_CLEAN_ACCRUALS"],
+      "factor_scores": { "value": 0.88, "quality": 1.94, "momentum": 0.92, "growth": 0.74, "revision": 0.68, "volatility": 0.12, "liquidity": 0.84 },
+      "entry_ref_price": 5842, "entry_ref_source": "yfinance", "entry_ref_note_ja": "15分遅延・2026年8月22日 15:10 取得。約定価格には使用できません。",
+      "target_ref_price": 6280, "stop_ref_price": 5410,
+      "citations": [
+        { "doc_id": "EDINET-S100X948", "doc_type": "earnings_flash", "title": "2027年3月期 第1四半期決算短信〔日本基準〕(連結)", "filed_at": "2026-08-05", "page": 4, "quote": "半導体シリコン部門の稼働率は89%まで回復しております", "verification": "verified" },
+        { "doc_id": "EDINET-S100X949", "doc_type": "other", "title": "2027年3月期 第1四半期 決算説明資料", "filed_at": "2026-08-05", "page": 8, "quote": "最終需要の本格的な回復については引き続き注視が必要と考えております", "verification": "verified" }
+      ],
+      "data_freshness": [
+        { "source": "jquants", "latest_as_of": "2026-05-30" },
+        { "source": "yfinance_jp", "latest_as_of": "2026-08-22T15:10:00+09:00" },
+        { "source": "edinet", "latest_as_of": "2026-08-05" }
+      ],
+      "past_performance": { "n": 29, "hit_rate": 0.56, "avg_excess_return": 0.014, "max_drawdown": -0.078, "period_ja": "2024年9月 - 2026年7月" },
+      "critic_verdict": "approved", "critic_notes_ja": null,
+      "memory_ids_used": [12],
+      "flags": []
+    },
+    {
+      "rec_id": "01J8XKQ3M4N5P6R7S8T9V0W1X9",
+      "generated_at": "2026-08-22T06:39:04+09:00", "as_of": "2026-08-22",
+      "ticker": "6367", "market": "JP", "name_local": "ダイキン工業", "name_en": "Daikin Industries, Ltd.",
+      "sector_code": "3600", "sector_name": "機械",
+      "action": "watch", "horizon": "H20", "conviction": "low", "conviction_score": 0.29,
+      "quant_score": 66.2, "qual_score": 0.18, "qual_delta": 2.2, "total_score": 68.4, "ml_pred": 0.006,
+      "expected_ret": 0.007, "expected_ret_lo": -0.041, "expected_ret_hi": 0.055,
+      "hit_rate_prior": 0.51, "n_prior_samples": 24,
+      "thesis_ja": "欧州のヒートポンプ需要が政策支援を受けて回復し、地域別売上で欧州が前年同期比+8%となった。",
+      "bear_case_ja": "引用として使用した業界統計は開示資料ではなく、根拠資料としての裏付けが弱い。欧州の政策支援は2027年に段階的に縮小する予定が公表されており、需要の先食いの可能性がある。中国部門は前年同期比-6%で、開示された回復時期の見通しはない。",
+      "invalidation_ja": "欧州の四半期売上が前年同期比でマイナスに転じた場合。",
+      "reason_codes": ["GRW_ACCELERATING", "MODEL_LOW_CONFIDENCE"],
+      "factor_scores": { "value": -0.42, "quality": 1.12, "momentum": 0.48, "growth": 0.62, "revision": 0.22, "volatility": 0.31, "liquidity": 0.68 },
+      "entry_ref_price": 18420, "entry_ref_source": "yfinance", "entry_ref_note_ja": "15分遅延・2026年8月22日 15:10 取得。約定価格には使用できません。",
+      "target_ref_price": null, "stop_ref_price": null,
+      "citations": [
+        { "doc_id": "EDINET-S100X961", "doc_type": "earnings_flash", "title": "2027年3月期 第1四半期決算短信〔IFRS〕(連結)", "filed_at": "2026-08-06", "page": 5, "quote": "欧州における売上収益は前年同期比8%の増加となりました", "verification": "verified" }
+      ],
+      "data_freshness": [
+        { "source": "jquants", "latest_as_of": "2026-05-30" },
+        { "source": "yfinance_jp", "latest_as_of": "2026-08-22T15:10:00+09:00" },
+        { "source": "edinet", "latest_as_of": "2026-08-06" }
+      ],
+      "past_performance": { "n": 24, "hit_rate": 0.51, "avg_excess_return": 0.003, "max_drawdown": -0.104, "period_ja": "2024年12月 - 2026年7月" },
+      "critic_verdict": "rejected",
+      "critic_notes_ja": "却下。強気論拠が参照した業界統計に対応する開示資料が存在せず、引用が原文で確認できなかった (CITATION_NOT_FOUND)。学習のため保存する。",
+      "memory_ids_used": [],
+      "flags": ["CITATION_NOT_FOUND"]
+    }
+  ],
+
+  "watchlist": [
+    { "ticker": "7203", "market": "JP", "name_local": "トヨタ自動車", "ref_price": 3125, "change_pct": 0.0124, "total_score": 86.8, "days_to_earnings": 3, "filings_today": 1 },
+    { "ticker": "6501", "market": "JP", "name_local": "日立製作所", "ref_price": 4218, "change_pct": 0.0082, "total_score": 88.7, "days_to_earnings": null, "filings_today": 0 },
+    { "ticker": "6758", "market": "JP", "name_local": "ソニーグループ", "ref_price": 3684, "change_pct": -0.0421, "total_score": 36.8, "days_to_earnings": null, "filings_today": 1 },
+    { "ticker": "4063", "market": "JP", "name_local": "信越化学工業", "ref_price": 5842, "change_pct": 0.0034, "total_score": 79.5, "days_to_earnings": null, "filings_today": 0 },
+    { "ticker": "8306", "market": "JP", "name_local": "三菱UFJフィナンシャル・グループ", "ref_price": 2148, "change_pct": -0.0058, "total_score": 68.8, "days_to_earnings": null, "filings_today": 0 },
+    { "ticker": "9432", "market": "JP", "name_local": "日本電信電話", "ref_price": 168, "change_pct": 0.0012, "total_score": 61.4, "days_to_earnings": null, "filings_today": 1 },
+    { "ticker": "AAPL", "market": "US", "name_local": "Apple Inc.", "ref_price": 189.42, "change_pct": -0.0083, "total_score": 64.2, "days_to_earnings": 12, "filings_today": 1 },
+    { "ticker": "NVDA", "market": "US", "name_local": "NVIDIA Corporation", "ref_price": 184.62, "change_pct": 0.0218, "total_score": 74.6, "days_to_earnings": null, "filings_today": 0 }
+  ],
+
+  "filings": [
+    { "doc_id": "EDINET-S100XA12", "ticker": "6758", "market": "JP", "name_local": "ソニーグループ", "doc_type": "guidance_revision", "title": "2027年3月期 通期業績予想の修正に関するお知らせ", "filed_at": "2026-08-22T15:04:00+09:00", "source": "edinet", "has_summary": true, "tone": "cautious", "local_copy": true, "pages": 6, "bytes": 412000, "info_value_rank": 1 },
+    { "doc_id": "EDINET-S100XA07", "ticker": "7203", "market": "JP", "name_local": "トヨタ自動車", "doc_type": "earnings_flash", "title": "2027年3月期 第1四半期決算短信〔IFRS〕(連結)", "filed_at": "2026-08-22T15:00:00+09:00", "source": "edinet", "has_summary": true, "tone": "positive", "local_copy": true, "pages": 24, "bytes": 1840000, "info_value_rank": 2 },
+    { "doc_id": "EDINET-S100XA18", "ticker": "9432", "market": "JP", "name_local": "日本電信電話", "doc_type": "buyback", "title": "自己株式取得に係る事項の決定に関するお知らせ", "filed_at": "2026-08-22T08:45:00+09:00", "source": "edinet", "has_summary": false, "estimated_summary_cost_usd": 0.008, "tone": null, "local_copy": true, "pages": 3, "bytes": 148000, "info_value_rank": 5 },
+    { "doc_id": "EDGAR-0000320193-26-000081", "ticker": "AAPL", "market": "US", "name_local": "Apple Inc.", "doc_type": "10-Q", "title": "Quarterly report for the quarterly period ended 2026-06-27", "filed_at": "2026-08-22T09:30:00-04:00", "source": "sec_edgar", "has_summary": true, "tone": "neutral", "local_copy": true, "pages": 42, "bytes": 2140000, "info_value_rank": 3 },
+    { "doc_id": "EDGAR-0001045810-26-000142", "ticker": "NVDA", "market": "US", "name_local": "NVIDIA Corporation", "doc_type": "10-Q", "title": "Quarterly report for the quarterly period ended 2026-07-26", "filed_at": "2026-08-21T16:05:00-04:00", "source": "sec_edgar", "has_summary": true, "tone": "positive", "local_copy": true, "pages": 38, "bytes": 1980000, "info_value_rank": 4 },
+    { "doc_id": "EDINET-S100X948", "ticker": "4063", "market": "JP", "name_local": "信越化学工業", "doc_type": "earnings_flash", "title": "2027年3月期 第1四半期決算短信〔日本基準〕(連結)", "filed_at": "2026-08-05T15:30:00+09:00", "source": "edinet", "has_summary": true, "tone": "positive", "local_copy": true, "pages": 18, "bytes": 1240000, "info_value_rank": 6 },
+    { "doc_id": "EDINET-S100X902", "ticker": "6501", "market": "JP", "name_local": "日立製作所", "doc_type": "earnings_flash", "title": "2027年3月期 第1四半期決算短信〔IFRS〕(連結)", "filed_at": "2026-08-01T15:00:00+09:00", "source": "edinet", "has_summary": true, "tone": "positive", "local_copy": true, "pages": 22, "bytes": 1620000, "info_value_rank": 7 },
+    { "doc_id": "EDINET-S100W412", "ticker": "7203", "market": "JP", "name_local": "トヨタ自動車", "doc_type": "annual_report", "title": "第122期 有価証券報告書", "filed_at": "2026-06-24T16:12:00+09:00", "source": "edinet", "has_summary": true, "tone": "neutral", "local_copy": true, "pages": 148, "bytes": 8420000, "info_value_rank": 8 },
+    { "doc_id": "EDINET-S100X811", "ticker": "9984", "market": "JP", "name_local": "ソフトバンクグループ", "doc_type": "quarterly_report", "title": "2027年3月期 第1四半期報告書", "filed_at": "2026-08-12T15:45:00+09:00", "source": "edinet", "has_summary": false, "estimated_summary_cost_usd": 0.021, "tone": null, "local_copy": false, "local_copy_error_ja": "ローカル保存に失敗しました (HTTP 504)", "pages": 62, "bytes": null, "info_value_rank": 9 },
+    { "doc_id": "EDINET-S100X961", "ticker": "6367", "market": "JP", "name_local": "ダイキン工業", "doc_type": "earnings_flash", "title": "2027年3月期 第1四半期決算短信〔IFRS〕(連結)", "filed_at": "2026-08-06T15:00:00+09:00", "source": "edinet", "has_summary": true, "tone": "neutral", "local_copy": true, "pages": 20, "bytes": 1420000, "info_value_rank": 10 },
+    { "doc_id": "EDINET-S100X714", "ticker": "8306", "market": "JP", "name_local": "三菱UFJフィナンシャル・グループ", "doc_type": "earnings_flash", "title": "2027年3月期 第1四半期決算短信〔日本基準〕(連結)", "filed_at": "2026-08-04T15:00:00+09:00", "source": "edinet", "has_summary": true, "tone": "neutral", "local_copy": true, "pages": 26, "bytes": 1740000, "info_value_rank": 11 },
+    { "doc_id": "EDINET-S100X903", "ticker": "6501", "market": "JP", "name_local": "日立製作所", "doc_type": "other", "title": "2027年3月期 第1四半期 決算説明資料", "filed_at": "2026-08-01T15:00:00+09:00", "source": "edinet", "has_summary": true, "tone": "positive", "local_copy": true, "pages": 34, "bytes": 4120000, "info_value_rank": 12 },
+    { "doc_id": "EDGAR-0000320193-26-000074", "ticker": "AAPL", "market": "US", "name_local": "Apple Inc.", "doc_type": "8-K", "title": "Current report dated 2026-08-04", "filed_at": "2026-08-04T16:30:00-04:00", "source": "sec_edgar", "has_summary": false, "estimated_summary_cost_usd": 0.003, "tone": null, "local_copy": true, "pages": 4, "bytes": 182000, "info_value_rank": 13 },
+    { "doc_id": "EDINET-S100X949", "ticker": "4063", "market": "JP", "name_local": "信越化学工業", "doc_type": "other", "title": "2027年3月期 第1四半期 決算説明資料", "filed_at": "2026-08-05T15:30:00+09:00", "source": "edinet", "has_summary": true, "tone": "neutral", "local_copy": true, "pages": 28, "bytes": 3240000, "info_value_rank": 14 }
+  ],
+
+  "filing_summary": {
+    "doc_id": "EDINET-S100XA12",
+    "summary_version": 4,
+    "prompt_hash": "a91f2c7d",
+    "model": "gemini-3.7-flash",
+    "generated_at": "2026-08-22T15:12:04+09:00",
+    "cost_usd": 0.009,
+    "input_tokens": 42812,
+    "output_tokens": 1204,
+    "cache_hit": false,
+    "headline_ja": "通期営業利益予想を8%下方修正。ゲーム部門の販売計画未達が主因。",
+    "key_points_ja": [
+      "2027年3月期の通期営業利益予想を1兆3,000億円から1兆1,960億円へ8.0%下方修正 (p.1)",
+      "ゲーム&ネットワークサービス部門のハードウェア販売が計画を12%下回った (p.2)",
+      "音楽・映画部門は計画を上回り、下方修正幅を一部相殺 (p.2)",
+      "配当予想は据え置き、年間75円 (p.3)"
+    ],
+    "guidance_change": { "metric_ja": "営業利益", "from": 1300000000000, "to": 1196000000000, "change_pct": -0.080, "fiscal_period": "2027-03" },
+    "risk_factors_ja": [
+      "北米市場における競合の値引き競争の継続 (p.4)",
+      "半導体調達コストの上昇圧力 (p.4)",
+      "為替前提は1ドル148円、現状の152円との差は下期に織り込み予定 (p.3)"
+    ],
+    "tone": "cautious",
+    "tone_rationale_ja": "下方修正の主因を外部環境ではなく自社の販売計画未達と説明しており、下期の回復見通しについて具体的な施策が示されていない点を慎重と判定した。",
+    "citations": [
+      { "page": 2, "section_ja": "業績予想の修正の理由", "quote": "ゲーム&ネットワークサービス分野において、ハードウェアの販売台数が計画を下回ったことから", "verification": "verified" },
+      { "page": 4, "section_ja": "今後の見通し", "quote": "半導体等の部材調達コストの上昇が継続する見込みであり", "verification": "verified" },
+      { "page": 3, "section_ja": "配当予想", "quote": "配当予想につきましては変更ございません", "verification": "verified" }
+    ]
+  },
+
+  "stock_detail": {
+    "JP:7203": {
+      "ticker": "7203", "market": "JP", "name_local": "トヨタ自動車", "name_en": "Toyota Motor Corporation",
+      "exchange_ja": "東証プライム", "sector_code": "3050", "sector_name": "輸送用機器", "trading_unit": 100,
+      "ref_price": 3125, "ref_change_pct": 0.0124, "ref_change_abs": 38, "ref_source": "yfinance", "ref_as_of": "2026-08-22T15:10:00+09:00", "ref_is_delayed": true,
+      "total_score": 86.8, "quant_score": 78.4, "conviction": "medium",
+      "key_metrics": {
+        "market_cap_jpy": 42180000000000, "per_trailing": 11.2, "per_forward": 10.4, "pbr": 1.18, "ev_ebitda": 8.4,
+        "dividend_yield": 0.0284, "roe": 0.116, "roic": 0.124, "equity_ratio": 0.382,
+        "realized_vol_60d": 0.224, "garch_vol": 0.218, "adv_20d_jpy": 41200000000, "beta_topix": 1.04,
+        "fx_sensitivity": 0.42, "next_earnings_date": "2026-11-06", "days_to_earnings": 3,
+        "financials_filed_at": "2026-08-08"
+      }
+    },
+    "US:AAPL": {
+      "ticker": "AAPL", "market": "US", "name_local": "Apple Inc.", "name_en": "Apple Inc.",
+      "exchange_ja": "NASDAQ", "sector_code": "45", "sector_name": "Information Technology", "trading_unit": 1,
+      "ref_price": 189.42, "ref_change_pct": -0.0083, "ref_change_abs": -1.58, "ref_source": "yfinance", "ref_as_of": "2026-08-22T05:10:00+09:00", "ref_is_delayed": true,
+      "total_score": 64.2, "quant_score": 62.8, "conviction": "low",
+      "key_metrics": {
+        "market_cap_usd": 2894000000000, "per_trailing": 28.4, "per_forward": 25.9, "pbr": 41.2, "ev_ebitda": 19.8,
+        "dividend_yield": 0.0052, "roe": 1.482, "roic": 0.412, "equity_ratio": 0.182,
+        "realized_vol_60d": 0.212, "garch_vol": 0.204, "adv_20d_usd": 8940000000, "beta_spx": 1.12,
+        "fx_sensitivity": -0.08, "next_earnings_date": "2026-09-03", "days_to_earnings": 12,
+        "financials_filed_at": "2026-08-22"
+      }
+    }
+  },
+
+  "factors": {
+    "JP:7203": {
+      "as_of": "2026-08-22", "feature_version": "v3",
+      "rows": [
+        { "group": "value", "label_ja": "バリュエーション", "z_score": 1.42, "sector_percentile": 0.08, "raw_label_ja": "PER 11.2倍", "sector_median_label_ja": "PER 15.8倍", "contribution": 11.4 },
+        { "group": "quality", "label_ja": "クオリティ", "z_score": 0.88, "sector_percentile": 0.21, "raw_label_ja": "ROIC 12.4%", "sector_median_label_ja": "ROIC 8.9%", "contribution": 7.1 },
+        { "group": "momentum", "label_ja": "モメンタム", "z_score": 1.05, "sector_percentile": 0.14, "raw_label_ja": "12ヶ月 +18.4%", "sector_median_label_ja": "12ヶ月 +6.2%", "contribution": 8.4 },
+        { "group": "growth", "label_ja": "成長", "z_score": 0.31, "sector_percentile": 0.38, "raw_label_ja": "売上 +6.4%", "sector_median_label_ja": "売上 +4.1%", "contribution": 2.5 },
+        { "group": "revision", "label_ja": "予想改定", "z_score": 1.67, "sector_percentile": 0.05, "raw_label_ja": "営業利益予想 +5.0%", "sector_median_label_ja": "変更なし", "contribution": 13.4 },
+        { "group": "volatility", "label_ja": "ボラティリティ", "z_score": -0.24, "sector_percentile": 0.58, "raw_label_ja": "実現ボラ 22.4%", "sector_median_label_ja": "実現ボラ 20.8%", "contribution": -1.9 },
+        { "group": "liquidity", "label_ja": "流動性", "z_score": 0.92, "sector_percentile": 0.02, "raw_label_ja": "売買代金 412億円", "sector_median_label_ja": "売買代金 38億円", "contribution": 7.4 }
+      ]
+    }
+  },
+
+  "prices": {
+    "JP:7203": {
+      "research": {
+        "source": "jquants", "plan": "free", "latest_as_of": "2026-05-30", "is_adjusted": true, "delay_note_ja": "無料プランのため12週間遅延しています",
+        "sample": [
+          { "date": "2026-05-26", "open": 2984, "high": 3012, "low": 2971, "close": 3004, "volume": 8124300 },
+          { "date": "2026-05-27", "open": 3008, "high": 3042, "low": 2996, "close": 3038, "volume": 7812400 },
+          { "date": "2026-05-28", "open": 3040, "high": 3064, "low": 3018, "close": 3021, "volume": 6942100 },
+          { "date": "2026-05-29", "open": 3024, "high": 3058, "low": 3010, "close": 3052, "volume": 7284900 },
+          { "date": "2026-05-30", "open": 3055, "high": 3088, "low": 3041, "close": 3074, "volume": 9142800 }
+        ]
+      },
+      "live": {
+        "source": "yfinance", "delay_minutes": 15, "latest_as_of": "2026-08-22T15:10:00+09:00", "model_use_forbidden": true,
+        "sample": [
+          { "date": "2026-08-18", "open": 3062, "high": 3094, "low": 3048, "close": 3081, "volume": 8014200 },
+          { "date": "2026-08-19", "open": 3084, "high": 3112, "low": 3070, "close": 3096, "volume": 7642100 },
+          { "date": "2026-08-20", "open": 3098, "high": 3108, "low": 3062, "close": 3072, "volume": 6984300 },
+          { "date": "2026-08-21", "open": 3074, "high": 3096, "low": 3058, "close": 3087, "volume": 7412800 },
+          { "date": "2026-08-22", "open": 3090, "high": 3138, "low": 3084, "close": 3125, "volume": 8234100 }
+        ]
+      },
+      "overlays": { "ma20": 3084, "ma60": 3042, "ma200": 2918 },
+      "earnings_markers": [
+        { "date": "2026-05-08", "label_ja": "2026年3月期 決算" },
+        { "date": "2026-08-08", "label_ja": "2027年3月期 1Q 決算" }
+      ],
+      "recommendation_markers": [
+        { "date": "2026-07-18", "action": "watch", "outcome": "hit" },
+        { "date": "2026-08-22", "action": "watch", "outcome": "pending" }
+      ]
+    }
+  },
+
+  "financials": {
+    "JP:7203": {
+      "basis": "filed_at",
+      "periods": [
+        { "fiscal_period": "2027-03 1Q", "filed_at": "2026-08-08", "source_doc_id": "EDINET-S100XA07", "revenue": 12340000000000, "operating_income": 1204000000000, "operating_margin": 0.098, "net_income": 892000000000, "eps": 279.4, "free_cash_flow": 614000000000, "accruals_ratio": -0.021, "net_debt_ebitda": 0.42, "revenue_yoy": 0.064, "operating_income_yoy": 0.182, "restated": false },
+        { "fiscal_period": "2026-03 通期", "filed_at": "2026-05-08", "source_doc_id": "EDINET-S100V812", "revenue": 47820000000000, "operating_income": 4612000000000, "operating_margin": 0.096, "net_income": 3418000000000, "eps": 1071.2, "free_cash_flow": 2184000000000, "accruals_ratio": -0.018, "net_debt_ebitda": 0.38, "revenue_yoy": 0.048, "operating_income_yoy": 0.112, "restated": true, "restated_note_ja": "2026年5月14日開示分は2026年8月8日に修正再表示されています" },
+        { "fiscal_period": "2026-03 3Q", "filed_at": "2026-02-06", "source_doc_id": "EDINET-S100T914", "revenue": 35410000000000, "operating_income": 3402000000000, "operating_margin": 0.096, "net_income": 2514000000000, "eps": 787.8, "free_cash_flow": 1612000000000, "accruals_ratio": -0.016, "net_debt_ebitda": 0.41, "revenue_yoy": 0.052, "operating_income_yoy": 0.094, "restated": false },
+        { "fiscal_period": "2026-03 2Q", "filed_at": "2025-11-06", "source_doc_id": "EDINET-S100S412", "revenue": 23180000000000, "operating_income": 2214000000000, "operating_margin": 0.096, "net_income": 1642000000000, "eps": 514.6, "free_cash_flow": 1042000000000, "accruals_ratio": -0.014, "net_debt_ebitda": 0.44, "revenue_yoy": 0.041, "operating_income_yoy": 0.068, "restated": false }
+      ]
+    }
+  },
+
+  "peers": {
+    "JP:7203": [
+      { "ticker": "7267", "name_local": "本田技研工業", "total_score": 71.8, "per_forward": 8.9, "pbr": 0.72, "roic": 0.091, "return_20d": 0.042, "fx_sensitivity": 0.38 },
+      { "ticker": "7201", "name_local": "日産自動車", "total_score": 48.2, "per_forward": null, "pbr": 0.34, "roic": 0.021, "return_20d": -0.018, "fx_sensitivity": 0.44 },
+      { "ticker": "7269", "name_local": "スズキ", "total_score": 66.4, "per_forward": 11.8, "pbr": 1.24, "roic": 0.108, "return_20d": 0.028, "fx_sensitivity": 0.31 },
+      { "ticker": "7270", "name_local": "SUBARU", "total_score": 62.1, "per_forward": 9.4, "pbr": 0.88, "roic": 0.084, "return_20d": 0.014, "fx_sensitivity": 0.52 },
+      { "ticker": "7202", "name_local": "いすゞ自動車", "total_score": 58.8, "per_forward": 10.2, "pbr": 0.94, "roic": 0.078, "return_20d": -0.006, "fx_sensitivity": 0.28 }
+    ]
+  },
+
+  "screener": {
+    "as_of": "2026-08-22",
+    "market": "JP",
+    "preset": "value_quality",
+    "filters": [
+      { "field": "per_forward", "operator": "lte", "value": 12.0, "unit_ja": "倍" },
+      { "field": "roic", "operator": "gte", "value": 10.0, "unit_ja": "%" },
+      { "field": "accruals_ratio", "operator": "gte", "value": -0.05, "unit_ja": null },
+      { "field": "adv_20d", "operator": "gte", "value": 100000000, "unit_ja": "円" },
+      { "field": "sector", "operator": "in", "value": ["輸送用機器", "電気機器", "化学", "機械", "情報・通信業"], "unit_ja": null }
+    ],
+    "meta": {
+      "total_matched": 142,
+      "universe_size": 1994,
+      "truncated": true,
+      "limit": 100,
+      "excluded_count": 62,
+      "excluded_reason_ja": "入力データが不足しているため対象外",
+      "distributions": [
+        { "field": "per_forward", "label_ja": "PER（会社予想）", "median": 15.8, "threshold": 12.0, "threshold_percentile": 0.27 },
+        { "field": "roic", "label_ja": "ROIC", "median": 0.089, "threshold": 0.10, "threshold_percentile": 0.58 },
+        { "field": "accruals_ratio", "label_ja": "利益の質", "median": -0.012, "threshold": -0.05, "threshold_percentile": 0.18 },
+        { "field": "adv_20d", "label_ja": "平均売買代金", "median": 3800000000, "threshold": 100000000, "threshold_percentile": 0.12 }
+      ]
+    },
+    "rows": [
+      { "ticker": "6501", "name_local": "日立製作所", "sector_name": "電気機器", "total_score": 88.7, "ref_price": 4218, "change_pct": 0.0082, "per_forward": 11.4, "pbr": 2.14, "roic": 0.148, "dividend_yield": 0.0182, "mom_12m": 0.382, "realized_vol_60d": 0.198, "reason_codes": ["QLT_HIGH_ROIC", "GRW_ACCELERATING", "REV_UP_GUIDANCE", "MOM_NEAR_52W_HIGH"], "days_to_earnings": null, "market_cap_jpy": 19840000000000 },
+      { "ticker": "7203", "name_local": "トヨタ自動車", "sector_name": "輸送用機器", "total_score": 86.8, "ref_price": 3125, "change_pct": 0.0124, "per_forward": 10.4, "pbr": 1.18, "roic": 0.124, "dividend_yield": 0.0284, "mom_12m": 0.184, "realized_vol_60d": 0.224, "reason_codes": ["VAL_CHEAP_VS_SECTOR", "REV_UP_GUIDANCE", "MOM_STRONG_12M", "EVENT_EARNINGS_SOON"], "days_to_earnings": 3, "market_cap_jpy": 42180000000000 },
+      { "ticker": "4063", "name_local": "信越化学工業", "sector_name": "化学", "total_score": 79.5, "ref_price": 5842, "change_pct": 0.0034, "per_forward": 11.8, "pbr": 1.62, "roic": 0.142, "dividend_yield": 0.0198, "mom_12m": 0.162, "realized_vol_60d": 0.212, "reason_codes": ["QLT_LOW_LEVERAGE", "QLT_CLEAN_ACCRUALS", "VAL_CHEAP_VS_SECTOR"], "days_to_earnings": null, "market_cap_jpy": 11840000000000 },
+      { "ticker": "6273", "name_local": "SMC", "sector_name": "機械", "total_score": 76.2, "ref_price": 62400, "change_pct": -0.0042, "per_forward": 11.9, "pbr": 1.94, "roic": 0.138, "dividend_yield": 0.0162, "mom_12m": 0.084, "realized_vol_60d": 0.224, "reason_codes": ["QLT_HIGH_ROIC", "QLT_LOW_LEVERAGE"], "days_to_earnings": null, "market_cap_jpy": 4120000000000 },
+      { "ticker": "7267", "name_local": "本田技研工業", "sector_name": "輸送用機器", "total_score": 71.8, "ref_price": 1842, "change_pct": 0.0068, "per_forward": 8.9, "pbr": 0.72, "roic": 0.091, "dividend_yield": 0.0412, "mom_12m": 0.062, "realized_vol_60d": 0.242, "reason_codes": ["VAL_CHEAP_VS_SECTOR", "VAL_CHEAP_VS_HISTORY"], "days_to_earnings": null, "market_cap_jpy": 9420000000000 },
+      { "ticker": "6702", "name_local": "富士通", "sector_name": "電気機器", "total_score": 70.4, "ref_price": 3284, "change_pct": 0.0112, "per_forward": 11.2, "pbr": 2.42, "roic": 0.118, "dividend_yield": 0.0142, "mom_12m": 0.214, "realized_vol_60d": 0.234, "reason_codes": ["REV_UP_GUIDANCE", "MOM_ABOVE_MA200"], "days_to_earnings": null, "market_cap_jpy": 6180000000000 },
+      { "ticker": "8306", "name_local": "三菱UFJフィナンシャル・グループ", "sector_name": "銀行業", "total_score": 68.8, "ref_price": 2148, "change_pct": -0.0058, "per_forward": 11.6, "pbr": 0.94, "roic": null, "dividend_yield": 0.0348, "mom_12m": 0.288, "realized_vol_60d": 0.264, "reason_codes": ["VAL_CHEAP_VS_HISTORY", "MOM_ABOVE_MA200", "DATA_STALE"], "days_to_earnings": null, "market_cap_jpy": 26140000000000 },
+      { "ticker": "6367", "name_local": "ダイキン工業", "sector_name": "機械", "total_score": 68.4, "ref_price": 18420, "change_pct": -0.0018, "per_forward": 18.2, "pbr": 2.18, "roic": 0.104, "dividend_yield": 0.0132, "mom_12m": 0.042, "realized_vol_60d": 0.228, "reason_codes": ["GRW_ACCELERATING", "MODEL_LOW_CONFIDENCE"], "days_to_earnings": null, "market_cap_jpy": 5420000000000 },
+      { "ticker": "5108", "name_local": "ブリヂストン", "sector_name": "ゴム製品", "total_score": 65.2, "ref_price": 6142, "change_pct": 0.0024, "per_forward": 10.8, "pbr": 1.14, "roic": 0.112, "dividend_yield": 0.0324, "mom_12m": 0.048, "realized_vol_60d": 0.202, "reason_codes": ["VAL_CHEAP_VS_SECTOR", "QLT_CLEAN_ACCRUALS"], "days_to_earnings": 2, "market_cap_jpy": 4180000000000 },
+      { "ticker": "9432", "name_local": "日本電信電話", "sector_name": "情報・通信業", "total_score": 61.4, "ref_price": 168, "change_pct": 0.0012, "per_forward": 11.4, "pbr": 1.28, "roic": 0.084, "dividend_yield": 0.0342, "mom_12m": -0.024, "realized_vol_60d": 0.164, "reason_codes": ["VOL_LOW_REGIME", "VAL_CHEAP_VS_HISTORY"], "days_to_earnings": null, "market_cap_jpy": 14620000000000 },
+      { "ticker": "7011", "name_local": "三菱重工業", "sector_name": "機械", "total_score": 58.4, "ref_price": 2842, "change_pct": 0.0182, "per_forward": 24.8, "pbr": 3.42, "roic": 0.088, "dividend_yield": 0.0092, "mom_12m": 0.484, "realized_vol_60d": 0.342, "reason_codes": ["MOM_NEAR_52W_HIGH", "VOL_HIGH_REGIME"], "days_to_earnings": null, "market_cap_jpy": 9580000000000 },
+      { "ticker": "7201", "name_local": "日産自動車", "sector_name": "輸送用機器", "total_score": 48.2, "ref_price": 412, "change_pct": -0.0142, "per_forward": null, "pbr": 0.34, "roic": 0.021, "dividend_yield": 0.0, "mom_12m": -0.184, "realized_vol_60d": 0.384, "reason_codes": ["VAL_CHEAP_VS_HISTORY", "REV_DOWN_GUIDANCE", "VOL_HIGH_REGIME"], "days_to_earnings": null, "market_cap_jpy": 1620000000000 }
+    ]
+  },
+
+  "fx": {
+    "pair": "USDJPY",
+    "as_of": "2026-08-22",
+    "official": { "value": 152.18, "as_of": "2026-08-21", "source": "FRED DEXJPUS" },
+    "reference": { "value": 152.34, "change_pct": 0.0041, "change_abs": 0.62, "as_of": "2026-08-22T18:35:00+09:00", "source": "yfinance", "delay_minutes": 15 },
+    "verdict_ja": "ランダムウォークに対する優位性は確認できていません。過去248営業日の予測を検証した結果、ARIMAXモデルの予測精度はランダムウォーク（前日値をそのまま予測とする手法）と統計的に区別できませんでした。以下の予測値は参考情報として扱ってください。",
+    "verdict_status": "no_edge",
+    "diebold_mariano": { "stat": -1.02, "p_value": 0.31, "n_validation": 248, "variance": "HAC", "hac_lags": 5 },
+    "baseline_rmse": 1.842,
+    "model_rmse": 1.826,
+    "forecasts": [
+      { "horizon": "H5", "label_ja": "5営業日", "median": 152.52, "lo80": 151.20, "hi80": 153.84, "lo95": 150.10, "hi95": 155.50, "change_pct": 0.0012, "direction_hit_rate": 0.52, "n_validation": 248, "model": "ARIMAX(1,0,1)", "beats_baseline": false, "p_value": 0.28 },
+      { "horizon": "H20", "label_ja": "20営業日", "median": 152.80, "lo80": 150.90, "hi80": 154.70, "lo95": 149.40, "hi95": 156.30, "change_pct": 0.0030, "direction_hit_rate": 0.51, "n_validation": 248, "model": "ARIMAX(1,0,1)", "beats_baseline": false, "p_value": 0.31 },
+      { "horizon": "H60", "label_ja": "60営業日", "median": 153.10, "lo80": 149.20, "hi80": 157.00, "lo95": 146.40, "hi95": 159.80, "change_pct": 0.0050, "direction_hit_rate": 0.49, "n_validation": 248, "model": "VECM(2)", "beats_baseline": false, "p_value": 0.72 }
+    ],
+    "model_comparison": [
+      { "model": "ランダムウォーク", "is_baseline": true, "rmse": 1.842, "mae": 1.402, "direction_hit_rate": 0.50, "n": 248, "dm_p_value": null, "verdict_ja": "ベースライン" },
+      { "model": "ARIMAX(1,0,1)", "is_baseline": false, "rmse": 1.826, "mae": 1.388, "direction_hit_rate": 0.51, "n": 248, "dm_p_value": 0.31, "verdict_ja": "優位性なし" },
+      { "model": "VECM(2)", "is_baseline": false, "rmse": 1.871, "mae": 1.421, "direction_hit_rate": 0.49, "n": 248, "dm_p_value": 0.72, "verdict_ja": "優位性なし" },
+      { "model": "GARCH平均回帰", "is_baseline": false, "rmse": 1.858, "mae": 1.412, "direction_hit_rate": 0.50, "n": 248, "dm_p_value": 0.58, "verdict_ja": "優位性なし" }
+    ],
+    "volatility": { "realized_20d": 0.0842, "realized_60d": 0.0918, "garch_forecast_20d": 0.0894, "persistence": 0.962, "converged": true, "regime_ja": "低ボラ局面（過去3年の下位30%）" },
+    "rate_differential": { "spread_10y": 0.0342, "us_10y": 0.0418, "jp_10y": 0.0076, "spread_2y": 0.0388, "us_2y": 0.0442, "jp_2y": 0.0054, "correlation_1y": 0.72 },
+    "history_sample": [
+      { "date": "2026-08-17", "value": 151.42 },
+      { "date": "2026-08-18", "value": 151.68 },
+      { "date": "2026-08-19", "value": 151.94 },
+      { "date": "2026-08-20", "value": 151.56 },
+      { "date": "2026-08-21", "value": 152.18 }
+    ]
+  },
+
+  "macro_series": [
+    { "id": "DGS10", "label_ja": "米10年国債利回り", "latest": 0.0418, "unit": "pct", "change_mom": -0.0012, "as_of": "2026-08-21", "vintage_date": "2026-08-21", "revised": false },
+    { "id": "DGS2", "label_ja": "米2年国債利回り", "latest": 0.0442, "unit": "pct", "change_mom": -0.0008, "as_of": "2026-08-21", "vintage_date": "2026-08-21", "revised": false },
+    { "id": "CPIAUCSL", "label_ja": "米CPI（前年同月比）", "latest": 0.028, "unit": "pct", "change_mom": -0.001, "as_of": "2026-07-31", "vintage_date": "2026-08-13", "revised": true, "revision_note_ja": "速報 2.9% → 確報 2.8%" },
+    { "id": "UNRATE", "label_ja": "米失業率", "latest": 0.042, "unit": "pct", "change_mom": 0.001, "as_of": "2026-07-31", "vintage_date": "2026-08-07", "revised": false },
+    { "id": "IRLTLT01JPM156N", "label_ja": "日10年国債利回り", "latest": 0.0076, "unit": "pct", "change_mom": 0.0004, "as_of": "2026-07-31", "vintage_date": "2026-08-10", "revised": false },
+    { "id": "DEXJPUS", "label_ja": "ドル円", "latest": 152.18, "unit": "jpy", "change_mom": 0.0142, "as_of": "2026-08-21", "vintage_date": "2026-08-21", "revised": false }
+  ],
+
+  "model_health": {
+    "market": "JP", "horizon": "H20", "as_of": "2026-08-22",
+    "rank_ic_20d": 0.031, "rank_ic_20d_n": 20,
+    "rank_ic_3m": 0.028, "rank_ic_3m_n": 62, "rank_ic_3m_tstat": 1.84,
+    "coverage_pct": 0.924, "covered_tickers": 1842, "universe_tickers": 1994,
+    "degradation_detected": false,
+    "ic_mean_period": 0.029, "ic_std_period": 0.081, "ic_positive_days_pct": 0.54, "ic_n_days": 248,
+    "quintiles": [
+      { "quintile": 1, "label_ja": "第1分位（最下位）", "mean_excess_return": -0.0042 },
+      { "quintile": 2, "label_ja": "第2分位", "mean_excess_return": -0.0008 },
+      { "quintile": 3, "label_ja": "第3分位", "mean_excess_return": 0.0021 },
+      { "quintile": 4, "label_ja": "第4分位", "mean_excess_return": 0.0044 },
+      { "quintile": 5, "label_ja": "第5分位（最上位）", "mean_excess_return": 0.0091 }
+    ],
+    "quintile_spread": 0.0133,
+    "monotonic": true,
+    "feature_importance": [
+      { "feature": "rev_guidance_op_3m", "label_ja": "予想改定（営業利益・3ヶ月）", "gain": 0.142 },
+      { "feature": "mom_12m_ex1m", "label_ja": "12ヶ月モメンタム（直近1ヶ月除外）", "gain": 0.118 },
+      { "feature": "earnings_yield", "label_ja": "益回り", "gain": 0.096 },
+      { "feature": "roic", "label_ja": "ROIC", "gain": 0.081 },
+      { "feature": "accruals_ratio", "label_ja": "利益の質", "gain": 0.074 },
+      { "feature": "realized_vol_60d", "label_ja": "実現ボラティリティ (60営業日)", "gain": 0.068 },
+      { "feature": "adv_20d_log", "label_ja": "平均売買代金（対数）", "gain": 0.061 },
+      { "feature": "fx_sensitivity", "label_ja": "為替感応度", "gain": 0.054 },
+      { "feature": "ev_ebitda", "label_ja": "EV/EBITDA", "gain": 0.048 },
+      { "feature": "dist_52w_high", "label_ja": "52週高値からの乖離", "gain": 0.042 }
+    ],
+    "validation": { "method": "PurgedWalkForwardCV", "n_folds": 8, "train_window_days": 252, "test_window_days": 42, "purge_days": 20, "embargo_days": 5, "expanding": true }
+  },
+
+  "model_runs": [
+    { "run_id": "mr_20260801_h20_jp_003", "kind": "ranker", "market": "JP", "horizon": "H20", "trained_at": "2026-08-01T03:12:00+09:00", "period_start": "2024-08-01", "period_end": "2026-07-31", "n_samples": 892140, "n_features": 42, "feature_version": "v3", "objective": "regression + quantile (0.1 / 0.5 / 0.9)", "n_trials": 120, "fold_rank_ic": [0.021, 0.038, 0.019, 0.044, 0.026, 0.031, 0.012, 0.035], "fold_ic_std": 0.010, "status": "active" },
+    { "run_id": "mr_20260701_h20_jp_002", "kind": "ranker", "market": "JP", "horizon": "H20", "trained_at": "2026-07-01T03:08:00+09:00", "period_start": "2024-07-01", "period_end": "2026-06-30", "n_samples": 874200, "n_features": 42, "feature_version": "v3", "objective": "regression + quantile (0.1 / 0.5 / 0.9)", "n_trials": 100, "fold_rank_ic": [0.018, 0.031, 0.024, 0.038, 0.021, 0.028, 0.015, 0.029], "fold_ic_std": 0.007, "status": "archived" },
+    { "run_id": "mr_20260801_h5_jp_001", "kind": "ranker", "market": "JP", "horizon": "H5", "trained_at": "2026-08-01T03:41:00+09:00", "period_start": "2024-08-01", "period_end": "2026-07-31", "n_samples": 892140, "n_features": 42, "feature_version": "v3", "objective": "regression + quantile (0.1 / 0.5 / 0.9)", "n_trials": 80, "fold_rank_ic": [0.014, 0.022, 0.008, 0.026, 0.011, 0.019, 0.004, 0.017], "fold_ic_std": 0.007, "status": "active" }
+  ],
+
+  "backtests": [
+    {
+      "backtest_id": "bt_20260805_001", "strategy_name": "value_quality_h20", "market": "JP", "status": "finished",
+      "period_start": "2024-08-01", "period_end": "2026-08-01", "rebalance_freq": "monthly", "n_positions": 20,
+      "fee_bps": 5.0, "slippage_bps": 10.0, "max_turnover_pct": 30.0,
+      "total_return": 0.184, "annualized_return": 0.088, "benchmark_annualized": 0.062, "excess_return": 0.026,
+      "volatility": 0.142, "sharpe": 0.62, "deflated_sharpe": 0.18, "dsr_p_value": 0.24, "n_trials": 120,
+      "skew": -0.31, "kurtosis": 4.2,
+      "max_drawdown": -0.128, "max_drawdown_period_ja": "2025年3月 - 2025年6月",
+      "realized_turnover_pct": 24.2, "cost_drag_annual": -0.018, "gross_annualized_return": 0.106,
+      "monthly_hit_rate": 0.58, "n_months": 24,
+      "significance_ja": "統計的に有意とは言えません (DSR 0.18, p=0.24)。シャープレシオ 0.62 は120回のパラメータ探索の結果であり、偶然の可能性を排除できません。"
+    },
+    {
+      "backtest_id": "bt_20260710_004", "strategy_name": "revision_momentum_h20", "market": "JP", "status": "finished",
+      "period_start": "2023-08-01", "period_end": "2026-08-01", "rebalance_freq": "monthly", "n_positions": 25,
+      "fee_bps": 5.0, "slippage_bps": 12.0, "max_turnover_pct": 40.0,
+      "total_return": 0.412, "annualized_return": 0.122, "benchmark_annualized": 0.071, "excess_return": 0.051,
+      "volatility": 0.148, "sharpe": 0.82, "deflated_sharpe": 0.71, "dsr_p_value": 0.018, "n_trials": 120,
+      "skew": -0.12, "kurtosis": 3.4,
+      "max_drawdown": -0.112, "max_drawdown_period_ja": "2025年4月 - 2025年7月",
+      "realized_turnover_pct": 34.8, "cost_drag_annual": -0.028, "gross_annualized_return": 0.150,
+      "monthly_hit_rate": 0.61, "n_months": 36,
+      "significance_ja": "Deflated Sharpe Ratio 0.71 (p=0.018)。120回の試行を考慮しても有意です。ただし超過リターン5.1%のうち2.8%はコストで失われており、コスト前提の悪化に弱い戦略です。"
+    },
+    { "backtest_id": "bt_20260822_002", "strategy_name": "low_vol_dividend_h20", "market": "JP", "status": "running", "period_start": "2024-08-01", "period_end": "2026-08-01", "rebalance_freq": "quarterly", "n_positions": 15, "fee_bps": 5.0, "slippage_bps": 8.0, "max_turnover_pct": 20.0, "progress_pct": 0.42, "elapsed_sec": 192, "eta_sec": 288 },
+    { "backtest_id": "bt_20260818_003", "strategy_name": "ml_pred_h5", "market": "JP", "status": "failed", "period_start": "2024-08-01", "period_end": "2026-08-01", "rebalance_freq": "weekly", "n_positions": 30, "fee_bps": 5.0, "slippage_bps": 15.0, "max_turnover_pct": 80.0, "error_ja": "リバランス頻度が週次で回転率上限80%の場合、必要な履歴が不足しています（利用可能 104週 / 必要 156週）" }
+  ],
+
+  "factor_weights": {
+    "market": "JP", "horizon": "H20",
+    "active": { "weight_set_id": "ws_20260701_a", "activated_at": "2026-07-01", "weights": { "value": 0.22, "quality": 0.18, "momentum": 0.20, "growth": 0.12, "revision": 0.20, "volatility": 0.04, "liquidity": 0.04 } },
+    "proposed": {
+      "weight_set_id": "ws_20260801_b", "proposed_at": "2026-08-22T06:47:22+09:00",
+      "weights": { "value": 0.26, "quality": 0.16, "momentum": 0.16, "growth": 0.10, "revision": 0.26, "volatility": 0.03, "liquidity": 0.03 },
+      "fit_method": "Ridge回帰（非負制約）",
+      "n_samples": 214,
+      "period_ja": "2026年2月 - 2026年8月",
+      "blend_ratio": 0.5,
+      "status": "pending_approval"
+    },
+    "history": [
+      { "weight_set_id": "ws_20260401_a", "activated_at": "2026-04-01" },
+      { "weight_set_id": "ws_20260701_a", "activated_at": "2026-07-01" }
+    ]
+  },
+
+  "llm_cost": {
+    "today_usd": 0.48, "daily_cap_usd": 1.5,
+    "month_usd": 8.42, "monthly_cap_usd": 20.0,
+    "projected_month_usd": 11.60,
+    "kill_switch": false,
+    "by_tier": [
+      { "tier": "bulk", "label_ja": "一括処理 (Gemini Flash)", "model": "gemini-3.7-flash", "today_usd": 0.21 },
+      { "tier": "default", "label_ja": "推論 (Claude Sonnet)", "model": "claude-sonnet-5", "today_usd": 0.22 },
+      { "tier": "deep", "label_ja": "詳細分析 (Claude Opus)", "model": "claude-opus-5", "today_usd": 0.05 },
+      { "tier": "embedding", "label_ja": "埋め込み", "model": "gemini-embedding", "today_usd": 0.0 }
+    ],
+    "by_purpose": [
+      { "purpose": "doc_summary", "label_ja": "資料要約", "today_usd": 0.18, "share": 0.38, "cache_hits": 24, "cache_misses": 8 },
+      { "purpose": "thesis", "label_ja": "推奨の論拠生成", "today_usd": 0.21, "share": 0.44, "cache_hits": 0, "cache_misses": 12 },
+      { "purpose": "critic", "label_ja": "レビュー", "today_usd": 0.09, "share": 0.19, "cache_hits": 0, "cache_misses": 12 },
+      { "purpose": "evaluator", "label_ja": "教訓の抽出", "today_usd": 0.0, "share": 0.0, "cache_hits": 0, "cache_misses": 0 }
+    ],
+    "recent_calls": [
+      { "at": "2026-08-22T06:31:12+09:00", "purpose": "doc_summary", "label_ja": "資料要約", "model": "gemini-3.7-flash", "input_tokens": 42812, "output_tokens": 1204, "cost_usd": 0.0077, "cache_hit": false, "duration_sec": 4.2, "status": "success" },
+      { "at": "2026-08-22T06:30:48+09:00", "purpose": "doc_summary", "label_ja": "資料要約", "model": "gemini-3.7-flash", "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "cache_hit": true, "duration_sec": 0.1, "status": "success" },
+      { "at": "2026-08-22T06:38:12+09:00", "purpose": "thesis", "label_ja": "推奨の論拠生成", "model": "claude-sonnet-5", "input_tokens": 8420, "output_tokens": 1840, "cost_usd": 0.0529, "cache_hit": false, "duration_sec": 11.4, "status": "success" },
+      { "at": "2026-08-22T06:44:02+09:00", "purpose": "critic", "label_ja": "レビュー", "model": "claude-sonnet-5", "input_tokens": 6210, "output_tokens": 720, "cost_usd": 0.0294, "cache_hit": false, "duration_sec": 7.8, "status": "success" },
+      { "at": "2026-08-22T06:29:04+09:00", "purpose": "doc_summary", "label_ja": "資料要約", "model": "gemini-3.7-flash", "input_tokens": 61240, "output_tokens": 0, "cost_usd": 0.0459, "cache_hit": false, "duration_sec": 9.2, "status": "failed", "error_ja": "スキーマ検証エラー: citations が空でした" }
+    ],
+    "daily_series": [
+      { "date": "2026-08-16", "bulk": 0.08, "default": 0.11, "deep": 0.0, "embedding": 0.0 },
+      { "date": "2026-08-17", "bulk": 0.02, "default": 0.02, "deep": 0.0, "embedding": 0.0 },
+      { "date": "2026-08-18", "bulk": 0.19, "default": 0.24, "deep": 0.0, "embedding": 0.0 },
+      { "date": "2026-08-19", "bulk": 0.22, "default": 0.21, "deep": 0.0, "embedding": 0.0 },
+      { "date": "2026-08-20", "bulk": 0.18, "default": 0.19, "deep": 0.0, "embedding": 0.0 },
+      { "date": "2026-08-21", "bulk": 0.24, "default": 0.26, "deep": 0.0, "embedding": 0.0 },
+      { "date": "2026-08-22", "bulk": 0.21, "default": 0.22, "deep": 0.05, "embedding": 0.0 }
+    ]
+  },
+
+  "critic_stats": {
+    "days": 30,
+    "n_reviewed": 296, "n_approved": 190, "n_revised": 64, "n_rejected": 42,
+    "rejection_rate": 0.142, "revision_rate": 0.216,
+    "reasons": [
+      { "code": "CITATION_NOT_FOUND", "label_ja": "引用が原文で確認できない", "count": 18 },
+      { "code": "BEAR_CASE_INSUBSTANTIAL", "label_ja": "弱気論拠が定型的で実質がない", "count": 11 },
+      { "code": "STALE_DATA_USED", "label_ja": "古いデータに基づいている", "count": 6 },
+      { "code": "DELAYED_PRICE_MISUSED", "label_ja": "遅延データを現在値として扱っている", "count": 3 },
+      { "code": "CONVICTION_UNSUPPORTED", "label_ja": "確信度がサンプル数に見合わない", "count": 2 },
+      { "code": "INTERVAL_MISSING", "label_ja": "信頼区間が欠けている", "count": 1 },
+      { "code": "PIT_VIOLATION", "label_ja": "開示日より前の情報を使用している", "count": 1 }
+    ],
+    "rate_trend": [
+      { "week_start": "2026-07-27", "rejection_rate": 0.182 },
+      { "week_start": "2026-08-03", "rejection_rate": 0.158 },
+      { "week_start": "2026-08-10", "rejection_rate": 0.124 },
+      { "week_start": "2026-08-17", "rejection_rate": 0.104 }
+    ]
+  },
+
+  "agent_memory": [
+    { "memory_id": 7, "category": "bias", "label_ja": "偏り", "scope": "market", "scope_value": "JP", "lesson_ja": "決算発表の3営業日前に生成した推奨の的中率は42% (n=38) で、それ以外の期間の57% (n=176) を大きく下回る。決算直前は確信度を一段引き下げるか、推奨を見送る。", "evidence_ja": "2026年2月 - 2026年8月の推奨実績 214件を集計", "n_evidence": 214, "times_injected_30d": 28, "effect_hit_rate_used": 0.59, "effect_n_used": 28, "effect_hit_rate_unused": 0.54, "effect_n_unused": 64, "is_active": true, "updated_at": "2026-08-15", "harmful_flag": false },
+    { "memory_id": 12, "category": "pattern", "label_ja": "パターン", "scope": "global", "scope_value": null, "lesson_ja": "会社予想の上方修正と12ヶ月モメンタムが同時に上位20%に入る銘柄の的中率は64% (n=44) で、単独条件より高い。両条件が揃う場合は確信度を一段上げてよい。", "evidence_ja": "2025年11月 - 2026年8月の推奨実績 288件を集計", "n_evidence": 288, "times_injected_30d": 34, "effect_hit_rate_used": 0.62, "effect_n_used": 34, "effect_hit_rate_unused": 0.52, "effect_n_unused": 58, "is_active": true, "updated_at": "2026-08-08", "harmful_flag": false },
+    { "memory_id": 18, "category": "caveat", "label_ja": "注意点", "scope": "global", "scope_value": null, "lesson_ja": "実現ボラティリティが35%を超える銘柄では、20営業日の予測区間が広すぎて方向性の判断材料にならない。確信度は常に「低」とし、期待リターンより区間の幅を先に示す。", "evidence_ja": "2026年1月 - 2026年8月の高ボラ銘柄推奨 52件を集計", "n_evidence": 52, "times_injected_30d": 18, "effect_hit_rate_used": 0.50, "effect_n_used": 18, "effect_hit_rate_unused": 0.44, "effect_n_unused": 22, "is_active": true, "updated_at": "2026-07-28", "harmful_flag": false },
+    { "memory_id": 21, "category": "lesson", "label_ja": "教訓", "scope": "sector", "scope_value": "銀行業", "lesson_ja": "銀行業ではPBRの低さが上昇要因になった実績が乏しい (的中率 46%, n=28)。バリュエーションの寄与を過大評価しない。", "evidence_ja": "2025年9月 - 2026年8月の銀行業推奨 28件を集計", "n_evidence": 28, "times_injected_30d": 6, "effect_hit_rate_used": 0.50, "effect_n_used": 6, "effect_hit_rate_unused": 0.46, "effect_n_unused": 22, "is_active": true, "updated_at": "2026-08-01", "harmful_flag": false },
+    { "memory_id": 24, "category": "lesson", "label_ja": "教訓", "scope": "global", "scope_value": null, "lesson_ja": "低ボラ銘柄を優先する。", "evidence_ja": "2026年3月 - 2026年6月の推奨実績 88件を集計", "n_evidence": 88, "times_injected_30d": 32, "effect_hit_rate_used": 0.44, "effect_n_used": 32, "effect_hit_rate_unused": 0.56, "effect_n_unused": 112, "is_active": true, "updated_at": "2026-06-20", "harmful_flag": true, "harmful_note_ja": "この教訓を使用した推奨の的中率は44% (n=32) で、未使用時の56% (n=112) を下回っています。無効化を検討してください。" },
+    { "memory_id": 26, "category": "caveat", "label_ja": "注意点", "scope": "market", "scope_value": "US", "lesson_ja": "米国株では類似条件の過去実績サンプルが不足しており（運用開始から4ヶ月）、的中率を根拠に確信度を上げてはならない。", "evidence_ja": "2026年4月 - 2026年8月の米国株推奨 42件を集計", "n_evidence": 42, "times_injected_30d": 12, "effect_hit_rate_used": null, "effect_n_used": 12, "effect_hit_rate_unused": null, "effect_n_unused": 18, "is_active": true, "updated_at": "2026-08-18", "harmful_flag": false }
+  ],
+
+  "portfolio": {
+    "as_of": "2026-08-22",
+    "market_value_jpy": 8472150, "book_value_jpy": 7977030,
+    "unrealized_pl_jpy": 495120, "unrealized_pl_pct": 0.062,
+    "realized_pl_ytd_jpy": 182400,
+    "cash_jpy": 1240000,
+    "daily_pl_jpy": 38420, "daily_pl_pct": 0.0046,
+    "currency_split": { "JPY": 0.78, "USD": 0.22 }, "fx_rate_used": 152.34,
+    "n_positions": 7,
+    "performance": { "range": "1y", "portfolio_return": 0.062, "benchmark_return": 0.041, "excess_return": 0.021, "benchmark_label_ja": "TOPIX" },
+    "allocation_by_sector": [
+      { "sector_name": "電気機器", "weight": 0.321, "n": 3 },
+      { "sector_name": "輸送用機器", "weight": 0.196, "n": 1 },
+      { "sector_name": "情報・通信業", "weight": 0.142, "n": 1 },
+      { "sector_name": "Information Technology", "weight": 0.224, "n": 2 },
+      { "sector_name": "化学", "weight": 0.117, "n": 1 }
+    ],
+    "risk": {
+      "top_position_weight": 0.184, "top_position_ticker": "6758",
+      "top3_weight": 0.442,
+      "top_sector_weight": 0.321, "top_sector_name": "電気機器",
+      "usd_exposure": 0.224,
+      "weighted_fx_sensitivity": 0.28,
+      "high_vol_share": 0.128,
+      "positions_reporting_soon": 2,
+      "warnings_ja": ["セクター集中が30%を超えています（電気機器 32.1%）。"]
+    }
+  },
+
+  "positions": [
+    { "ticker": "6758", "market": "JP", "name_local": "ソニーグループ", "sector_name": "電気機器", "quantity": 400, "avg_cost": 3524, "book_value_jpy": 1409600, "ref_price": 3684, "market_value_jpy": 1473600, "unrealized_pl_jpy": 64000, "unrealized_pl_pct": 0.045, "weight": 0.184, "total_score": 36.8, "current_view": "reduce", "current_view_label_ja": "縮小検討", "holding_days": 68, "next_earnings_date": null },
+    { "ticker": "7203", "market": "JP", "name_local": "トヨタ自動車", "sector_name": "輸送用機器", "quantity": 300, "avg_cost": 2948, "book_value_jpy": 884400, "ref_price": 3125, "market_value_jpy": 937500, "unrealized_pl_jpy": 53100, "unrealized_pl_pct": 0.060, "weight": 0.111, "total_score": 86.8, "current_view": "watch", "current_view_label_ja": "注目", "holding_days": 42, "next_earnings_date": "2026-11-06" },
+    { "ticker": "6501", "market": "JP", "name_local": "日立製作所", "sector_name": "電気機器", "quantity": 200, "avg_cost": 3812, "book_value_jpy": 762400, "ref_price": 4218, "market_value_jpy": 843600, "unrealized_pl_jpy": 81200, "unrealized_pl_pct": 0.107, "weight": 0.100, "total_score": 88.7, "current_view": "accumulate", "current_view_label_ja": "積み増し検討", "holding_days": 124, "next_earnings_date": null },
+    { "ticker": "4063", "market": "JP", "name_local": "信越化学工業", "sector_name": "化学", "quantity": 100, "avg_cost": 5218, "book_value_jpy": 521800, "ref_price": 5842, "market_value_jpy": 584200, "unrealized_pl_jpy": 62400, "unrealized_pl_pct": 0.120, "weight": 0.069, "total_score": 79.5, "current_view": "watch", "current_view_label_ja": "注目", "holding_days": 96, "next_earnings_date": null },
+    { "ticker": "9432", "market": "JP", "name_local": "日本電信電話", "sector_name": "情報・通信業", "quantity": 6000, "avg_cost": 154, "book_value_jpy": 924000, "ref_price": 168, "market_value_jpy": 1008000, "unrealized_pl_jpy": 84000, "unrealized_pl_pct": 0.091, "weight": 0.119, "total_score": 61.4, "current_view": null, "current_view_label_ja": "—", "holding_days": 284, "next_earnings_date": null },
+    { "ticker": "AAPL", "market": "US", "name_local": "Apple Inc.", "sector_name": "Information Technology", "quantity": 40, "avg_cost": 172.4, "book_value_jpy": 1050530, "ref_price": 189.42, "market_value_jpy": 1154270, "unrealized_pl_jpy": 103740, "unrealized_pl_pct": 0.099, "weight": 0.136, "total_score": 64.2, "current_view": null, "current_view_label_ja": "—", "holding_days": 212, "next_earnings_date": "2026-09-03" },
+    { "ticker": "NVDA", "market": "US", "name_local": "NVIDIA Corporation", "sector_name": "Information Technology", "quantity": 30, "avg_cost": 158.2, "book_value_jpy": 723180, "ref_price": 184.62, "market_value_jpy": 843780, "unrealized_pl_jpy": 120600, "unrealized_pl_pct": 0.167, "weight": 0.100, "total_score": 74.6, "current_view": "watch", "current_view_label_ja": "注目", "holding_days": 58, "next_earnings_date": null }
+  ],
+
+  "trades": [
+    { "trade_id": 142, "ticker": "7203", "market": "JP", "name_local": "トヨタ自動車", "side": "buy", "quantity": 100, "price": 3125, "fee": 275, "currency": "JPY", "executed_at": "2026-08-22T09:15:00+09:00", "broker": "楽天証券", "account_type": "特定", "linked_rec_id": "01J8XKQ3M4N5P6R7S8T9V0W1X2", "thesis_ja": "上方修正と割安さを評価。北米の競争環境は懸念だが為替の追い風が上回ると判断した。", "emotion_tag": "confident", "exit_plan_ja": "3,420円で半分、2,890円割れで全部撤退。", "ref_price_at_entry": 3121, "slippage_bps": 12.8, "sync_status": "synced" },
+    { "trade_id": 141, "ticker": "6501", "market": "JP", "name_local": "日立製作所", "side": "buy", "quantity": 100, "price": 4184, "fee": 275, "currency": "JPY", "executed_at": "2026-08-04T09:22:00+09:00", "broker": "楽天証券", "account_type": "特定", "linked_rec_id": "01J8T2Q3M4N5P6R7S8T9V0W1A1", "thesis_ja": "受注の加速とマージン目標の引き上げを評価。官公庁案件依存は認識のうえで、DSS部門の構造的な伸びに賭ける。", "emotion_tag": "confident", "exit_plan_ja": "4,640円で半分。受注が前年割れなら即撤退。", "ref_price_at_entry": 4178, "slippage_bps": 14.4, "sync_status": "synced" },
+    { "trade_id": 140, "ticker": "7011", "market": "JP", "name_local": "三菱重工業", "side": "buy", "quantity": 100, "price": 2784, "fee": 275, "currency": "JPY", "executed_at": "2026-07-30T13:42:00+09:00", "broker": "楽天証券", "account_type": "特定", "linked_rec_id": null, "thesis_ja": "急騰しているのを見て乗り遅れたくないと思い成行で買った。推奨には出ていない。", "emotion_tag": "fomo", "exit_plan_ja": "特に決めていない。", "ref_price_at_entry": 2742, "slippage_bps": 153.2, "sync_status": "synced" },
+    { "trade_id": 139, "ticker": "7011", "market": "JP", "name_local": "三菱重工業", "side": "sell", "quantity": 100, "price": 2612, "fee": 275, "currency": "JPY", "executed_at": "2026-08-06T14:58:00+09:00", "broker": "楽天証券", "account_type": "特定", "linked_rec_id": null, "thesis_ja": "下落が続いて不安になり損切りした。エントリー根拠がなかったので撤退基準もなかった。", "emotion_tag": "fearful", "exit_plan_ja": "—", "ref_price_at_entry": 2618, "slippage_bps": -22.9, "sync_status": "synced" },
+    { "trade_id": 138, "ticker": "6758", "market": "JP", "name_local": "ソニーグループ", "side": "buy", "quantity": 200, "price": 3548, "fee": 275, "currency": "JPY", "executed_at": "2026-06-16T09:04:00+09:00", "broker": "楽天証券", "account_type": "特定", "linked_rec_id": "01J8A1Q3M4N5P6R7S8T9V0W1B2", "thesis_ja": "ゲーム部門の回復と映画部門の好調を評価。ハードウェア販売の計画未達リスクは弱気論拠で指摘されていたが、映画部門で相殺できると判断した。", "emotion_tag": "neutral", "exit_plan_ja": "3,900円で半分、3,300円割れで全部撤退。", "ref_price_at_entry": 3544, "slippage_bps": 11.3, "sync_status": "synced" },
+    { "trade_id": 137, "ticker": "4063", "market": "JP", "name_local": "信越化学工業", "side": "buy", "quantity": 100, "price": 5218, "fee": 275, "currency": "JPY", "executed_at": "2026-05-18T09:12:00+09:00", "broker": "楽天証券", "account_type": "NISA", "linked_rec_id": "01J7X1Q3M4N5P6R7S8T9V0W1C3", "thesis_ja": "財務の健全性と稼働率の底打ちを評価。最終需要の回復未確認は認識している。", "emotion_tag": "confident", "exit_plan_ja": "6,280円で半分、4,900円割れで撤退。", "ref_price_at_entry": 5212, "slippage_bps": 11.5, "sync_status": "synced" },
+    { "trade_id": 136, "ticker": "NVDA", "market": "US", "name_local": "NVIDIA Corporation", "side": "buy", "quantity": 30, "price": 158.2, "fee": 0.0, "currency": "USD", "executed_at": "2026-06-24T22:42:00+09:00", "broker": "楽天証券", "account_type": "特定", "linked_rec_id": "01J7Y1Q3M4N5P6R7S8T9V0W1D4", "thesis_ja": "供給制約の緩和を評価。顧客集中リスクとボラティリティの高さは弱気論拠のとおりで、サイズを通常の半分に抑えた。", "emotion_tag": "neutral", "exit_plan_ja": "$201で半分、$168割れで撤退。", "ref_price_at_entry": 157.9, "slippage_bps": 19.0, "sync_status": "synced" },
+    { "trade_id": 135, "ticker": "8306", "market": "JP", "name_local": "三菱UFJフィナンシャル・グループ", "side": "sell", "quantity": 400, "price": 2088, "fee": 275, "currency": "JPY", "executed_at": "2026-07-14T14:12:00+09:00", "broker": "楽天証券", "account_type": "特定", "linked_rec_id": null, "thesis_ja": "銀行業のPBR低位が解消しないという教訓を読んで手放した。", "emotion_tag": "neutral", "exit_plan_ja": "—", "ref_price_at_entry": 2092, "slippage_bps": -19.1, "sync_status": "synced" },
+    { "trade_id": 134, "ticker": "9432", "market": "JP", "name_local": "日本電信電話", "side": "buy", "quantity": 3000, "price": 152, "fee": 275, "currency": "JPY", "executed_at": "2025-11-12T09:08:00+09:00", "broker": "楽天証券", "account_type": "NISA", "linked_rec_id": "01J5X1Q3M4N5P6R7S8T9V0W1E5", "thesis_ja": "低ボラで配当利回りが高く、長期保有の土台として購入。", "emotion_tag": "neutral", "exit_plan_ja": "配当政策の変更がなければ保有継続。", "ref_price_at_entry": 152, "slippage_bps": 0.0, "sync_status": "synced" },
+    { "trade_id": 133, "ticker": "AAPL", "market": "US", "name_local": "Apple Inc.", "side": "buy", "quantity": 40, "price": 172.4, "fee": 0.0, "currency": "USD", "executed_at": "2026-01-22T23:34:00+09:00", "broker": "楽天証券", "account_type": "特定", "linked_rec_id": null, "thesis_ja": "分散のために購入。推奨には出ていないが、ポートフォリオの通貨分散を意図した。", "emotion_tag": "neutral", "exit_plan_ja": "通貨分散目的のため価格での撤退基準は設けない。", "ref_price_at_entry": 172.1, "slippage_bps": 17.4, "sync_status": "synced" },
+    { "trade_id": 132, "ticker": "7201", "market": "JP", "name_local": "日産自動車", "side": "buy", "quantity": 1000, "price": 468, "fee": 275, "currency": "JPY", "executed_at": "2026-03-04T09:18:00+09:00", "broker": "楽天証券", "account_type": "特定", "linked_rec_id": null, "thesis_ja": "PBR0.3倍台は安すぎると思い購入。ツールは「回避」を出していたが自分の判断を優先した。", "emotion_tag": "confident", "exit_plan_ja": "特に決めていない。", "ref_price_at_entry": 466, "slippage_bps": 42.9, "sync_status": "synced" },
+    { "trade_id": 131, "ticker": "7201", "market": "JP", "name_local": "日産自動車", "side": "sell", "quantity": 1000, "price": 412, "fee": 275, "currency": "JPY", "executed_at": "2026-08-20T14:44:00+09:00", "broker": "楽天証券", "account_type": "特定", "linked_rec_id": null, "thesis_ja": "5ヶ月保有して回復しなかったため撤退。ツールの「回避」判断が正しかった。", "emotion_tag": "fearful", "exit_plan_ja": "—", "ref_price_at_entry": 414, "slippage_bps": -48.3, "sync_status": "queued", "queued_note_ja": "オフライン時に記録したため未送信です" }
+  ],
+
+  "trade_analysis": {
+    "recommendation_quality": {
+      "n_recommendations": 214,
+      "hit_rate": 0.542,
+      "avg_excess_return": 0.0081,
+      "by_conviction": { "low": 0.51, "medium": 0.56, "high": 0.61 },
+      "by_conviction_n": { "low": 74, "medium": 98, "high": 42 },
+      "monotonic": true,
+      "note_ja": "確信度が高いほど的中率が高く、確信度の付け方は妥当です。",
+      "scope_note_ja": "この指標は利用者が売買したかどうかに関係なく、全推奨を対象に算出しています。"
+    },
+    "execution_quality": {
+      "n_trades": 42, "n_from_recommendation": 31, "n_discretionary": 11,
+      "hit_rate_from_rec": 0.581, "hit_rate_discretionary": 0.364,
+      "avg_slippage_vs_ref_bps": 18.4, "buy_slippage_bps": 24.1, "sell_slippage_bps": -11.8,
+      "avg_holding_days": 24.1, "planned_holding_days": 20.0,
+      "median_holding_days_winners": 19, "median_holding_days_losers": 38,
+      "exited_early_pct": 0.31, "exited_early_n": 13,
+      "held_longer_pct": 0.48, "held_longer_n": 20,
+      "exit_plan_adherence": 0.62, "exit_plan_adherence_n": 26,
+      "by_emotion_tag": { "confident": 0.61, "neutral": 0.55, "fearful": 0.44, "fomo": 0.29 },
+      "by_emotion_tag_n": { "confident": 18, "neutral": 11, "fearful": 9, "fomo": 7 },
+      "note_ja": "fomo タグの取引の的中率が29% (n=7) と著しく低く、この心理状態での売買を控えることが最も効果的な改善点です。ただしサンプルが7件と少ないため、件数が20件を超えた時点で再評価してください。",
+      "observations_ja": [
+        "裁量売買の的中率は36.4% (n=11) で、推奨連動の58.1% (n=31) を大きく下回ります。",
+        "損失が出ている銘柄の保有日数の中央値は38営業日で、利益が出ている銘柄の19営業日より長いです。損切りが遅れる傾向があります。",
+        "撤退計画を記入した買いのうち、実際に計画どおり撤退したのは62% (n=26) です。"
+      ]
+    },
+    "journal_stats": { "n_entries": 42, "thesis_filled_pct": 1.0, "emotion_tagged_pct": 1.0, "exit_plan_filled_pct": 0.88, "exit_plan_denominator": 25, "linked_to_rec_pct": 0.74 }
+  },
+
+  "recommendation_history": {
+    "JP:7203": {
+      "n": 13, "hit_rate": 0.62, "avg_excess_return": 0.014,
+      "rows": [
+        { "rec_id": "01J8B1Q3M4N5P6R7S8T9V0W1F6", "generated_at": "2026-07-18", "action": "watch", "horizon": "H20", "conviction": "medium", "expected_ret": 0.021, "expected_ret_lo": -0.034, "expected_ret_hi": 0.076, "realized_ret": 0.038, "outcome": "hit" },
+        { "rec_id": "01J89PQ3M4N5P6R7S8T9V0W1G7", "generated_at": "2026-06-20", "action": "watch", "horizon": "H20", "conviction": "low", "expected_ret": 0.008, "expected_ret_lo": -0.042, "expected_ret_hi": 0.058, "realized_ret": -0.012, "outcome": "miss" },
+        { "rec_id": "01J87NQ3M4N5P6R7S8T9V0W1H8", "generated_at": "2026-05-22", "action": "accumulate", "horizon": "H20", "conviction": "high", "expected_ret": 0.032, "expected_ret_lo": -0.014, "expected_ret_hi": 0.078, "realized_ret": 0.041, "outcome": "hit" },
+        { "rec_id": "01J8XKQ3M4N5P6R7S8T9V0W1X2", "generated_at": "2026-08-22", "action": "watch", "horizon": "H20", "conviction": "medium", "expected_ret": 0.024, "expected_ret_lo": -0.031, "expected_ret_hi": 0.079, "realized_ret": null, "outcome": "pending", "pending_business_days_left": 20 }
+      ]
+    }
+  },
+
+  "sectors_jp": [
+    "水産・農林業", "鉱業", "建設業", "食料品", "繊維製品", "パルプ・紙", "化学", "医薬品",
+    "石油・石炭製品", "ゴム製品", "ガラス・土石製品", "鉄鋼", "非鉄金属", "金属製品", "機械",
+    "電気機器", "輸送用機器", "精密機器", "その他製品", "電気・ガス業", "陸運業", "海運業",
+    "空運業", "倉庫・運輸関連業", "情報・通信業", "卸売業", "小売業", "銀行業", "証券・商品先物取引業",
+    "保険業", "その他金融業", "不動産業", "サービス業"
+  ]
+}
