@@ -289,6 +289,30 @@ git add --renormalize .
 git status
 ```
 
+### 4.4 Git 操作が WSL2 側に統一されているか
+
+Windows ネイティブの Git クライアントで同じリポジトリを操作すると、`dubious ownership`、
+偽のパーミッション差分、インデックス破損の原因になる（[15-windows-runtime.md](../../../docs/15-windows-runtime.md) §6.4.1）。
+以下の兆候が出ていないか確認する。
+
+```bash
+# (1) 実行ビットのみの偽差分が出ていないか
+git diff --summary | grep -i 'mode change' | head
+
+# (2) filemode の設定が WSL2 側の既定（true）から変えられていないか
+git config --get core.filemode
+
+# (3) 直近のコミットが Windows 側のユーザー名で入っていないか
+git log -5 --format='%an <%ae>'
+```
+
+`mode change` が大量に出る、または `core.filemode=false` が設定されている場合は、Windows 側の
+クライアントが介入した可能性が高い。エディタは WSL2 のシェルから起動する運用に戻す。
+
+```bash
+cd ~/ai-stock && cursor .
+```
+
 ## 5. 常時稼働
 
 ### 5.1 電源設定

@@ -569,13 +569,71 @@ def data_dir_not_on_windows_mount(cls, v: Path) -> Path:
 
 ### 6.4 Windows 側からファイルを見る方法
 
-WSL2 のファイルは Windows から `\\wsl$\Ubuntu\home\user\ai-stock` でアクセスできる。エクスプローラーのアドレスバーに入力すれば開ける。
+リポジトリを WSL2 側に置いても、Windows から普通のフォルダとして扱える。用途に応じて 3 つの経路を使い分ける。
 
-エディタ（VS Code / Cursor）は WSL 拡張機能を使い、**WSL2 内のファイルシステムを直接開く**。Windows 側から `\\wsl$` 経由で開くと 9P プロトコルを経由するため遅い。
+**経路 1: エディタから開く（日常の開発はこれ）**
+
+Cursor / VS Code の WSL 拡張機能を使い、**WSL2 内のファイルシステムを直接開く**。エディタ・ターミナル・Git 操作が 1 ウィンドウに収まるため、別途 Git GUI クライアントを用意する必要がない。
 
 ```bash
-# WSL2 内から起動する（推奨）
-cd ~/ai-stock && code .
+# WSL2 のシェルから起動する（推奨）
+cd ~/ai-stock && cursor .   # VS Code なら code .
+```
+
+Windows 側で起動したエディタから `\\wsl.localhost\...` を開くこともできるが、後述の 9P 経由になるため遅い。必ず WSL2 側から起動するか、エディタの「Connect to WSL」機能を使う。
+
+**経路 2: エクスプローラーで開く（ファイルの受け渡し）**
+
+```powershell
+# アドレスバーに直接入力する。Windows 11 では wsl.localhost が新形式
+\\wsl.localhost\Ubuntu\home\<user>\ai-stock
+# 旧形式（現在も動作する）
+\\wsl$\Ubuntu\home\<user>\ai-stock
+```
+
+エクスプローラーのナビゲーションウィンドウには「Linux」の項目が現れるのでそこから辿ってもよい。頻繁に開くならクイックアクセスにピン留めしておく。
+
+WSL2 のシェルから開くほうが速い。
+
+```bash
+# 現在のディレクトリをエクスプローラーで開く
+cd ~/ai-stock && explorer.exe .
+```
+
+この経路は、**Figma Make へ `docs/ui/` 配下のファイルをアップロードする**ときに使う。ブラウザのファイル選択ダイアログは UNC パスを扱えるため、WSL2 上のファイルを直接選択できる。
+
+**経路 3: ブラウザで読む（クローン前の閲覧）**
+
+リモートに push 済みであれば、リポジトリのホスティング先の Web UI でそのまま読める。仕様書は Markdown なのでレンダリングされた状態で確認できる。クローンせずに内容を参照したいだけの場合はこれで足りる。
+
+### 6.4.1 Git 操作は WSL2 側に統一する
+
+**同一リポジトリを Windows ネイティブの Git と WSL2 の Git の両方から操作してはいけない。** SourceTree、GitHub Desktop、Fork などの Windows 製 GUI クライアントを `\\wsl.localhost\...` 経由で接続する構成は、動作はするが以下の問題を生む。
+
+| 問題 | 原因 |
+| --- | --- |
+| `dubious ownership` エラー | Windows 側の Git が WSL2 のファイル所有者（UID）を解釈できず、`safe.directory` の設定を要求する |
+| 改行コードの意図しない変換 | Windows 側の `core.autocrlf` 設定が WSL2 側と異なると、同じファイルが差分として現れ続ける |
+| パーミッションの差分 | `core.filemode` の解釈差により、実行ビットの変更が偽の差分として検出される |
+| インデックスの競合 | 両方から同時に操作すると `.git/index` が壊れることがある |
+| 動作の重さ | 9P プロトコル経由のためステータス更新が遅く、リポジトリが育つほど顕著になる |
+
+`.gitattributes` の `* text=auto eol=lf`（§7.3）で改行コードは吸収できるが、残りの問題は設定では消えない。**Git の操作は WSL2 側（CLI、またはエディタ内蔵の Git UI）に統一する**のが本プロジェクトの規約とする。
+
+履歴の閲覧やブランチグラフの可視化だけが目的なら、WSL2 内で動くツールを使う。
+
+```bash
+# WSL2 内で動く TUI クライアント（任意）
+sudo apt install -y lazygit   # または: gh repo view --web で Web UI を開く
+```
+
+やむを得ず Windows 製クライアントを併用する場合は、閲覧専用と割り切り、コミットとブランチ操作は行わない。加えて Windows 側で以下を設定する。
+
+```powershell
+# Windows 側の Git に WSL2 のパスを信頼させる
+git config --global --add safe.directory '%(prefix)///wsl.localhost/Ubuntu/home/<user>/ai-stock'
+# 改行コードの二重変換を防ぐ（.gitattributes 側で制御するため無効化）
+git config --global core.autocrlf false
 ```
 
 ### 6.5 例外: 発注ブリッジ
@@ -1045,6 +1103,9 @@ fnm install 22 && fnm default 22
 mkdir -p ~/ai-stock && cd ~/ai-stock
 git clone <repo-url> .
 
+# (7-b) エディタを WSL2 側から開く。以降の Git 操作もここに統一する（§6.4.1）
+cursor .   # VS Code なら code .
+
 # (8) 依存のインストール
 uv sync
 cd apps/web && npm ci && cd ../..
@@ -1110,6 +1171,8 @@ tailscale serve status
 - [ ] Parquet のパーティション名に `:` `?` `*` がない
 - [ ] `.gitattributes` に `* text=auto eol=lf` がある
 - [ ] `git status` に改行コードのみの差分が出ていない
+- [ ] Git 操作が WSL2 側に統一されている（Windows 製 GUI クライアントでコミットしていない）
+- [ ] エディタを WSL2 のシェルから起動している（`\\wsl.localhost` 経由で開いていない）
 
 ### 11.4 常時稼働
 
