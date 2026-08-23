@@ -1,0 +1,45 @@
+# シークレット
+.env
+.env.*
+!.env.example
+
+# データ層（生データ・DuckDB・Parquet・ベクトルストア・SQLite）
+data/
+*.duckdb
+*.duckdb.wal
+*.sqlite
+*.sqlite-journal
+*.parquet
+
+# 実行時の生成物
+logs/
+*.log
+.killswitch
+.cache/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+
+# 生成された型定義
+openapi.json
+apps/web/lib/api-types.ts
+
+# エディタ・OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
