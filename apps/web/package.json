@@ -1,0 +1,37 @@
+{
+  "name": "web",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0 --port 3000",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0 --port 3000",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "gen:api": "python ../../scripts/gen_api_types.py",
+    "check:api": "python ../../scripts/gen_api_types.py --check"
+  },
+  "dependencies": {
+    "@ai-stock/ui": "workspace:*",
+    "@tanstack/react-query": "^5.66.0",
+    "lucide-react": "^0.475.0",
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^2.15.1"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.2.0",
+    "@playwright/test": "^1.50.1",
+    "@tailwindcss/postcss": "^4.0.6",
+    "@types/node": "^22.13.1",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "eslint": "^9.20.0",
+    "eslint-config-next": "^15.1.6",
+    "openapi-typescript": "^7.13.0",
+    "tailwindcss": "^4.0.6",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,72 @@
+# packages/core/config/models.yaml
+# ここがモデル識別子の唯一の定義場所。アプリコードにモデル名を書かない。
+# docs/07-llm-rag.md §2.2 の内容をそのまま起こしたもの。
+#
+# [要検証] モデル名・価格・コンテキスト長はすべて執筆時点の値。
+# 実装・運用の前に各プロバイダの公式価格ページで確認し、
+# last_verified を更新すること。90日以上前だと起動時に警告が出る。
+version: 3
+last_verified: "2026-08-23"
+
+tiers:
+  bulk:
+    primary: gemini-3.7-flash
+    fallbacks: [claude-sonnet-5]
+    max_output_tokens: 4096
+    temperature: 0.2
+  default:
+    primary: claude-sonnet-5
+    fallbacks: [gemini-3.7-flash]
+    max_output_tokens: 8192
+    temperature: 0.3
+  deep:
+    primary: claude-opus-5
+    fallbacks: [claude-sonnet-5]
+    max_output_tokens: 16384
+    temperature: 0.4
+
+models:
+  gemini-3.7-flash:
+    litellm_model: "gemini/gemini-3.7-flash"     # [要検証] 実際の識別子
+    provider: google
+    input_usd_per_mtok: 0.75                     # 導入価格（2026-12-31まで）
+    output_usd_per_mtok: 3.75
+    input_usd_per_mtok_after_2027: 1.50
+    output_usd_per_mtok_after_2027: 7.50
+    context_window: 1000000
+    supports_pdf_input: true                     # これが bulk 層に選ぶ決定的な理由
+    supports_json_mode: true
+    supports_prompt_cache: true
+  claude-sonnet-5:
+    litellm_model: "anthropic/claude-sonnet-5"   # [要検証]
+    provider: anthropic
+    input_usd_per_mtok: 3.00
+    output_usd_per_mtok: 15.00
+    intro_input_usd_per_mtok: 2.00               # 2026-08-31 まで
+    intro_output_usd_per_mtok: 10.00
+    intro_until: "2026-08-31"
+    context_window: 1000000
+    supports_pdf_input: true
+    supports_json_mode: true
+    supports_prompt_cache: true
+  claude-opus-5:
+    litellm_model: "anthropic/claude-opus-5"     # [要検証]
+    provider: anthropic
+    input_usd_per_mtok: 5.00
+    output_usd_per_mtok: 25.00
+    context_window: 1000000
+    long_context_surcharge: false                # 1M全域でフラット
+    supports_pdf_input: true
+    supports_json_mode: true
+
+embeddings:
+  primary: gemini-embedding
+  models:
+    gemini-embedding:
+      litellm_model: "gemini/gemini-embedding-001"   # [要検証]
+      dimensions: 3072
+      usd_per_mtok: 0.15                             # [要検証]
+    text-embedding-3-small:
+      litellm_model: "openai/text-embedding-3-small"
+      dimensions: 1536
+      usd_per_mtok: 0.02

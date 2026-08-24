@@ -1,0 +1,55 @@
+{# version: 1 #}
+{# tier: default #}
+## 評価対象
+
+過去 {{ horizon }} の実績が確定した推奨 {{ n }} 件の一覧です。
+
+{% for r in outcomes %}
+### {{ r.ticker }}（{{ r.as_of }}、{{ r.action }}、conviction={{ r.conviction }}）
+- 論拠: {{ r.thesis_ja }}
+- 弱気論拠: {{ r.bear_case_ja }}
+- reason codes: {{ r.reason_codes | join(", ") }}
+- 予測: {{ r.expected_ret }} [{{ r.expected_ret_lo }}, {{ r.expected_ret_hi }}]
+- 実績: 超過リターン {{ r.excess_return }}（的中: {{ r.is_hit }}）
+- 期間中の最大不利変動: {{ r.max_adverse_excursion }}
+{% endfor %}
+
+## 集計
+
+- 全体の的中率: {{ hit_rate }}（n={{ n }}）
+- conviction 別の的中率: {{ hit_rate_by_conviction }}
+- reason code 別の的中率: {{ hit_rate_by_reason_code }}
+- 予測が信頼区間内に収まった比率: {{ coverage_rate }}
+
+## タスク
+
+1. **繰り返し現れるパターン**を特定する。
+   偶然と区別できる程度の頻度があるものだけを挙げる（最低 n=10）。
+
+2. 各パターンについて、以下を出力する。
+   - scope: global / market / sector / ticker のいずれか
+   - category: lesson（教訓）/ bias（体系的な偏り）/ pattern（規則性）/ caveat（注意点）
+   - lesson_ja: 以降の分析で参照すべき短い文（150文字以内）
+   - evidence_ja: なぜそう言えるかの根拠（該当する rec_id と数値）
+   - n_observations: 根拠となった観測数
+   - confidence: 0.0-1.0
+
+3. **信頼区間のキャリブレーション**を評価する。
+   coverage_rate が 60%（q20-q80の想定）から大きく乖離している場合、
+   モデルが過信または過度に慎重であることを指摘する。
+
+4. 既存の教訓（下記）のうち、実績と矛盾するものを特定する。
+
+{% for m in existing_memory %}
+- [{{ m.memory_id }}] {{ m.lesson_ja }}（適用前的中率 {{ m.hit_rate_before }} →
+  適用後 {{ m.hit_rate_after }}、n={{ m.n_observations }}）
+{% endfor %}
+
+## 制約
+
+- n < 10 のパターンを教訓として出力してはいけません。
+- 「モメンタムが有効だった」のような一般論ではなく、
+  「JP市場のH5で REV_UP_GUIDANCE と MOM_STRONG_12M が同時に立つケースの
+  的中率は 68%（n=31）だが、REV_UP_GUIDANCE 単独では 51%（n=88）である」
+  のように、条件と数値を伴う具体的な内容にしてください。
+- 結果の良し悪しではなく、再現しそうな規則性のみを教訓にしてください。

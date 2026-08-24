@@ -1,0 +1,4 @@
+@import "tailwindcss";
+/* 色・寸法の実体はすべて ../styles/tokens.css にある。
+   app/ と components/ に生の 16 進数カラーを置かないための分離。 */
+@import "../styles/tokens.css";

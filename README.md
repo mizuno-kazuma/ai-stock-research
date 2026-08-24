@@ -1,7 +1,34 @@
 # AI 株式リサーチ・売買判断支援ツール 仕様書
 
 日米株式（東証・US）を対象とした、個人利用のAIリサーチ・売買判断支援ツールの詳細仕様書一式です。
-このリポジトリには**仕様書とSKILLSのみ**が含まれます。アプリケーションの実装は含みません。
+バックエンド API（`services/api`）とストレージ層は本リポジトリで動かせます。フロントエンドは `apps/web` を参照してください。
+
+## 実装の起動（API）
+
+前提: Python 3.12、[`uv`](https://docs.astral.sh/uv/)、`PYTHONUTF8=1`。データは WSL2 ホーム配下に置く（`/mnt/c` は使わない）。Windows ネイティブで試す場合は `DATA_DIR` を `%USERPROFILE%\ai-stock\data` などにする。
+
+```powershell
+$env:PYTHONUTF8 = "1"
+Copy-Item .env.example .env   # 値を埋める。EDGAR を叩かない API 起動には空のままでよい
+uv sync
+uv run python -m packages.core.storage.init_db
+uv run python -m services.api.seed
+uv run pytest
+uv run uvicorn services.api.main:app --host 0.0.0.0 --port 8000
+```
+
+WSL では `make sync init-db seed test api` でもよい。systemd unit と `.wslconfig` のサンプルは `infra/`（[docs/15-windows-runtime.md](docs/15-windows-runtime.md)）。
+
+確認:
+
+```powershell
+curl.exe http://localhost:8000/health
+curl.exe "http://localhost:8000/api/v1/system/health"
+curl.exe "http://localhost:8000/api/v1/dashboard?market=JP"
+curl.exe "http://localhost:8000/api/v1/recommendations?market=JP"
+```
+
+OpenAPI は `http://localhost:8000/api/v1/openapi.json`（`uv run python -m services.api.export_openapi`）。
 
 ## このツールが何であって、何でないか
 

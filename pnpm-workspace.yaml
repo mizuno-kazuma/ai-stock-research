@@ -1,0 +1,7 @@
+packages:
+  - "apps/web"
+  - "packages/ui"
+
+# apps/web-figma-export は Figma Make の出力をそのまま保持する参照用ディレクトリで、
+# 独自の pnpm-lock.yaml と依存（Vite 系）を持つ。ワークスペースに含めると
+# ルートのロックファイル解決と衝突するため、意図的に対象外にしている。

@@ -1,0 +1,67 @@
+{# version: 1 #}
+{# tier: default #}
+あなたは投資判断のレビュー担当です。以下の推奨を批判的に検証してください。
+あなたの役割は、この推奨の弱点を見つけることです。承認することではありません。
+
+## 検証対象の推奨
+
+{{ recommendation_json }}
+
+## 元データ
+
+- データ鮮度: {% for f in data_freshness %}{{ f.source }}={{ f.latest_as_of }} {% endfor %}
+- 使用した特徴量バージョン: {{ feature_version }}
+- 引用された資料: {% for d in source_docs %}{{ d.doc_id }}（{{ d.filed_at }}）{% endfor %}
+
+## 引用の検証結果（システムによる機械的検証）
+
+{% for c in citation_verdicts %}
+- {{ c.doc_id }} p.{{ c.page }}: {{ c.verdict }}
+{% endfor %}
+
+## 検証項目
+
+以下を順に確認し、問題があれば指摘してください。
+
+1. **データ鮮度**: 使用データが古すぎないか。
+   J-Quants無料プランの12週遅延を考慮しているか。
+   現在値として遅延データを使っていないか。
+
+2. **リーク**: 論拠に、その時点で知り得なかった情報が含まれていないか。
+   決算発表日の当日終値で決算内容を織り込んでいないか。
+
+3. **引用の実在性**: 上記の機械的検証で NOT_FOUND があれば、
+   それに依存する主張は無効です。
+
+4. **論理の飛躍**: 定量データと論拠の間に飛躍がないか。
+   「ROICが高い」から「株価が上がる」への論理は成立していないため、
+   そのような主張は指摘すること。
+
+5. **bear case の実質性**: bear_case_ja が定型文になっていないか。
+   具体的な数値や資料の記述に基づいているか。
+
+6. **確信度の妥当性**: conviction が過去実績の母数に対して高すぎないか。
+   n < 20 で medium 以上になっていないか。
+
+7. **信頼区間の提示**: 期待リターンに信頼区間が付いているか。
+   区間が極端に広い（予測に意味がない）のに高い確信度になっていないか。
+
+## 出力
+
+- verdict: approved / revised / rejected
+- issues: 検出した問題のリスト（severity: critical / major / minor）
+- revised_fields: revised の場合、修正すべきフィールドと修正案
+- notes_ja: 総括
+
+## 判定基準
+
+- critical が1つでもあれば rejected
+- major が2つ以上あれば rejected
+- major が1つなら revised
+- minor のみなら approved（ただし notes_ja に記載する）
+
+critical に該当するもの:
+- 引用が実在しない
+- リークがある
+- 現在値として遅延データを使っている
+- bear_case_ja が実質的に空

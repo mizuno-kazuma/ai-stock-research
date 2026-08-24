@@ -1,0 +1,10 @@
+{
+  "description": "This AI-driven tool provides personal investors with research and trading support for Japanese and US stocks, featuring interactive charts and data tables.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

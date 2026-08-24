@@ -1,0 +1,27 @@
+[project]
+name = "ai-stock-api"
+version = "0.1.0"
+description = "FastAPI による読み取り/書き込み API（docs/09-api-spec.md）"
+requires-python = ">=3.12,<3.13"
+
+# このサービス自身の依存境界を宣言する。
+# ルートの pyproject.toml がこの集合を含む上位集合になっているため、
+# 通常の開発では `uv sync`（ルート）だけでよい。
+# Phase B でコンテナに分割する際は、この一覧がそのまま Dockerfile の
+# 依存リストになる（docs/01-architecture.md §8）。
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sse-starlette>=2.1",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "duckdb>=1.1",
+    "sqlalchemy>=2.0",
+    "python-ulid>=3.0",
+    "python-multipart>=0.0.12",
+]
+
+# ビルド対象にはしない。実体はワークスペースルートの
+# `packages` / `services` ツリーとして 1 つの wheel に入る。
+[tool.uv]
+package = false

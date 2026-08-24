@@ -34,9 +34,19 @@ out/
 dist/
 *.tsbuildinfo
 
-# 生成された型定義
+# 中間の OpenAPI JSON。TS 生成物 `apps/web/lib/api-types.generated.ts` はコミットする。
 openapi.json
-apps/web/lib/api-types.ts
+apps/web/lib/.openapi.tmp.json
+apps/web/lib/.api-types.tmp.ts
+apps/web/lib/.api-types.check.ts
+
+# Next.js / PWA
+apps/web/.next/
+apps/web/out/
+apps/web/public/sw.js.map
+apps/web/playwright-report/
+apps/web/test-results/
+apps/web/.turbo/
 
 # エディタ・OS
 .DS_Store

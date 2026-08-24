@@ -1,0 +1,24 @@
+{
+  "name": "AI Stock Research",
+  "short_name": "Research",
+  "description": "日米株式のAIリサーチ・売買判断支援",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0B0E14",
+  "theme_color": "#0B0E14",
+  "lang": "ja",
+  "dir": "ltr",
+  "icons": [
+    {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+    {"src": "/icons/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml"}
+  ],
+  "shortcuts": [
+    {"name": "推奨銘柄", "url": "/recommendations", "icons": [{"src": "/icons/rec-96.png", "sizes": "96x96"}]},
+    {"name": "決算資料", "url": "/filings", "icons": [{"src": "/icons/filing-96.png", "sizes": "96x96"}]},
+    {"name": "ポートフォリオ", "url": "/portfolio", "icons": [{"src": "/icons/pf-96.png", "sizes": "96x96"}]}
+  ]
+}

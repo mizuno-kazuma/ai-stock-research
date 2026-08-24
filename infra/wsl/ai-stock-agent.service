@@ -1,0 +1,23 @@
+[Unit]
+Description=AI Stock Research Agent (APScheduler)
+After=network-online.target ai-stock-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/ai-stock
+Environment=PYTHONUTF8=1
+Environment=LANG=C.UTF-8
+Environment=TZ=Asia/Tokyo
+EnvironmentFile=-/home/ubuntu/ai-stock/.env
+ExecStart=/home/ubuntu/.local/bin/uv run python -m services.agent.main
+Restart=always
+RestartSec=30
+# 起動時に中断ジョブの再開チェックを行うため、少し待つ
+ExecStartPre=/bin/sleep 10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

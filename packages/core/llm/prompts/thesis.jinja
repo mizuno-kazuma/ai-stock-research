@@ -1,0 +1,77 @@
+{# version: 1 #}
+{# tier: default #}
+## 対象銘柄
+
+{{ ticker }} {{ company_name }}（{{ market }}、{{ sector_name }}）
+
+## 定量データ
+
+| 項目 | 値 | セクター内順位 |
+|---|---|---|
+| 定量スコア | {{ quant_score }} | {{ sector_rank }}/{{ sector_count }} |
+| バリュー z | {{ value_z }} | |
+| モメンタム z | {{ momentum_z }} | |
+| クオリティ z | {{ quality_z }} | |
+| 成長 z | {{ growth_z }} | |
+| 低ボラ z | {{ lowvol_z }} | |
+| 改定 z | {{ revision_z }} | |
+| ML予測（{{ horizon }}） | {{ ml_pred }} [{{ ml_pred_lo }}, {{ ml_pred_hi }}] | |
+| PER / PBR | {{ per }} / {{ pbr }} | |
+| ROIC | {{ roic }} | |
+| 実現ボラ(60日) | {{ realized_vol }} | |
+
+## 検出された reason codes
+
+{{ reason_codes | join(", ") }}
+
+## 関連する開示資料の抜粋
+
+{% for hit in retrieved_chunks %}
+### [{{ hit.doc_id }}] {{ hit.title }}（{{ hit.filed_at }}、p.{{ hit.page_from }}、{{ hit.section }}）
+{{ hit.text }}
+{% endfor %}
+
+## 過去の類似ケースの実績
+
+同様の reason code の組み合わせでの過去の的中率: {{ hit_rate_prior }}（n={{ n_prior_samples }}）
+平均超過リターン: {{ avg_excess_return }}
+
+## 蓄積された教訓
+
+{% for m in agent_memory %}
+- [{{ m.category }}] {{ m.lesson_ja }}（根拠: {{ m.evidence_ja }}、n={{ m.n_observations }}）
+{% endfor %}
+
+## タスク
+
+1. **thesis_ja**: この銘柄に注目すべき論拠を2-4行で書く。
+   定量データの数値と、資料からの引用の両方を根拠にする。
+
+2. **bear_case_ja**: **この推奨を却下すべき理由を3つ挙げる。**
+   以下を必ず検討すること。
+   - 定量スコアの構成要素で最も低いグループは何か。それは何を意味するか
+   - 割安と判断した場合、それがバリュートラップである可能性
+   - 開示資料に記載されたリスク要因のうち、この論拠を崩すもの
+   - 過去の類似ケースで失敗した事例があるか
+   一般論ではなく、この銘柄のデータと資料に基づいて具体的に書く。
+
+3. **invalidation_ja**: この見立てを捨てるべき具体的な条件を書く。
+   「株価が下がったら」ではなく、「次期の会社予想が下方修正されたら」
+   「営業利益率が X% を下回ったら」のように検証可能な条件にする。
+
+4. **conviction**: low / medium / high。以下を考慮する。
+   - 過去の類似ケースの母数（n < 20 なら low 以外にしない）
+   - ML予測の信頼区間の幅
+   - データの鮮度
+   - 開示資料の量と鮮度
+
+5. **citations**: 上記の根拠となった引用を3件以上。
+
+## 制約
+
+- bear_case_ja を「特にありません」「リスクは限定的」のような内容にしてはならない。
+  却下すべき理由を具体的に3つ挙げられない場合、この銘柄は推奨に適さない。
+  その場合は conviction を low とし、bear_case_ja に「明確な弱気論拠を
+  特定できなかったため、分析が不十分である可能性がある」と書くこと。
+- 「買い」「売り」という語を使わない。
+- 目標株価を提示しない（統計的根拠のない数字になるため）。

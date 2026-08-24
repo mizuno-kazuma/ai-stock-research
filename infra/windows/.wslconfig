@@ -1,0 +1,29 @@
+[wsl2]
+# WSL2 に Windows ホストのネットワークインターフェースを鏡像化する。
+# これにより WSL2 内の 0.0.0.0 バインドが Windows の全インターフェース
+# （Tailscale 含む）で到達可能になる。Windows 11 22H2 以降が必要。
+# 配置先: %USERPROFILE%\.wslconfig
+# 反映には `wsl --shutdown` が必要（ターミナルを閉じるだけでは足りない）。
+networkingMode=mirrored
+
+# DNS 解決を Windows 側にトンネルする。VPN 併用時の名前解決の失敗を防ぐ。
+dnsTunneling=true
+
+# ファイアウォールを Hyper-V 側で統合管理する
+firewall=true
+
+# 自動プロキシ設定の引き継ぎ（企業ネットワーク等で有効）
+autoProxy=true
+
+# ホストが 16GB の場合の目安。全部を割り当てない。
+memory=12GB
+processors=6
+swap=8GB
+swapFile=C:\\wsl-swap.vhdx
+
+[experimental]
+# メモリを解放する（DuckDB の大きな集計後にホストへ返す）
+autoMemoryReclaim=gradual
+
+# ディスクの空き領域を Windows に返す
+sparseVhd=true

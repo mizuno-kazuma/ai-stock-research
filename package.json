@@ -1,0 +1,17 @@
+{
+  "name": "ai-stock-research",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "lint": "pnpm --filter web lint",
+    "typecheck": "pnpm -r typecheck",
+    "test:e2e": "pnpm --filter web test:e2e",
+    "gen:api": "python scripts/gen_api_types.py",
+    "check:api": "python scripts/gen_api_types.py --check"
+  },
+  "engines": {
+    "node": ">=20.11"
+  }
+}
