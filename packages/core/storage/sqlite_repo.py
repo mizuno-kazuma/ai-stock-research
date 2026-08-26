@@ -24,6 +24,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     create_engine,
+    delete,
     event,
     func,
     select,
@@ -523,6 +524,12 @@ class SQLiteRepo:
         stmt = stmt.order_by(JobRun.started_at.desc(), JobRun.id.desc()).limit(limit)
         with self.session() as s:
             return list(s.execute(stmt).scalars().all())
+
+    def clear_finished_job_runs(self) -> int:
+        """実行中以外の job_runs を削除する。戻り値は削除件数。"""
+        with self.session() as s:
+            result = s.execute(delete(JobRun).where(JobRun.status != "running"))
+            return int(result.rowcount or 0)
 
     def latest_job_run(
         self,
@@ -1239,8 +1246,25 @@ class SQLiteRepo:
         return self.get_rate_limit_state(source)
 
     def save_rate_limit_state(
-        self, source: str, *, tokens: float, calls_today: int, day_key: str
+        self,
+        source: str | object,
+        *,
+        tokens: float | None = None,
+        calls_today: int | None = None,
+        day_key: str | None = None,
     ) -> None:
+        last_iso = utc_now_iso()
+        if not isinstance(source, str):
+            obj = source
+            source = str(getattr(obj, "source"))
+            tokens = float(getattr(obj, "tokens"))
+            calls_today = int(getattr(obj, "calls_today", 0) or 0)
+            day_key = str(getattr(obj, "day_key", "") or "")
+            last = getattr(obj, "last_refill_at", None)
+            if last is not None:
+                last_iso = last.isoformat() if hasattr(last, "isoformat") else str(last)
+        if tokens is None or calls_today is None or day_key is None:
+            raise TypeError("save_rate_limit_state には tokens / calls_today / day_key が必要です")
         with self.session() as s:
             row = s.get(RateLimitState, source)
             if row is None:
@@ -1248,14 +1272,14 @@ class SQLiteRepo:
                     RateLimitState(
                         source=source,
                         tokens=tokens,
-                        last_refill_at=utc_now_iso(),
+                        last_refill_at=last_iso,
                         calls_today=calls_today,
                         day_key=day_key,
                     )
                 )
             else:
                 row.tokens = tokens
-                row.last_refill_at = utc_now_iso()
+                row.last_refill_at = last_iso
                 row.calls_today = calls_today
                 row.day_key = day_key
 

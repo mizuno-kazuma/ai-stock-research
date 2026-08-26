@@ -63,7 +63,7 @@ class AppState:
     def freshness(self) -> list[DataFreshness]:
         items: list[DataFreshness] = []
         seed_rows = self.payload.get("data_freshness") or []
-        if seed_rows:
+        if self.is_seed_data and seed_rows:
             for row in seed_rows:
                 items.append(
                     DataFreshness(

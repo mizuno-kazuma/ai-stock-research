@@ -34,6 +34,7 @@ from services.api.util import as_list, utc_now
 router = APIRouter(tags=["agent"])
 
 KNOWN_JOBS = {
+    "collector",
     "collector_jp",
     "collector_us",
     "analyst",
@@ -129,6 +130,32 @@ def cancel_job(
         {"job_run_id": job_run_id, "status": "cancelled", "duration_sec": row.duration_sec, "failed_steps": []},
     )
     return wrap(state, OkResponse(ok=True, id=job_run_id, message_ja="ジョブをキャンセルしました。"))
+
+
+def _prune_seed_jobs(state: AppState) -> None:
+    """SQLite から消した実行がシードに残って再表示されないようにする。"""
+    remaining = {int(row.id) for row in state.sqlite.get_job_runs(limit=200)}
+    jobs = state.payload.get("jobs")
+    if jobs is None:
+        return
+    state.payload["jobs"] = [j for j in jobs if int(j.get("job_run_id") or 0) in remaining]
+
+
+@router.delete("/agent/jobs", response_model=Envelope[OkResponse])
+def clear_jobs(
+    _user: User = Depends(require_user),
+    state: AppState = Depends(get_app_state),
+) -> Envelope[OkResponse]:
+    deleted = state.sqlite.clear_finished_job_runs()
+    _prune_seed_jobs(state)
+    remaining = len(state.sqlite.get_job_runs(limit=200))
+    if remaining:
+        message = f"完了した実行履歴を{deleted}件削除しました。実行中のジョブは残しています。"
+    elif deleted:
+        message = f"実行履歴を{deleted}件削除しました。"
+    else:
+        message = "削除する実行履歴はありませんでした。"
+    return wrap(state, OkResponse(ok=True, message_ja=message))
 
 
 @router.get("/agent/memory", response_model=Envelope[AgentMemoryList])

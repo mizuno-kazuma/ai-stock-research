@@ -46,14 +46,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 def _open_duck(settings: Settings) -> DuckDBRepo:
-    path = settings.duckdb_path
-    if path.exists():
-        try:
-            return DuckDBRepo.open(settings, read_only=True)
-        except Exception:
-            logger.warning("DuckDB を読み取り専用で開けませんでした。書き込みモードで開きます。")
-            return DuckDBRepo.open(settings, read_only=False)
-    logger.warning("DuckDB がありません。空の DB を作成します: %s", path)
+    # 画面からの手動ジョブが upsert するため、Phase A では API も書き込み接続で開く。
     repo = DuckDBRepo.open(settings, read_only=False)
     repo.init_db()
     return repo

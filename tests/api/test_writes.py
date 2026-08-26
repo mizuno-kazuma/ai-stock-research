@@ -4,6 +4,21 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from packages.core.storage import SQLiteRepo
+
+
+def test_clear_finished_job_runs_keeps_running() -> None:
+    state = SQLiteRepo.in_memory()
+    state.init_db()
+    done = state.start_job_run("collector", trigger="schedule")
+    state.update_job_run(done, status="success", finished=True)
+    running = state.start_job_run("analyst", trigger="manual")
+    deleted = state.clear_finished_job_runs()
+    assert deleted == 1
+    remaining = state.get_job_runs(limit=10)
+    assert [row.id for row in remaining] == [running]
+    assert remaining[0].status == "running"
+
 
 def test_trade_roundtrip(client: TestClient) -> None:
     created = client.post(
@@ -43,6 +58,21 @@ def test_settings_roundtrip(client: TestClient) -> None:
     assert values["llm.daily_cap_usd"] == 1.5
     got = client.get("/api/v1/settings")
     assert got.json()["data"]["values"]["ui.direction_colors"] == "us"
+
+
+def test_clear_job_history(client: TestClient) -> None:
+    listed = client.get("/api/v1/agent/jobs?limit=50")
+    assert listed.status_code == 200, listed.text
+    items = listed.json()["data"]["items"]
+    assert items
+    running_before = [j for j in items if j["status"] == "running"]
+    cleared = client.delete("/api/v1/agent/jobs")
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["data"]["ok"] is True
+    after = client.get("/api/v1/agent/jobs?limit=50")
+    remaining = after.json()["data"]["items"]
+    assert all(j["status"] == "running" for j in remaining)
+    assert len(remaining) == len(running_before)
 
 
 def test_watchlist_roundtrip(client: TestClient) -> None:

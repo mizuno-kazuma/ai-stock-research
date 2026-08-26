@@ -54,7 +54,7 @@ AMENDMENT_CODES = frozenset({"130", "150", "170", "190", "360"})
 class EdinetConnector(HttpConnector):
     source = "edinet"
 
-    required_payload_keys = {EP_DOCUMENTS: ("results",)}
+    required_payload_keys = {EP_DOCUMENTS: ()}
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -131,7 +131,8 @@ class EdinetConnector(HttpConnector):
     # ------------------------------------------------------------------
     def normalize(self, batch: RawBatch) -> pd.DataFrame:
         self.assert_payload_shape(batch)
-        results = batch.payload.get("results") or []
+        payload = batch.payload if isinstance(batch.payload, dict) else {}
+        results = payload.get("results")
         if not results:
             return tag_table(pd.DataFrame(), "documents")
 

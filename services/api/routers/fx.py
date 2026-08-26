@@ -174,12 +174,32 @@ def get_fx(
     state: AppState = Depends(get_app_state),
 ) -> Envelope[FxDetail]:
     pair = pair.upper()
-    seeded = _fx_from_seed(state, pair)
-    if seeded:
-        return wrap(state, seeded, as_of=seeded.as_of)
+    if state.is_seed_data:
+        seeded = _fx_from_seed(state, pair)
+        if seeded:
+            return wrap(state, seeded, as_of=seeded.as_of)
     rows = state.duck.get_fx_forecasts(pair, as_of=as_date(as_of) if as_of else None)
     if not rows:
-        raise not_found(f"為替ペア {pair} の予測がありません。")
+        series_id = "DEXJPUS" if pair in {"USDJPY", "USD/JPY"} else pair
+        day = as_date(as_of) or state.as_of
+        macro = state.duck.get_macro_as_of(series_id, as_of=day, limit=1)
+        if not macro or macro[0].get("value") is None:
+            raise not_found(f"為替ペア {pair} の予測がありません。")
+        spot = float(macro[0]["value"])
+        obs = as_date(macro[0].get("observation_date")) or day
+        return wrap(
+            state,
+            FxDetail(
+                pair=pair,
+                as_of=obs,
+                spot=spot,
+                official=FxQuote(value=spot, as_of=obs, source="fred"),
+                verdict_ja="為替予測モデルはまだ未計算です。表示は FRED の実績値です。",
+                verdict_status="no_edge",
+                forecasts=[],
+            ),
+            as_of=obs,
+        )
     forecasts = []
     for r in rows:
         beats = r.get("beats_baseline")
@@ -235,7 +255,7 @@ def get_fx_history(
         for r in reversed(rows)
         if r.get("value") is not None and (as_date(r["observation_date"]) or start) >= start
     ]
-    if not points:
+    if not points and state.is_seed_data:
         for item in (state.payload.get("fx") or {}).get("history_sample") or []:
             points.append(FxHistoryPoint(date=as_date(item["date"]) or state.as_of, value=float(item["value"])))
     return wrap(

@@ -248,7 +248,28 @@ def _adapt_state(sqlite: Any) -> Any:
             }
 
         def load_rate_limit_state(self, source: str) -> Any:
-            return self._i.get_rate_limit_state(source)
+            row = self._i.get_rate_limit_state(source)
+            if row is None:
+                return None
+            from datetime import UTC, datetime
+
+            from packages.core.interfaces.storage import RateLimitState as RL
+
+            last = getattr(row, "last_refill_at", None)
+            if isinstance(last, str):
+                last = datetime.fromisoformat(last.replace("Z", "+00:00"))
+            if last is not None and getattr(last, "tzinfo", None) is None:
+                last = last.replace(tzinfo=UTC)
+            return RL(
+                source=str(row.source),
+                tokens=float(row.tokens),
+                last_refill_at=last or datetime.now(UTC),
+                calls_today=int(getattr(row, "calls_today", 0) or 0),
+                day_key=str(getattr(row, "day_key", "") or ""),
+            )
+
+        def save_rate_limit_state(self, state: Any) -> None:
+            self._i.save_rate_limit_state(state)
 
         def __getattr__(self, name: str) -> Any:
             return getattr(self._i, name)

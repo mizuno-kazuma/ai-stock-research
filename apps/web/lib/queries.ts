@@ -604,6 +604,17 @@ export function useCancelJob() {
   );
 }
 
+export function useClearJobHistory() {
+  const qc = useQueryClient();
+  return useApiMutation<{ ok: boolean; message_ja?: string }, void>(
+    () => apiDelete<{ ok: boolean; message_ja?: string }>("/agent/jobs"),
+    () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.agentJobs() });
+      void qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  );
+}
+
 export function useRunDiagnostics() {
   return useApiMutation<{ report_ja: string }, void>(() =>
     apiPost<{ report_ja: string }>("/system/diagnostics"),

@@ -22,16 +22,16 @@ SOURCES_YAML = CONFIG_DIR / "sources.yaml"
 DEFAULT_SOURCES: dict[str, dict[str, Any]] = {
     "jquants": {
         "base_url": "https://api.jquants.com",
-        "rate_limit_per_min": 5,  # free plan。light は 60 [要検証]
+        "rate_limit_per_min": 5,  # 既定は free。実効値は jquants_plan_params() が上書き
         "plan": "${JQUANTS_PLAN}",
-        "delay_weeks": 12,  # free plan の遅延。light は 0
+        "delay_weeks": 12,  # 既定は free。light は 0（jquants_plan_params）
         "history_years": 2,
         "auth": {"kind": "header", "header_name": "x-api-key", "env_var": "JQUANTS_API_KEY"},
         "retry": {"max_attempts": 5, "backoff_base_sec": 4.0},
         "timeout_sec": 30,
         "read_timeout_sec": 120,
         "enabled": True,
-        "last_verified": "2026-08-23",
+        "last_verified": "2026-08-26",
     },
     "edinet": {
         "base_url": "https://api.edinet-fsa.go.jp/api/v2",

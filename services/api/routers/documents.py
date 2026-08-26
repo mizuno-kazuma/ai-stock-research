@@ -37,6 +37,8 @@ def _all_docs(state: AppState) -> list[Document]:
     items = [document_from_row(r) for r in rows]
     if items:
         return items
+    if not state.is_seed_data:
+        return []
     return [
         document_from_row(r, has_summary=bool(r.get("has_summary")))
         for r in state.payload.get("filings") or []
@@ -48,6 +50,8 @@ def _find_doc(state: AppState, doc_id: str) -> Document | None:
     if row:
         has = state.duck.get_document_summary(doc_id) is not None
         return document_from_row(row, has_summary=has)
+    if not state.is_seed_data:
+        return None
     for item in state.payload.get("filings") or []:
         if item.get("doc_id") == doc_id:
             return document_from_row(item, has_summary=bool(item.get("has_summary")))

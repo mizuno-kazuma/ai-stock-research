@@ -66,7 +66,8 @@ export interface paths {
         get: operations["list_jobs_api_v1_agent_jobs_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Clear Jobs */
+        delete: operations["clear_jobs_api_v1_agent_jobs_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4841,6 +4842,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_jobs_api_v1_agent_jobs_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_OkResponse_"];
                 };
             };
         };

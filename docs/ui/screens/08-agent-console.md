@@ -194,6 +194,18 @@ Status labels use the shared set: 成功 / 部分 / 失敗 / 実行中 / 中断 
 A `partial` card always names what was skipped:
 `部分 · TDnetの取得に失敗（3回試行）`.
 
+### Job run list
+
+The list is sticky on desktop and scrolls internally so the page does not grow with history.
+
+| Element | label_en | label_ja | Example |
+| --- | --- | --- | --- |
+| Heading | Run history | 実行履歴 | |
+| Clear | Clear | クリア | |
+| Clear confirm title | Clear job history? | 実行履歴を削除しますか | |
+| Clear confirm body | | 完了したジョブの実行履歴を削除します。実行中のジョブは残ります。この操作は取り消せません。 | |
+| Clear confirm | Delete | 削除する | |
+
 ### Job run detail
 
 | Element | label_en | label_ja | Example |
@@ -457,6 +469,7 @@ the switch in its active state with the count of LLM calls skipped today.
 | Checkpoint value | Click | Copies the checkpoint JSON; toast `チェックポイントをコピーしました` |
 | Failed step retry | Click | Re-runs from the checkpoint; the button shows a running state |
 | Cancel running job | Click | Confirm dialog, then `POST /api/v1/agent/jobs/{job_run_id}/cancel` |
+| Clear history | Click | Confirm dialog, then `DELETE /api/v1/agent/jobs`. Running jobs are kept. The list becomes the empty state when nothing remains. |
 | Manual run | Click | Validates the date, shows the cost estimate for LLM-using jobs, then runs |
 | Log viewer | Scroll | Loads older lines on demand; supports text search within the loaded buffer |
 | Artifact link | Click | Opens the raw file listing for that run |
@@ -484,6 +497,7 @@ the switch in its active state with the count of LLM calls skipped today.
 | Job detail | `GET /api/v1/agent/jobs/{job_run_id}` |
 | Manual run | `POST /api/v1/agent/jobs/{job_name}/run` |
 | Cancel | `POST /api/v1/agent/jobs/{job_run_id}/cancel` |
+| Clear history | `DELETE /api/v1/agent/jobs` |
 | Live progress | `GET /api/v1/agent/events` (SSE) |
 | Cost | `GET /api/v1/agent/cost?period=daily&days=30` |
 | Critic stats | `GET /api/v1/agent/critic-stats?days=30` |

@@ -26,7 +26,7 @@ from packages.schemas.dashboard import (
 from packages.schemas.recommendations import RecommendationSummary
 from services.api.deps import AppState, User, get_app_state, require_user
 from services.api.envelope import wrap
-from services.api.mapping import recommendation_from_seed
+from services.api.mapping import alert_from_row, recommendation_from_seed
 from services.api.util import as_date, as_utc, split_csv
 
 router = APIRouter(tags=["dashboard"])
@@ -191,25 +191,17 @@ def _dashboard_from_seed(state: AppState, *, market: str, as_of: dt.date) -> Das
     )
 
 
-@router.get("/dashboard", response_model=Envelope[Dashboard])
-def get_dashboard(
-    market: str = Query(default="JP"),
-    as_of: dt.date | None = None,
-    _user: User = Depends(require_user),
-    state: AppState = Depends(get_app_state),
-) -> Envelope[Dashboard]:
-    day = as_of or state.as_of
-    if state.payload:
-        data = _dashboard_from_seed(state, market=market, as_of=day)
-        return wrap(state, data, as_of=day)
-    recs = state.duck.get_recommendations(market=market, as_of=day, limit=5)
-    summaries = []
+def _dashboard_from_warehouse(state: AppState, *, market: str, as_of: dt.date) -> Dashboard:
+    recs = state.duck.get_recommendations(market=market, as_of=as_of, limit=5)
+    if not recs:
+        recs = state.duck.get_recommendations(market=market, limit=5)
+    summaries: list[RecommendationSummary] = []
     for row in recs:
         sec = state.duck.get_security(row["ticker"], row["market"]) or {}
         summaries.append(
             RecommendationSummary(
                 rec_id=row["rec_id"],
-                as_of=as_date(row["as_of"]) or day,
+                as_of=as_date(row["as_of"]) or as_of,
                 ticker=row["ticker"],
                 market=row["market"],
                 name_local=sec.get("name_local") or row["ticker"],
@@ -228,5 +220,123 @@ def get_dashboard(
                 flags=list(row.get("flags") or []),
             )
         )
-    data = Dashboard(as_of=day, market=market, top_recommendations=summaries)  # type: ignore[arg-type]
+
+    series_id = "NIKKEI225" if market == "JP" else "SP500"
+    bench_rows = state.duck.get_macro_as_of(series_id, as_of=as_of, limit=2)
+    market_summary = None
+    if bench_rows:
+        latest = bench_rows[0]
+        prev = bench_rows[1] if len(bench_rows) > 1 else None
+        close = latest.get("value")
+        change = None
+        if close is not None and prev and prev.get("value"):
+            change = float(close) / float(prev["value"]) - 1.0
+        market_summary = MarketSummary(
+            benchmark=BenchmarkQuote(
+                symbol=series_id,
+                label_ja="日経平均" if market == "JP" else "S&P500",
+                close=float(close) if close is not None else None,
+                change_pct=change,
+                as_of=as_date(latest.get("observation_date")),
+            )
+        )
+
+    fx = None
+    fx_rows = state.duck.get_macro_as_of("DEXJPUS", as_of=as_of, limit=2)
+    if fx_rows:
+        latest = fx_rows[0]
+        prev = fx_rows[1] if len(fx_rows) > 1 else None
+        spot = latest.get("value")
+        change = None
+        if spot is not None and prev and prev.get("value"):
+            change = float(spot) / float(prev["value"]) - 1.0
+        fx = DashboardFx(
+            pair="USDJPY",
+            spot=float(spot) if spot is not None else None,
+            change_pct=change,
+            as_of=as_date(latest.get("observation_date")),
+        )
+
+    watch = {(w.market, w.ticker) for w in state.sqlite.get_watchlist()}
+    docs = state.duck.get_documents(market=market, limit=40)
+    preferred = [
+        row for row in docs if not watch or (row.get("market"), row.get("ticker")) in watch
+    ]
+    source_docs = preferred or docs
+    watch_filings: list[WatchlistFiling] = []
+    for row in source_docs:
+        filed = as_utc(row.get("filed_at"))
+        if filed is None:
+            continue
+        sec = state.duck.get_security(row.get("ticker") or "", row.get("market") or market) or {}
+        watch_filings.append(
+            WatchlistFiling(
+                doc_id=str(row["doc_id"]),
+                ticker=row.get("ticker"),
+                market=row.get("market"),
+                name_local=sec.get("name_local"),
+                doc_type=str(row.get("doc_type") or "other_disclosure"),
+                title=str(row.get("title") or row["doc_id"]),
+                filed_at=filed,
+                has_summary=state.duck.get_document_summary(str(row["doc_id"])) is not None,
+            )
+        )
+        if len(watch_filings) >= 8:
+            break
+
+    alerts: list[Alert] = []
+    for row in state.sqlite.get_alerts(unread_only=True, limit=10):
+        item = alert_from_row(row)
+        alerts.append(
+            Alert(
+                alert_id=item.alert_id,
+                severity=item.severity,
+                category=item.category,
+                title_ja=item.title_ja,
+                body_ja=item.body_ja,
+                created_at=item.created_at,
+                is_read=item.is_read,
+                link=item.link,
+            )
+        )
+
+    jobs = state.sqlite.get_job_runs(limit=1)
+    job_status = None
+    if jobs:
+        last = jobs[0]
+        job_status = JobStatusBrief(
+            last_run=as_utc(getattr(last, "finished_at", None) or getattr(last, "started_at", None)),
+            status=getattr(last, "status", None),
+            failed_steps=[],
+        )
+
+    positions = state.sqlite.get_positions()
+    portfolio = PortfolioSnapshot(n_positions=len(positions), currency="JPY")
+
+    return Dashboard(
+        as_of=as_of,
+        market=market,  # type: ignore[arg-type]
+        market_summary=market_summary,
+        fx=fx,
+        top_recommendations=summaries,
+        portfolio_snapshot=portfolio,
+        new_filings_count=state.duck.count_documents(market=market),
+        watchlist_filings=watch_filings,
+        alerts=alerts,
+        job_status=job_status,
+    )
+
+
+@router.get("/dashboard", response_model=Envelope[Dashboard])
+def get_dashboard(
+    market: str = Query(default="JP"),
+    as_of: dt.date | None = None,
+    _user: User = Depends(require_user),
+    state: AppState = Depends(get_app_state),
+) -> Envelope[Dashboard]:
+    day = as_of or state.as_of
+    if state.is_seed_data and state.payload:
+        data = _dashboard_from_seed(state, market=market, as_of=day)
+        return wrap(state, data, as_of=day)
+    data = _dashboard_from_warehouse(state, market=market, as_of=day)
     return wrap(state, data, as_of=day)

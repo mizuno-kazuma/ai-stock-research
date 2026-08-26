@@ -38,6 +38,7 @@ MIGRATIONS_DIR = Path(__file__).parent / "migrations" / "duckdb"
 # 推奨の不変条件（docs/03-data-model.md §2.9）
 MIN_BEAR_CASE_CHARS = 20
 MIN_PRIOR_SAMPLES_FOR_HIGH_CONVICTION = 20
+_UNSET = object()
 
 
 class StorageError(RuntimeError):
@@ -389,16 +390,32 @@ class DuckDBRepo:
     def get_security(
         self, ticker: str, market: str, *, as_of: dt.date | None = None
     ) -> dict[str, Any] | None:
+        wanted = [ticker]
+        if market == "JP" and len(ticker) == 4:
+            wanted.append(ticker + "0")
         rows = self.get_securities(
-            market=market, tickers=[ticker], active_only=False, as_of=as_of, limit=1
+            market=market, tickers=wanted, active_only=False, as_of=as_of
         )
-        return rows[0] if rows else None
+        if not rows:
+            return None
+        latest: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            latest.setdefault(str(row["ticker"]), row)
+        padded = latest.get(ticker + "0") if market == "JP" and len(ticker) == 4 else None
+        if padded is not None:
+            name = str(padded.get("name_local") or "").strip()
+            if name and name != padded["ticker"]:
+                return padded
+            if ticker not in latest:
+                return padded
+        return latest.get(ticker) or padded
 
     def search_securities(
         self, q: str, *, market: str | None = None, limit: int = 20
     ) -> list[dict[str, Any]]:
         """ティッカー・名称（日本語 / 英語 / カナ）の部分一致検索。"""
         pattern = f"%{q}%"
+        padded = f"{q}0" if len(q) == 4 else q
         where = [
             "(ticker ILIKE ? OR name_local ILIKE ? OR coalesce(name_en,'') ILIKE ?"
             " OR coalesce(name_kana,'') ILIKE ?)",
@@ -410,8 +427,8 @@ class DuckDBRepo:
             params.append(market)
         return self.query(
             f"SELECT * FROM securities WHERE {' AND '.join(where)} "
-            "ORDER BY (ticker = ?) DESC, ticker LIMIT ?",
-            [*params, q, limit],
+            "ORDER BY (ticker = ?) DESC, (ticker = ?) DESC, ticker LIMIT ?",
+            [*params, q, padded, limit],
         )
 
     # -- prices ---------------------------------------------------------------
@@ -446,6 +463,10 @@ class DuckDBRepo:
                 f"ORDER BY trade_date DESC LIMIT {int(limit)}"
             )
         rows = self.query(sql, params)
+        if not rows and market == "JP" and len(ticker) == 4:
+            return self.get_prices_daily(
+                ticker + "0", market, start=start, end=end, limit=limit, adjusted=adjusted
+            )
         if limit:
             rows.reverse()
         if adjusted:
@@ -492,11 +513,14 @@ class DuckDBRepo:
         return self.upsert("prices_live", rows, defaults={"ingested_at": _now()})
 
     def get_latest_live_quote(self, ticker: str, market: str) -> dict[str, Any] | None:
-        return self.query_one(
+        row = self.query_one(
             "SELECT * FROM prices_live WHERE ticker = ? AND market = ? "
             "ORDER BY trade_date DESC LIMIT 1",
             [ticker, market],
         )
+        if row is None and market == "JP" and len(ticker) == 4:
+            return self.get_latest_live_quote(ticker + "0", market)
+        return row
 
     def get_latest_close(
         self, ticker: str, market: str, *, as_of: dt.date | None = None
@@ -539,7 +563,7 @@ class DuckDBRepo:
         if period_type:
             clause = "AND period_type = ?"
             params.append(period_type)
-        return self.query(
+        rows = self.query(
             f"""
             SELECT * EXCLUDE (rn) FROM (
                 SELECT *, ROW_NUMBER() OVER (
@@ -553,16 +577,24 @@ class DuckDBRepo:
             """,
             params,
         )
+        if not rows and market == "JP" and len(ticker) == 4:
+            return self.get_financials_as_of(
+                ticker + "0", market, as_of, limit=limit, period_type=period_type
+            )
+        return rows
 
     def get_latest_financials(
         self, ticker: str, market: str, *, limit: int = 8
     ) -> list[dict[str, Any]]:
         """最新版の財務（PIT ではない。画面表示用）。"""
-        return self.query(
+        rows = self.query(
             "SELECT * EXCLUDE (rn) FROM financials_pit "
             "WHERE ticker = ? AND market = ? ORDER BY period_end DESC LIMIT ?",
             [ticker, market, limit],
         )
+        if not rows and market == "JP" and len(ticker) == 4:
+            return self.get_latest_financials(ticker + "0", market, limit=limit)
+        return rows
 
     # -- documents ------------------------------------------------------------
 
@@ -911,6 +943,7 @@ class DuckDBRepo:
         action: str | None = None,
         horizon: str | None = None,
         conviction: str | None = None,
+        critic_verdict: str | None | object = _UNSET,
         include_rejected: bool = False,
         limit: int = 50,
         offset: int = 0,
@@ -928,7 +961,13 @@ class DuckDBRepo:
             if value is not None:
                 where.append(f"{column} = ?")
                 params.append(value)
-        if not include_rejected:
+        if critic_verdict is not _UNSET:
+            if critic_verdict is None:
+                where.append("critic_verdict IS NULL")
+            else:
+                where.append("critic_verdict = ?")
+                params.append(critic_verdict)
+        elif not include_rejected:
             where.append("coalesce(critic_verdict, 'approved') <> 'rejected'")
         return self.query(
             f"SELECT * FROM recommendations WHERE {' AND '.join(where)} "

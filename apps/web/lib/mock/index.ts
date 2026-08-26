@@ -266,7 +266,15 @@ function resolve(method: string, path: string, params?: QueryParams, body?: unkn
   }
 
   // 9) /agent
-  if (seg[0] === "agent" && seg[1] === "jobs" && seg.length === 2) return empty ? [] : fx.AGENT_JOBS;
+  if (seg[0] === "agent" && seg[1] === "jobs" && seg.length === 2) {
+    if (method === "DELETE") {
+      const kept = fx.AGENT_JOBS.filter((j) => j.status === "running");
+      const deleted = fx.AGENT_JOBS.length - kept.length;
+      fx.AGENT_JOBS.splice(0, fx.AGENT_JOBS.length, ...kept);
+      return { ok: true, message_ja: `実行履歴を${deleted}件削除しました。` };
+    }
+    return empty ? [] : fx.AGENT_JOBS;
+  }
   if (seg[0] === "agent" && seg[1] === "jobs" && seg[3] === "run") return { job_run_id: 1048, status: "running" };
   if (seg[0] === "agent" && seg[1] === "jobs" && seg[3] === "cancel") return { cancelled: true };
   if (seg[0] === "agent" && seg[1] === "jobs") {

@@ -41,14 +41,23 @@ ENDPOINT_PATHS = {
     EP_FINS_SUMMARY: "/v2/fins/summary",
 }
 
-# 東証以外のサフィックス。`[要検証]`
+# 東証以外のサフィックス。v2 の MktNm（プライム等）と英語キーの両方を見る。
 MARKET_SUFFIX = {
     "TSE_PRIME": ".T",
     "TSE_STANDARD": ".T",
     "TSE_GROWTH": ".T",
+    "プライム": ".T",
+    "スタンダード": ".T",
+    "グロース": ".T",
+    "prime": ".T",
+    "standard": ".T",
+    "growth": ".T",
     "SAPPORO": ".S",
     "NAGOYA": ".N",
     "FUKUOKA": ".F",
+    "札幌": ".S",
+    "名古屋": ".N",
+    "福岡": ".F",
 }
 
 
@@ -95,9 +104,9 @@ class JQuantsConnector(HttpConnector):
     source = "jquants"
 
     required_payload_keys = {
-        EP_MASTER: ("info",),
-        EP_BARS_DAILY: ("daily_quotes",),
-        EP_FINS_SUMMARY: ("statements",),
+        EP_MASTER: (),
+        EP_BARS_DAILY: (),
+        EP_FINS_SUMMARY: (),
     }
 
     def __init__(self, *, plan: str | None = None, auth: JQuantsAuth | None = None, **kwargs: Any):
@@ -117,6 +126,11 @@ class JQuantsConnector(HttpConnector):
         self.history_years = int(self.plan_params["history_years"])
         self.yfinance_gap_fill = bool(self.plan_params["yfinance_gap_fill"])
         self.auth: JQuantsAuth = auth or ApiKeyAuth(self.config.secret(self.env))
+        # sources.yaml は無料プランの 5 req/min を既定にしている。プラン派生値で上書きする。
+        bucket = getattr(self.http, "bucket", None)
+        if bucket is not None:
+            bucket.rate_per_min = float(self.rate_limit_per_min)
+            bucket.burst = max(1.0, min(float(self.rate_limit_per_min), 5.0))
 
     # ------------------------------------------------------------------
     def url(self, endpoint: str) -> str:
@@ -153,38 +167,57 @@ class JQuantsConnector(HttpConnector):
             unit = day.isoformat()
             if self._checkpoint.is_done(f"{endpoint}:{unit}"):
                 continue
-            params = {"date": unit}
             try:
-                payload = self.http.get_json(
-                    self.url(endpoint), params=params, headers=headers, endpoint=endpoint
+                yield from self._iter_pages(
+                    endpoint, params={"date": unit}, headers=headers, as_of=day, persist=persist
                 )
             except NotFoundError:
                 # 休業日など。data_gaps に残すのは Collector 側の責務。
                 self._checkpoint.mark_done(f"{endpoint}:{unit}")
                 self._checkpoint.bump("not_found")
                 continue
-            self._checkpoint.bump("api_calls")
-            yield self.make_batch(
-                endpoint=endpoint, as_of=day, payload=payload, request=params, persist=persist
-            )
             self._checkpoint.mark_done(f"{endpoint}:{unit}")
 
     def _fetch_master(
         self, window: FetchWindow, *, headers: dict[str, str], persist: bool
     ) -> Iterator[RawBatch]:
-        params = {"date": window.end.isoformat()}
-        payload = self.http.get_json(
-            self.url(EP_MASTER), params=params, headers=headers, endpoint=EP_MASTER
-        )
-        self._checkpoint.bump("api_calls")
-        yield self.make_batch(
-            endpoint=EP_MASTER,
+        yield from self._iter_pages(
+            EP_MASTER,
+            params={"date": window.end.isoformat()},
+            headers=headers,
             as_of=window.end,
-            payload=payload,
-            request=params,
             persist=persist,
         )
         self._checkpoint.mark_done(f"{EP_MASTER}:{window.end.isoformat()}")
+
+    def _iter_pages(
+        self,
+        endpoint: str,
+        *,
+        params: dict[str, str],
+        headers: dict[str, str],
+        as_of: date,
+        persist: bool,
+    ) -> Iterator[RawBatch]:
+        """`pagination_key` が続く限り同じ日付を取り切る。"""
+        query = dict(params)
+        while True:
+            payload = self.http.get_json(
+                self.url(endpoint), params=query, headers=headers, endpoint=endpoint
+            )
+            self._checkpoint.bump("api_calls")
+            cursor = payload.get("pagination_key") if isinstance(payload, dict) else None
+            yield self.make_batch(
+                endpoint=endpoint,
+                as_of=as_of,
+                payload=payload,
+                request=dict(query),
+                next_cursor=cursor,
+                persist=persist,
+            )
+            if not cursor:
+                return
+            query = {**params, "pagination_key": str(cursor)}
 
     # ------------------------------------------------------------------
     def normalize(self, batch: RawBatch) -> pd.DataFrame:
@@ -200,36 +233,34 @@ class JQuantsConnector(HttpConnector):
         )
 
     def _normalize_prices(self, batch: RawBatch) -> pd.DataFrame:
-        rows = batch.payload.get("daily_quotes") or []
+        rows = _payload_rows(batch.payload, "data", "daily_quotes")
         if not rows:
             return tag_table(_empty_prices_frame(), "prices_daily")
         raw = pd.DataFrame(rows)
-        missing = {"Code", "Date", "Close"} - set(raw.columns)
-        if missing:
+        if "Code" not in raw.columns or "Date" not in raw.columns:
             raise SchemaDriftError(
-                f"jquants/{batch.endpoint}: 必須フィールドが欠けています {sorted(missing)}",
+                f"jquants/{batch.endpoint}: 必須フィールド Code/Date が欠けています",
                 source=self.source,
                 endpoint=batch.endpoint,
             )
 
         df = pd.DataFrame(
             {
-                # 数値型にしない。'7203' の先頭ゼロ落ちと '130A' に対応するため。
                 "ticker": raw["Code"].astype(str).str.strip(),
                 "market": "JP",
                 "trade_date": pd.to_datetime(raw["Date"]).dt.date,
-                "open": _num(raw, "Open"),
-                "high": _num(raw, "High"),
-                "low": _num(raw, "Low"),
-                "close": _num(raw, "Close"),
-                "volume": _num(raw, "Volume"),
-                "turnover_value": _num(raw, "TurnoverValue"),
-                "adj_open": _num(raw, "AdjustmentOpen"),
-                "adj_high": _num(raw, "AdjustmentHigh"),
-                "adj_low": _num(raw, "AdjustmentLow"),
-                "adj_close": _num(raw, "AdjustmentClose"),
-                "adj_volume": _num(raw, "AdjustmentVolume"),
-                "adjustment_factor": _num(raw, "AdjustmentFactor").fillna(1.0),
+                "open": _num(raw, "O", "Open"),
+                "high": _num(raw, "H", "High"),
+                "low": _num(raw, "L", "Low"),
+                "close": _num(raw, "C", "Close"),
+                "volume": _num(raw, "Vo", "Volume"),
+                "turnover_value": _num(raw, "Va", "TurnoverValue"),
+                "adj_open": _num(raw, "AdjO", "AdjustmentOpen"),
+                "adj_high": _num(raw, "AdjH", "AdjustmentHigh"),
+                "adj_low": _num(raw, "AdjL", "AdjustmentLow"),
+                "adj_close": _num(raw, "AdjC", "AdjustmentClose"),
+                "adj_volume": _num(raw, "AdjVo", "AdjustmentVolume"),
+                "adjustment_factor": _num(raw, "AdjFactor", "AdjustmentFactor").fillna(1.0),
                 "currency": "JPY",
                 "source": self.source,
             }
@@ -250,20 +281,20 @@ class JQuantsConnector(HttpConnector):
         return tag_table(accepted, "prices_daily")
 
     def _normalize_master(self, batch: RawBatch) -> pd.DataFrame:
-        rows = batch.payload.get("info") or []
+        rows = _payload_rows(batch.payload, "data", "info")
         if not rows:
             return tag_table(pd.DataFrame(), "securities")
         raw = pd.DataFrame(rows)
         df = pd.DataFrame(
             {
-                "ticker": raw.get("Code", pd.Series(dtype=object)).astype(str).str.strip(),
+                "ticker": _col(raw, "Code").astype(str).str.strip(),
                 "market": "JP",
-                "exchange": raw.get("MarketCodeName"),
-                "name_local": raw.get("CompanyName"),
-                "name_en": raw.get("CompanyNameEnglish"),
-                "sector_code": _as_str(raw, "Sector33Code"),
-                "sector_name": raw.get("Sector33CodeName"),
-                "industry_name": raw.get("Sector17CodeName"),
+                "exchange": _col(raw, "MktNm", "MarketCodeName"),
+                "name_local": _col(raw, "CoName", "CompanyName"),
+                "name_en": _col(raw, "CoNameEn", "CompanyNameEnglish"),
+                "sector_code": _as_str(raw, "S33", "Sector33Code"),
+                "sector_name": _col(raw, "S33Nm", "Sector33CodeName"),
+                "industry_name": _col(raw, "S17Nm", "Sector17CodeName"),
                 "currency": "JPY",
                 "valid_from": batch.as_of,
                 "is_active": True,
@@ -271,49 +302,48 @@ class JQuantsConnector(HttpConnector):
             }
         )
         df["yf_symbol"] = df["ticker"] + df["exchange"].map(_suffix_for_exchange).fillna(".T")
+        names = df["name_local"].astype("string").str.strip()
+        df["name_local"] = names.mask(names.isin(["", "<NA>"]), other=pd.NA).fillna(df["ticker"])
         return tag_table(df, "securities")
 
     def _normalize_financials(self, batch: RawBatch) -> pd.DataFrame:
-        rows = batch.payload.get("statements") or []
+        rows = _payload_rows(batch.payload, "data", "statements")
         if not rows:
             return tag_table(pd.DataFrame(), "financials")
         raw = pd.DataFrame(rows)
+        fy_end = _col(raw, "CurFYEn", "CurrentFiscalYearEndDate")
         df = pd.DataFrame(
             {
-                "ticker": raw.get("LocalCode", raw.get("Code")).astype(str).str.strip(),
+                "ticker": _col(raw, "Code", "LocalCode").astype(str).str.strip(),
                 "market": "JP",
-                "period_end": _date(raw, "CurrentPeriodEndDate"),
+                "period_end": _date(raw, "CurPerEn", "CurrentPeriodEndDate"),
                 # PIT の基準は開示日。期末日ではない。
-                "filed_at": _date(raw, "DisclosedDate"),
-                "fiscal_year": _num(raw, "CurrentFiscalYearEndDate").pipe(
-                    lambda s: pd.to_datetime(raw.get("CurrentFiscalYearEndDate")).dt.year
-                    if "CurrentFiscalYearEndDate" in raw
-                    else s
-                ),
+                "filed_at": _date(raw, "DiscDate", "DisclosedDate"),
+                "fiscal_year": pd.to_datetime(fy_end, errors="coerce").dt.year,
                 "fiscal_period": _period_series(raw).map(_fiscal_period),
                 # 決算短信は期首からの累計で開示される。単独四半期に直す処理が
                 # 必要なため、`quarter` ではなく `cumulative` と記録する
                 # （docs/04-analysis-engine.md §1.6 の累計/単独判別）。
                 "period_type": _period_series(raw).map(_period_type),
-                "doc_id": raw.get("DisclosureNumber"),
-                "revenue": _num(raw, "NetSales"),
-                "operating_income": _num(raw, "OperatingProfit"),
-                "ordinary_income": _num(raw, "OrdinaryProfit"),
-                "net_income": _num(raw, "Profit"),
-                "eps": _num(raw, "EarningsPerShare"),
-                "total_assets": _num(raw, "TotalAssets"),
-                "total_equity": _num(raw, "Equity"),
-                "operating_cf": _num(raw, "CashFlowsFromOperatingActivities"),
-                "investing_cf": _num(raw, "CashFlowsFromInvestingActivities"),
-                "financing_cf": _num(raw, "CashFlowsFromFinancingActivities"),
-                "cash_and_equiv": _num(raw, "CashAndEquivalents"),
-                "dividend_per_share": _num(raw, "ResultDividendPerShareAnnual"),
-                "bps": _num(raw, "BookValuePerShare"),
-                "forecast_revenue": _num(raw, "ForecastNetSales"),
-                "forecast_op_income": _num(raw, "ForecastOperatingProfit"),
-                "forecast_net_income": _num(raw, "ForecastProfit"),
-                "forecast_eps": _num(raw, "ForecastEarningsPerShare"),
-                "accounting_standard": raw.get("TypeOfDocument", "JGAAP"),
+                "doc_id": _col(raw, "DiscNo", "DisclosureNumber"),
+                "revenue": _num(raw, "Sales", "NetSales"),
+                "operating_income": _num(raw, "OP", "OperatingProfit"),
+                "ordinary_income": _num(raw, "OdP", "OrdinaryProfit"),
+                "net_income": _num(raw, "NP", "Profit"),
+                "eps": _num(raw, "EPS", "EarningsPerShare"),
+                "total_assets": _num(raw, "TA", "TotalAssets"),
+                "total_equity": _num(raw, "Eq", "Equity"),
+                "operating_cf": _num(raw, "CFO", "CashFlowsFromOperatingActivities"),
+                "investing_cf": _num(raw, "CFI", "CashFlowsFromInvestingActivities"),
+                "financing_cf": _num(raw, "CFF", "CashFlowsFromFinancingActivities"),
+                "cash_and_equiv": _num(raw, "CashEq", "CashAndEquivalents"),
+                "dividend_per_share": _num(raw, "DivAnn", "ResultDividendPerShareAnnual"),
+                "bps": _num(raw, "BPS", "BookValuePerShare"),
+                "forecast_revenue": _num(raw, "FSales", "ForecastNetSales"),
+                "forecast_op_income": _num(raw, "FOP", "ForecastOperatingProfit"),
+                "forecast_net_income": _num(raw, "FNP", "ForecastProfit"),
+                "forecast_eps": _num(raw, "FEPS", "ForecastEarningsPerShare"),
+                "accounting_standard": _col(raw, "DocType", "TypeOfDocument"),
                 "currency": "JPY",
                 "source": self.source,
                 "ingested_at": now_utc(),
@@ -353,9 +383,9 @@ def _suffix_for_exchange(exchange: object) -> str:
 
 
 def _period_series(df: pd.DataFrame) -> pd.Series:
-    if "TypeOfCurrentPeriod" not in df:
-        return pd.Series(["FY"] * len(df), dtype=object)
-    return df["TypeOfCurrentPeriod"].fillna("FY").astype(str).str.upper().str.strip()
+    series = _col(df, "CurPerType", "TypeOfCurrentPeriod")
+    filled = series.fillna("FY").astype(str).str.upper().str.strip()
+    return filled.mask(filled.isin(["", "<NA>", "NAN", "NONE"]), other="FY")
 
 
 def _fiscal_period(value: str) -> str:
@@ -373,22 +403,43 @@ def _period_type(value: str) -> str:
     return "cumulative"
 
 
-def _num(df: pd.DataFrame, column: str) -> pd.Series:
-    if column not in df:
-        return pd.Series([pd.NA] * len(df), dtype="Float64").astype(float)
-    return pd.to_numeric(df[column], errors="coerce")
+def _payload_rows(payload: Any, *keys: str) -> list[Any]:
+    if not isinstance(payload, dict):
+        return []
+    for key in keys:
+        rows = payload.get(key)
+        if isinstance(rows, list):
+            return rows
+    return []
 
 
-def _as_str(df: pd.DataFrame, column: str) -> pd.Series:
-    if column not in df:
-        return pd.Series([None] * len(df), dtype=object)
-    return df[column].astype(str)
+def _num(df: pd.DataFrame, *columns: str) -> pd.Series:
+    for column in columns:
+        if column in df:
+            return pd.to_numeric(df[column], errors="coerce")
+    return pd.Series([pd.NA] * len(df), dtype="Float64").astype(float)
 
 
-def _date(df: pd.DataFrame, column: str) -> pd.Series:
-    if column not in df:
-        return pd.Series([None] * len(df), dtype=object)
-    return pd.to_datetime(df[column], errors="coerce").dt.date
+def _col(df: pd.DataFrame, *columns: str) -> pd.Series:
+    """v1 正式名と v2 短縮名のどちらが来ても最初に存在する列を返す。"""
+    for column in columns:
+        if column in df.columns:
+            return df[column]
+    return pd.Series([None] * len(df), dtype=object)
+
+
+def _as_str(df: pd.DataFrame, *columns: str) -> pd.Series:
+    for column in columns:
+        if column in df.columns:
+            return df[column].astype(str)
+    return pd.Series([None] * len(df), dtype=object)
+
+
+def _date(df: pd.DataFrame, *columns: str) -> pd.Series:
+    for column in columns:
+        if column in df.columns:
+            return pd.to_datetime(df[column], errors="coerce").dt.date
+    return pd.Series([None] * len(df), dtype=object)
 
 
 def _empty_prices_frame() -> pd.DataFrame:

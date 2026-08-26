@@ -405,6 +405,7 @@ GET  /api/v1/agent/jobs?limit=50
 GET  /api/v1/agent/jobs/{job_run_id}
 POST /api/v1/agent/jobs/{job_name}/run     # 手動実行
 POST /api/v1/agent/jobs/{job_run_id}/cancel
+DELETE /api/v1/agent/jobs                  # 完了した実行履歴を削除（実行中は残す）
 GET  /api/v1/agent/memory?scope=market&scope_value=JP&is_active=true
 PATCH /api/v1/agent/memory/{memory_id}     # 有効化・無効化・編集
 DELETE /api/v1/agent/memory/{memory_id}

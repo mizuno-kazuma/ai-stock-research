@@ -46,6 +46,7 @@ import {
   useAgentJobs,
   useAgentMemory,
   useCancelJob,
+  useClearJobHistory,
   useCriticStats,
   useRecommendations,
   useRunJob,
@@ -126,10 +127,12 @@ function JobsTab({ selectedId, onSelect }: { selectedId: string | null; onSelect
   const jobsQ = useAgentJobs();
   const runJob = useRunJob();
   const cancelJob = useCancelJob();
+  const clearHistory = useClearJobHistory();
   const [jobName, setJobName] = useState<JobName>("collector");
   const [targetDate, setTargetDate] = useState("2026-08-22");
   const [force, setForce] = useState(false);
   const [confirmRun, setConfirmRun] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   return (
     <div className="space-y-4">
@@ -166,14 +169,28 @@ function JobsTab({ selectedId, onSelect }: { selectedId: string | null; onSelect
               <SectionCard title="本日のパイプライン">
                 <JobStatusStrip jobs={jobs} lastRun={jobs[jobs.length - 1]?.started_at ?? null} />
               </SectionCard>
-              <div className="grid gap-4 desktop:grid-cols-12">
-                <SectionCard title="実行履歴" className="desktop:col-span-5">
-                  <ul className="space-y-2">
+              <div className="grid gap-4 desktop:grid-cols-12 desktop:items-start">
+                <SectionCard
+                  title="実行履歴"
+                  className="desktop:col-span-5 desktop:sticky desktop:top-4 desktop:self-start"
+                  bodyClassName="max-h-96 overflow-y-auto overscroll-contain"
+                  actions={
+                    <Button
+                      variant="ghost"
+                      disabled={!online || clearHistory.isPending || jobs.every((j) => j.status === "running")}
+                      onClick={() => setConfirmClear(true)}
+                    >
+                      クリア
+                    </Button>
+                  }
+                >
+                  <ul className="space-y-2" aria-label="実行履歴">
                     {jobs.map((job) => (
                       <li key={job.job_run_id}>
                         <button
                           type="button"
                           className="w-full text-left card-inset p-3 tap-target"
+                          aria-current={selected && String(selected.job_run_id) === String(job.job_run_id) ? "true" : undefined}
                           onClick={() => onSelect(String(job.job_run_id))}
                         >
                           <span className="flex items-center justify-between gap-2">
@@ -243,6 +260,20 @@ function JobsTab({ selectedId, onSelect }: { selectedId: string | null; onSelect
       >
         {JOB_NAME_LABEL_JA[jobName]} を {targetDate} に対して実行します。
         {force ? "強制再実行のため、LLMコストが再発生する場合があります。" : null}
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={confirmClear}
+        onClose={() => setConfirmClear(false)}
+        title="実行履歴を削除しますか"
+        confirmLabel="削除する"
+        danger
+        disabled={!online || clearHistory.isPending}
+        onConfirm={() => {
+          clearHistory.mutate();
+          setConfirmClear(false);
+        }}
+      >
+        完了したジョブの実行履歴を削除します。実行中のジョブは残ります。この操作は取り消せません。
       </ConfirmDialog>
     </div>
   );

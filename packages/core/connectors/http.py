@@ -33,6 +33,7 @@ from packages.core.connectors.errors import (
 from packages.core.connectors.rate_limit import TokenBucket
 
 logger = logging.getLogger(__name__)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # FRED のようにクエリパラメータでキーを渡すAPIがあるため、
 # ログに出す前に必ずマスクする（T-SEC-02）。

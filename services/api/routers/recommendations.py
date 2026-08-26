@@ -63,7 +63,7 @@ def list_recommendations(
             if convictions and row.get("conviction") not in convictions:
                 continue
             items.append(_db_card(state, row))
-    elif state.payload:
+    elif state.is_seed_data and state.payload:
         for card in _seed_cards(state):
             if market and card.market != market:
                 continue
