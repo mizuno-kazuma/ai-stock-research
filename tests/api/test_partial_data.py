@@ -15,6 +15,12 @@ def test_partial_data_returns_200_with_warnings(client: TestClient) -> None:
     assert any(w["code"] == "SECTION_UNAVAILABLE" for w in body["warnings"])
 
 
+def test_dashboard_auto_market_resolves_to_jp_or_us(client: TestClient) -> None:
+    r = client.get("/api/v1/dashboard?market=auto")
+    assert r.status_code == 200
+    assert r.json()["data"]["market"] in ("JP", "US")
+
+
 def test_health_is_not_envelope(client: TestClient) -> None:
     r = client.get("/health")
     assert r.status_code == 200

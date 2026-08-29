@@ -24,7 +24,7 @@ from services.api.envelope import wrap
 from services.api.errors import cost_cap_exceeded, not_found, upstream_unavailable
 from services.api.mapping import document_from_row, document_summary_from_row, map_doc_type
 from services.api.runtime import generate_document_summary, load_document_chunks
-from services.api.util import as_date
+from services.api.util import as_date, resolve_market
 
 router = APIRouter(tags=["documents"])
 
@@ -69,6 +69,8 @@ def list_documents(
     _user: User = Depends(require_user),
     state: AppState = Depends(get_app_state),
 ) -> Envelope[DocumentList]:
+    if market:
+        market = resolve_market(market)
     mapped = map_doc_type(doc_type) if doc_type else None
     items = _all_docs(state)
     held = {(p.market, p.ticker) for p in state.sqlite.get_positions()}

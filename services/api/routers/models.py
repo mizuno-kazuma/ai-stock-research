@@ -35,7 +35,7 @@ from services.api.runtime import (
     queue_backtest_row,
     resolve_n_trials,
 )
-from services.api.util import as_date, as_dict, as_list, as_utc
+from services.api.util import as_date, as_dict, as_list, as_utc, resolve_market
 
 router = APIRouter(tags=["models"])
 
@@ -245,6 +245,7 @@ def get_model_health(
     _user: User = Depends(require_user),
     state: AppState = Depends(get_app_state),
 ) -> Envelope[ModelHealth]:
+    market = resolve_market(market)
     raw = state.payload.get("model_health") or {}
     if raw:
         val = raw.get("validation") or {}
@@ -394,6 +395,7 @@ def get_factor_weights(
     _user: User = Depends(require_user),
     state: AppState = Depends(get_app_state),
 ) -> Envelope[FactorWeightsResponse]:
+    market = resolve_market(market)
     listed = state.sqlite.list_weight_sets(market=market, horizon=horizon)
     if listed:
         active_row = next((r for r in listed if r.is_active), None)

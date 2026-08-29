@@ -28,7 +28,7 @@ from packages.schemas.recommendations import RecommendationSummary
 from services.api.deps import AppState, User, get_app_state, require_user
 from services.api.envelope import wrap
 from services.api.mapping import alert_from_row, recommendation_from_seed
-from services.api.util import as_date, as_utc, split_csv
+from services.api.util import as_date, as_utc, resolve_market, split_csv
 
 router = APIRouter(tags=["dashboard"])
 
@@ -345,6 +345,7 @@ def get_dashboard(
     _user: User = Depends(require_user),
     state: AppState = Depends(get_app_state),
 ) -> Envelope[Dashboard]:
+    market = resolve_market(market)
     day = as_of or state.as_of
     if state.is_seed_data and state.payload:
         data = _dashboard_from_seed(state, market=market, as_of=day)

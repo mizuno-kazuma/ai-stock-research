@@ -11,6 +11,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import type { DirectionColors, Market, ThemeMode } from "../lib/api-types";
+import { resolveMarket } from "../lib/market";
 
 export type Density = "standard" | "dense";
 
@@ -42,7 +43,11 @@ function readStored(): Prefs {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_PREFS;
     const parsed = JSON.parse(raw) as Partial<Prefs>;
-    return { ...DEFAULT_PREFS, ...parsed };
+    return {
+      ...DEFAULT_PREFS,
+      ...parsed,
+      market: resolveMarket(parsed.market),
+    };
   } catch {
     return DEFAULT_PREFS;
   }
@@ -66,7 +71,11 @@ export function PrefsProvider({ children }: { children: React.ReactNode }) {
 
   const setPrefs = useCallback((patch: Partial<Prefs>) => {
     setPrefsState((prev) => {
-      const next = { ...prev, ...patch };
+      const next = {
+        ...prev,
+        ...patch,
+        market: resolveMarket(patch.market ?? prev.market),
+      };
       try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       } catch {

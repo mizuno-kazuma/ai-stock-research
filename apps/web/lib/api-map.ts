@@ -15,6 +15,7 @@ import type {
   Backtest,
   CriticStats,
   DashboardData,
+  DefaultMarket,
   DocumentSummary,
   DocumentSummaryRow,
   FactorDetail,
@@ -78,6 +79,11 @@ function strArr(v: unknown): string[] {
 
 function asMarket(v: unknown): Market {
   return v === "US" ? "US" : "JP";
+}
+
+function asDefaultMarket(v: unknown): DefaultMarket {
+  if (v === "US" || v === "JP" || v === "auto") return v;
+  return "JP";
 }
 
 function asRatio(v: number | null): number | null {
@@ -689,6 +695,7 @@ export function mapSettings(raw: unknown): Settings {
   return {
     ...DEFAULT_SETTINGS,
     ...(values as Partial<Settings>),
+    "ui.default_market": asDefaultMarket(values["ui.default_market"]),
     "notify.quiet_hours": {
       from: str(quiet.from, DEFAULT_SETTINGS["notify.quiet_hours"].from),
       to: str(quiet.to, DEFAULT_SETTINGS["notify.quiet_hours"].to),

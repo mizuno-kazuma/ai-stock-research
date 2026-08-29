@@ -79,6 +79,9 @@
 GET /api/v1/dashboard?market=JP&as_of=2026-08-22
 ```
 
+`market` は `JP` / `US` / `auto`。`auto` は日本時間15時未満を `JP`、それ以降を `US` に解決する（設定キー `ui.default_market` と同じ規則）。レスポンスの `data.market` は常に `JP` または `US`。
+
+
 レスポンス:
 
 ```json

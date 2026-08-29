@@ -4870,6 +4870,7 @@ export interface operations {
         parameters: {
             query?: {
                 market?: string | null;
+                as_of?: string | null;
             };
             header?: never;
             path: {

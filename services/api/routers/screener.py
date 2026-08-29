@@ -25,7 +25,7 @@ from services.api.deps import AppState, User, get_app_state, require_user
 from services.api.envelope import wrap
 from services.api.errors import data_not_ready, not_found, validation_error
 from services.api.mapping import score_from_row
-from services.api.util import as_date, utc_now
+from services.api.util import as_date, resolve_market, utc_now
 
 router = APIRouter(tags=["screener"])
 
@@ -96,6 +96,7 @@ def get_scores(
     _user: User = Depends(require_user),
     state: AppState = Depends(get_app_state),
 ) -> Envelope[ScoreList]:
+    market = resolve_market(market)
     day = as_of
     tickers = [ticker] if ticker else None
     rows = state.duck.get_scores(market=market, as_of=day, tickers=tickers, limit=limit, offset=offset)
