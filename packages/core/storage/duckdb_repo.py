@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import math
 import threading
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
@@ -333,13 +334,39 @@ class DuckDBRepo:
 
     @staticmethod
     def _coerce(value: Any) -> Any:
-        """Pydantic / Enum 由来の値を DuckDB が扱える形にする。"""
+        """Pydantic / Enum / pandas / numpy 由来の値を DuckDB が扱える形にする。
+
+        INTEGER 列に NaN を渡すと `Type DOUBLE with value nan can't be cast
+        to INT32` で落ちる。非有限の浮動小数は NULL にする。
+        """
+        if value is None:
+            return None
+        cls_name = type(value).__name__
+        if cls_name in {"NAType", "NaTType"}:
+            return None
         if isinstance(value, dt.datetime):
             # DuckDB TIMESTAMP は naive UTC。tz-aware を渡すと INSERT が落ちる。
             if value.tzinfo is not None:
                 return value.astimezone(dt.UTC).replace(tzinfo=None)
             return value
-        if value is None or isinstance(value, (str, int, float, bool, dt.date)):
+        if isinstance(value, (str, bool)):
+            return value
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+        if isinstance(value, float):
+            if not math.isfinite(value):
+                return None
+            return value
+        item = getattr(value, "item", None)
+        if callable(item) and not isinstance(value, (bytes, bytearray, memoryview)):
+            try:
+                native = item()
+            except Exception:
+                native = None
+            else:
+                if native is not value:
+                    return DuckDBRepo._coerce(native)
+        if isinstance(value, dt.date):
             return value
         if isinstance(value, dt.timedelta):
             return value

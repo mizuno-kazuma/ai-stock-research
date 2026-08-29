@@ -5,7 +5,6 @@ LLM が止まっても定量スコアだけでカードを出す。不完全な�
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import date
 from typing import Any
@@ -40,6 +39,37 @@ FALLBACK_BEAR = (
     "バリュートラップと業績モメンタム剥落の両方を却下理由として残す。"
     "信頼区間が広く、母数不足なら確信度は低に固定する。"
 )
+# ML 未学習時に使う、情報のない広い区間（ホライズン20営業日）。
+FALLBACK_CI_HALF_WIDTH = 0.20
+
+
+def _finite(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number or number in {float("inf"), float("-inf")}:
+        return None
+    return number
+
+
+def _interval_from_row(row: pd.Series) -> tuple[float | None, float, float]:
+    """ML 区間が無ければ実現ボラ、それも無ければ広いデフォルトで埋める。
+
+    区間なしの推奨は不変条件で挿入できない。パイプラインを落とす代わりに
+    「情報がない」ことを幅で表現する。
+    """
+    pred = _finite(row.get("ml_pred_h20"))
+    lo = _finite(row.get("ml_pred_h20_lo"))
+    hi = _finite(row.get("ml_pred_h20_hi"))
+    if lo is not None and hi is not None and hi > lo:
+        return pred, lo, hi
+    vol = _finite(row.get("realized_vol_60d"))
+    center = pred if pred is not None else 0.0
+    if vol is not None and vol > 0:
+        half = float(vol) * (20.0 / 252.0) ** 0.5
+        return pred, center - half, center + half
+    return pred, center - FALLBACK_CI_HALF_WIDTH, center + FALLBACK_CI_HALF_WIDTH
 
 
 def _force_conviction(raw: str, n_prior: int) -> str:
@@ -113,6 +143,7 @@ def build_recommendation(
         order = {"low": 0, "medium": 1, "high": 2}
         level = raw_conv if order[raw_conv] <= order[level] else level
     level = _force_conviction(level, n_prior_samples)
+    expected_ret, expected_lo, expected_hi = _interval_from_row(row)
     rec = {
         "rec_id": str(uuid.uuid4()),
         "as_of": as_of,
@@ -124,9 +155,9 @@ def build_recommendation(
         "qual_score": row.get("qual_score"),
         "total_score": row.get("total_score"),
         "ml_pred_h20": row.get("ml_pred_h20"),
-        "expected_ret": row.get("ml_pred_h20"),
-        "expected_ret_lo": row.get("ml_pred_h20_lo"),
-        "expected_ret_hi": row.get("ml_pred_h20_hi"),
+        "expected_ret": expected_ret,
+        "expected_ret_lo": expected_lo,
+        "expected_ret_hi": expected_hi,
         "thesis_ja": thesis_ja,
         "bear_case_ja": bear,
         "invalidation_ja": inval,
@@ -256,9 +287,10 @@ def _strategist_body(
 
     recs: list[dict[str, Any]] = []
     llm_capped = False
+    discarded = 0
 
     def process(ticker: str) -> None:
-        nonlocal llm_capped
+        nonlocal llm_capped, discarded
         row = candidates.loc[candidates["ticker"].astype(str) == ticker].iloc[0]
         reasons = assign_reason_codes(row)
         row = row.copy()
@@ -330,23 +362,24 @@ def _strategist_body(
                 thesis = None
             except Exception:
                 thesis = None
-        rec = build_recommendation(
-            row,
-            as_of=as_of,
-            market=market,
-            n_prior_samples=prior.n_samples,
-            hit_rate_prior=prior.hit_rate,
-            thesis=thesis,
-            memory_ids=mem_ids,
-            source_doc_ids=source_ids,
-            data_freshness=freshness,
-        )
         try:
+            rec = build_recommendation(
+                row,
+                as_of=as_of,
+                market=market,
+                n_prior_samples=prior.n_samples,
+                hit_rate_prior=prior.hit_rate,
+                thesis=thesis,
+                memory_ids=mem_ids,
+                source_doc_ids=source_ids,
+                data_freshness=freshness,
+            )
             warehouse.insert_recommendation(rec)
             recs.append(rec)
             if memory is not None and mem_ids:
                 memory.touch_memory(mem_ids)
         except InvariantViolationError:
+            discarded += 1
             return
 
     tickers = candidates["ticker"].astype(str).tolist() if not candidates.empty else []
@@ -360,7 +393,7 @@ def _strategist_body(
             fn=process,
         )
 
-    status = "partial" if llm_capped or not recs else "success"
+    status = "partial" if llm_capped or not recs or discarded else "success"
     if not recs and candidates.empty:
         status = "partial"
     steps = {"cards": StepResult(status=status)}
@@ -371,8 +404,9 @@ def _strategist_body(
         )
     metrics = attach_step_failures(
         {
-            "n_candidates": int(len(candidates)),
+            "n_candidates": len(candidates),
             "n_recs": len(recs),
+            "n_discarded": discarded,
             "llm_capped": llm_capped,
         },
         steps,

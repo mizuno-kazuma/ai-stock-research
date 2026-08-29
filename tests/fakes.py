@@ -206,6 +206,8 @@ class FakeWarehouse:
         self.flags: list[dict[str, Any]] = []
         self.freshness = pd.DataFrame(columns=["source", "latest_as_of"])
         self.summaries: dict[tuple[str, str, str], dict[str, Any]] = {}
+        self.coverage: dict[str, date | None] = {}
+        self.macro_rows: list[dict[str, Any]] = []
 
     def upsert_securities(self, df: pd.DataFrame) -> int:
         self.securities = df
@@ -237,6 +239,8 @@ class FakeWarehouse:
     def latest_coverage_date(
         self, table: str, *, market: str | None = None, date_col: str | None = None
     ) -> date | None:
+        if table in self.coverage:
+            return self.coverage[table]
         if table != "prices_daily" or self.prices.empty or "trade_date" not in self.prices.columns:
             return None
         work = self.prices
@@ -287,7 +291,17 @@ class FakeWarehouse:
         return len(df)
 
     def read_macro_as_of(self, **kwargs: Any) -> pd.DataFrame:
-        return pd.DataFrame()
+        series_ids = kwargs.get("series_ids") or []
+        if not self.macro_rows:
+            return pd.DataFrame()
+        rows = [r for r in self.macro_rows if not series_ids or r.get("series_id") in series_ids]
+        return pd.DataFrame(rows)
+
+    def get_macro_as_of(
+        self, series_id: str, *, as_of: date, limit: int = 60
+    ) -> list[dict[str, Any]]:
+        rows = [r for r in self.macro_rows if r.get("series_id") == series_id]
+        return rows[: int(limit)]
 
     def upsert_features_daily(self, df: pd.DataFrame) -> int:
         self.features = df

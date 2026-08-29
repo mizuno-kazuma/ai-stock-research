@@ -171,16 +171,21 @@ def _storage_pair() -> tuple[Any, Any, bool]:
 def run_pipeline_job(market: str, as_of: date | None = None, trigger: str = "schedule") -> None:
     """スケジュールから呼ばれる。storage は遅延 import。"""
     from services.agent.pipeline import run_pipeline
+    from services.agent.wiring import pipeline_dependencies
 
     day = as_of or session_as_of(market)
     warehouse, sqlite, owned = _storage_pair()
     try:
+        state = _adapt_state(sqlite)
+        adapted_wh = _adapt_warehouse(warehouse)
+        extras = pipeline_dependencies(state, adapted_wh, market=market)
         run_pipeline(
             market,
             day,
-            state=_adapt_state(sqlite),
-            warehouse=_adapt_warehouse(warehouse),
+            state=state,
+            warehouse=adapted_wh,
             trigger=trigger,
+            **extras,
         )
     finally:
         if owned:

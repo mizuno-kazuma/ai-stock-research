@@ -123,6 +123,22 @@ def collector(
             return
         try:
             metrics = fn(market, as_of) or {}
+            if (
+                name == "documents"
+                and not metrics.get("skipped")
+                and int(metrics.get("rows") or 0) == 0
+                and warehouse is not None
+                and _latest_coverage(warehouse, "documents", market) is None
+            ):
+                results[name] = StepResult(
+                    status="failed",
+                    error="開示資料が0件で、倉庫にも既存がありません",
+                    metrics=dict(metrics),
+                    required=required,
+                )
+                if overall != "failed":
+                    overall = "partial"
+                return
             results[name] = StepResult(status="success", metrics=dict(metrics), required=required)
         except Exception as exc:
             results[name] = StepResult(
