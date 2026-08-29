@@ -36,6 +36,9 @@ JOB_LABEL_JA = {
     "strategist": "推奨生成",
     "critic": "レビュー",
     "evaluator": "実績評価",
+    "weekly_review": "週次の深掘り",
+    "model_retrain": "ranker 再学習",
+    "garch_refit": "GARCH 再推定",
     "pipeline": "パイプライン",
     "backtest": "バックテスト",
 }

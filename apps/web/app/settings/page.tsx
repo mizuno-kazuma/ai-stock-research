@@ -57,6 +57,8 @@ const SCHEDULE: Array<{ job: string; when: string }> = [
   { job: "レビュー", when: "平日 06:42 (JST)" },
   { job: "実績評価", when: "平日 06:47 (JST)" },
   { job: "週次の深掘り", when: "土曜 09:00 (JST)" },
+  { job: "ranker 再学習", when: "第1土曜 10:00 (JST)" },
+  { job: "GARCH 再推定", when: "月曜 07:00 (JST)" },
 ];
 
 function DirectionPreview() {

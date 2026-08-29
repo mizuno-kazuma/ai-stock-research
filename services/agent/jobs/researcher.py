@@ -11,7 +11,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from packages.core.interfaces.storage import JobRunRepo, MemoryRecord, WarehouseRepo
+from packages.core.interfaces.storage import JobRunRepo, WarehouseRepo
+from packages.core.llm.cache import input_hash, prompt_hash
 from packages.core.llm.errors import CostCapExceeded, KillSwitchActive
 from packages.core.llm.prompts import render_prompt
 from packages.core.llm.router import LLMRouter
@@ -71,6 +72,59 @@ def aggregate_qual_score(summaries: list[dict[str, Any]], as_of: date) -> dict[s
     }
 
 
+def _summary_from_cache(cached: dict[str, Any], row: pd.Series) -> dict[str, Any]:
+    return {
+        "doc_id": cached.get("doc_id") or row.get("doc_id"),
+        "filed_at": row.get("filed_at") or cached.get("filed_at"),
+        "doc_type": row.get("doc_type") or cached.get("doc_type"),
+        "qualitative_score": cached.get("qualitative_score"),
+        "citations": cached.get("citations") or [],
+    }
+
+
+def _summary_payload(
+    doc_id: str,
+    parsed: DocSummaryOutput,
+    p_hash: str,
+    i_hash: str,
+    *,
+    model_id: str | None,
+    input_tokens: int | None,
+    output_tokens: int | None,
+    cost_usd: float | None,
+    cache_hit: bool,
+) -> dict[str, Any]:
+    return {
+        "doc_id": doc_id,
+        "summary_version": 1,
+        "model_id": model_id or "unknown",
+        "prompt_hash": p_hash,
+        "input_hash": i_hash,
+        "headline_ja": parsed.summary_ja[:80],
+        "summary_ja": parsed.summary_ja,
+        "key_points": parsed.key_points,
+        "risk_factors": parsed.risk_factors,
+        "guidance_tone": parsed.guidance_tone,
+        "guidance_evidence": parsed.guidance_evidence,
+        "qualitative_score": parsed.qualitative_score,
+        "citations": [c.model_dump() for c in parsed.citations],
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "cost_usd": cost_usd,
+        "cache_hit": cache_hit,
+    }
+
+
+def _persist_summary(warehouse: WarehouseRepo, payload: dict[str, Any]) -> None:
+    writer = getattr(warehouse, "upsert_document_summaries", None)
+    if not callable(writer):
+        return
+    try:
+        writer([payload])
+    except Exception:
+        return
+
+
 def researcher(
     market: str,
     as_of: date,
@@ -112,18 +166,31 @@ def researcher(
         summaries: list[dict[str, Any]] = []
         for _, row in subset.iterrows():
             doc_id = str(row.get("doc_id") or "")
+            rendered = render_prompt(
+                "doc_summary.jinja",
+                company_name=row.get("title") or ticker,
+                ticker=ticker,
+                filed_at=row.get("filed_at"),
+                doc_type_ja=row.get("doc_type") or "",
+                prev_doc_available=False,
+                schema_json=DocSummaryOutput.model_json_schema(),
+            )
+            p_hash = prompt_hash("doc_summary.jinja", rendered)
+            i_hash = input_hash({"doc_id": doc_id, "messages": rendered})
+            cached = None
+            finder = getattr(warehouse, "find_summary", None)
+            if callable(finder):
+                try:
+                    cached = finder(doc_id=doc_id, prompt_hash=p_hash, input_hash=i_hash)
+                except TypeError:
+                    cached = finder(doc_id=doc_id)
+            if cached:
+                summaries.append(_summary_from_cache(cached, row))
+                metrics["n_summaries"] += 1
+                continue
             if router is None:
-                break
+                continue
             try:
-                rendered = render_prompt(
-                    "doc_summary.jinja",
-                    company_name=row.get("title") or ticker,
-                    ticker=ticker,
-                    filed_at=row.get("filed_at"),
-                    doc_type_ja=row.get("doc_type") or "",
-                    prev_doc_available=False,
-                    schema_json=DocSummaryOutput.model_json_schema(),
-                )
                 resp = router.complete(
                     tier="bulk",
                     purpose="doc_summary",
@@ -137,6 +204,18 @@ def researcher(
                 parsed = resp.parsed
                 if parsed is None:
                     continue
+                payload = _summary_payload(
+                    doc_id,
+                    parsed,
+                    p_hash,
+                    i_hash,
+                    model_id=getattr(resp, "model_id", None),
+                    input_tokens=getattr(resp, "input_tokens", None),
+                    output_tokens=getattr(resp, "output_tokens", None),
+                    cost_usd=getattr(resp, "cost_usd", None),
+                    cache_hit=getattr(resp, "was_cache_hit", False),
+                )
+                _persist_summary(warehouse, payload)
                 summaries.append(
                     {
                         "doc_id": doc_id,
@@ -157,7 +236,7 @@ def researcher(
         agg = aggregate_qual_score(summaries, as_of)
         qual_rows.append({"ticker": ticker, **agg})
 
-    if targets and router is not None:
+    if targets:
         with_checkpoint(
             state,
             run_id,
@@ -166,13 +245,10 @@ def researcher(
             units=targets,
             fn=process,
         )
-    else:
-        # LLM なし / 対象なし → 定量のみで後続へ。
-        if router is None:
-            metrics["llm_capped"] = False
-            overall = "partial"
-        for t in targets:
-            qual_rows.append({"ticker": t, "score": None, "confidence": None, "doc_count": 0})
+    if router is None:
+        # キャッシュがあれば使う。新規要約はスキップして定量のみで後続へ。
+        metrics["llm_skipped"] = True
+        overall = "partial"
 
     metrics["n_tickers"] = len(targets)
     finish_run(state, run_id, status=overall, metrics=metrics)

@@ -11,7 +11,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from packages.core.factors.calendar import TradingCalendar, next_business_day, shift_business_days
+from packages.core.factors.calendar import TradingCalendar
+from packages.core.factors.factor_config import DEFAULT_GROUP_WEIGHTS
 from packages.core.interfaces.storage import JobRunRepo, MemoryRecord, MemoryRepo, WarehouseRepo
 from packages.core.llm.errors import CostCapExceeded, KillSwitchActive
 from packages.core.llm.prompts import render_prompt
@@ -21,6 +22,18 @@ from services.agent.deps import begin_run, finish_run
 from services.agent.types import JobResult, StepResult
 
 ACTION_SIGN = {"watch": 1, "accumulate": 1, "reduce": -1, "avoid": -1}
+GROUP_Z_COLS = {
+    "value": "value_z",
+    "momentum": "momentum_z",
+    "quality": "quality_z",
+    "growth": "growth_z",
+    "lowvol": "lowvol_z",
+    "revision": "revision_z",
+}
+BENCHMARK_TICKERS = {
+    "JP": ("TOPIX", "1306", "1306.T", "^TOPX"),
+    "US": ("SPX", "SPY", "^GSPC"),
+}
 
 
 def evaluate_outcomes(
@@ -42,7 +55,10 @@ def evaluate_outcomes(
             ticker = str(r["ticker"])
             entry_date = cal.next_business_day(r["as_of"])
             exit_date = cal.shift(entry_date, days)
-            prices = warehouse.read_prices_daily(tickers=[ticker], start=entry_date, end=exit_date)
+            bench_tickers = list(BENCHMARK_TICKERS.get(market, ()))
+            prices = warehouse.read_prices_daily(
+                tickers=[ticker, *bench_tickers], start=entry_date, end=exit_date
+            )
             entry = _open_on(prices, ticker, entry_date)
             exit_ = _open_on(prices, ticker, exit_date)
             if entry is None or exit_ is None:
@@ -55,10 +71,15 @@ def evaluate_outcomes(
                 )
                 continue
             raw_ret = exit_ / entry - 1.0
-            bench_ret = 0.0
+            bench_ret, bench_ticker = _benchmark_return(
+                prices, market, entry_date, exit_date
+            )
             excess = raw_ret - bench_ret
             expected_sign = ACTION_SIGN.get(str(r.get("action") or "watch"), 1)
             is_hit = (excess * expected_sign) > 0
+            mfe, mae = _excursions(
+                prices, ticker, entry_date, exit_date, entry, expected_sign
+            )
             outcomes.append(
                 {
                     "rec_id": r["rec_id"],
@@ -72,10 +93,11 @@ def evaluate_outcomes(
                     "exit_price": exit_,
                     "raw_return": raw_ret,
                     "benchmark_return": bench_ret,
+                    "benchmark_ticker": bench_ticker,
                     "excess_return": excess,
                     "is_hit": bool(is_hit),
-                    "max_favorable_excursion": None,
-                    "max_adverse_excursion": None,
+                    "max_favorable_excursion": mfe,
+                    "max_adverse_excursion": mae,
                 }
             )
     if outcomes:
@@ -160,6 +182,9 @@ def evaluator(
     if outcomes:
         hits = [o["is_hit"] for o in outcomes]
         metrics["hit_rate"] = float(np.mean(hits))
+        metrics["benchmark_missing"] = all(
+            o.get("benchmark_ticker") is None for o in outcomes
+        )
         by_conv: dict[str, list[bool]] = {}
         recs = {
             r["rec_id"]: r
@@ -180,6 +205,10 @@ def evaluator(
             vals = [r for _, r in known]
             if any(vals[i] > vals[i + 1] + 1e-9 for i in range(len(vals) - 1)):
                 metrics["conviction_not_monotonic"] = True
+
+    _record_weight_proposal(
+        as_of, market, outcomes, warehouse=warehouse, state=state, memory=memory, metrics=metrics
+    )
 
     lessons: list[Lesson] = []
     if router is not None and len(outcomes) >= 10:
@@ -263,6 +292,141 @@ def _open_on(prices: pd.DataFrame, ticker: str, on: date) -> float | None:
     if pd.isna(val) or float(val) <= 0:
         return None
     return float(val)
+
+
+def _benchmark_return(
+    prices: pd.DataFrame, market: str, entry_date: date, exit_date: date
+) -> tuple[float, str | None]:
+    for ticker in BENCHMARK_TICKERS.get(market, ()):
+        entry = _open_on(prices, ticker, entry_date)
+        exit_ = _open_on(prices, ticker, exit_date)
+        if entry is None or exit_ is None:
+            continue
+        return exit_ / entry - 1.0, ticker
+    return 0.0, None
+
+
+def _excursions(
+    prices: pd.DataFrame,
+    ticker: str,
+    entry_date: date,
+    exit_date: date,
+    entry_price: float,
+    expected_sign: int,
+) -> tuple[float | None, float | None]:
+    """保有期間中の最大含み益 (MFE) と最大含み損 (MAE)。符号は推奨方向。"""
+    if prices is None or prices.empty or entry_price <= 0:
+        return None, None
+    work = prices.copy()
+    work["trade_date"] = pd.to_datetime(work["trade_date"]).dt.date
+    if "ticker" in work.columns:
+        work = work.loc[work["ticker"].astype(str) == ticker]
+    work = work.loc[(work["trade_date"] >= entry_date) & (work["trade_date"] <= exit_date)]
+    if work.empty:
+        return None, None
+    high_col = next((c for c in ("adj_high", "high", "adj_close", "adj_open") if c in work.columns), None)
+    low_col = next((c for c in ("adj_low", "low", "adj_close", "adj_open") if c in work.columns), None)
+    if high_col is None or low_col is None:
+        return None, None
+    highs = pd.to_numeric(work[high_col], errors="coerce")
+    lows = pd.to_numeric(work[low_col], errors="coerce")
+    if expected_sign >= 0:
+        fav = highs / entry_price - 1.0
+        adv = lows / entry_price - 1.0
+    else:
+        fav = 1.0 - lows / entry_price
+        adv = 1.0 - highs / entry_price
+    fav = fav.dropna()
+    adv = adv.dropna()
+    mfe = float(fav.max()) if not fav.empty else None
+    mae = float(adv.min()) if not adv.empty else None
+    return mfe, mae
+
+
+def _record_weight_proposal(
+    as_of: date,
+    market: str,
+    outcomes: list[dict[str, Any]],
+    *,
+    warehouse: WarehouseRepo,
+    state: JobRunRepo,
+    memory: MemoryRepo | None,
+    metrics: dict[str, Any],
+) -> None:
+    h20 = [o for o in outcomes if o.get("horizon") == "H20"]
+    if len(h20) < 100:
+        metrics["weight_proposal"] = "skipped_n"
+        return
+    current = _current_weights(state, memory, market)
+    group_z, excess = _align_scores(warehouse, h20, market)
+    proposed = propose_factor_weights(group_z, excess, current)
+    if proposed is None:
+        metrics["weight_proposal"] = "skipped_fit"
+        return
+    inserter = getattr(memory, "insert_factor_weights", None)
+    if not callable(inserter):
+        inserter = getattr(state, "insert_factor_weights", None)
+    if not callable(inserter):
+        metrics["weight_proposal"] = "skipped_repo"
+        return
+    dates = [o["as_of"] for o in h20 if o.get("as_of") is not None]
+    weight_set_id = f"eval_{market}_H20_{as_of.isoformat()}"
+    inserter(
+        {
+            "weight_set_id": weight_set_id,
+            "market": market,
+            "horizon": "H20",
+            "weights": proposed,
+            "fitted_from": str(min(dates)) if dates else str(as_of),
+            "fitted_to": str(max(dates)) if dates else str(as_of),
+            "fit_method": "ridge_nn",
+            "is_active": False,
+            "created_by": "evaluator",
+        }
+    )
+    metrics["weight_proposal"] = "proposed"
+    metrics["weight_set_id"] = weight_set_id
+
+
+def _current_weights(state: JobRunRepo, memory: MemoryRepo | None, market: str) -> dict[str, float]:
+    getter = getattr(memory, "get_active_factor_weights", None)
+    if not callable(getter):
+        getter = getattr(state, "get_active_factor_weights", None)
+    row = getter(market=market, horizon="H20") if callable(getter) else None
+    weights = row.get("weights") if isinstance(row, dict) else None
+    if isinstance(weights, dict) and weights:
+        return {str(k): float(v) for k, v in weights.items()}
+    return dict(DEFAULT_GROUP_WEIGHTS.get(market, {}).get("H20") or DEFAULT_GROUP_WEIGHTS["JP"]["H20"])
+
+
+def _align_scores(
+    warehouse: WarehouseRepo, outcomes: list[dict[str, Any]], market: str
+) -> tuple[pd.DataFrame, pd.Series]:
+    from collections import defaultdict
+
+    by_asof: dict[date, list[dict[str, Any]]] = defaultdict(list)
+    for item in outcomes:
+        as_of = item.get("as_of")
+        if as_of is None:
+            continue
+        by_asof[as_of].append(item)
+    records: list[dict[str, Any]] = []
+    excess: list[float] = []
+    for as_of, group in by_asof.items():
+        scores = warehouse.read_scores_daily(as_of=as_of, market=market)
+        if scores is None or getattr(scores, "empty", True):
+            continue
+        frame = scores.copy()
+        if "ticker" not in frame.columns:
+            continue
+        indexed = {str(row["ticker"]): row for row in frame.to_dict(orient="records")}
+        for item in group:
+            row = indexed.get(str(item["ticker"]))
+            if row is None:
+                continue
+            records.append({group: row.get(col) for group, col in GROUP_Z_COLS.items()})
+            excess.append(float(item.get("excess_return") or 0.0))
+    return pd.DataFrame(records), pd.Series(excess, dtype=float)
 
 
 def _find_similar(

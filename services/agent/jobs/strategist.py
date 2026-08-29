@@ -21,7 +21,7 @@ from packages.core.factors.screening import (
     conviction_from_score,
     determine_action,
 )
-from packages.core.interfaces.storage import JobRunRepo, MemoryRepo, WarehouseRepo
+from packages.core.interfaces.storage import JobRunRepo, MemoryRepo, SearchHit, WarehouseRepo
 from packages.core.llm.errors import (
     CostCapExceeded,
     InvariantViolationError,
@@ -76,6 +76,71 @@ def _force_conviction(raw: str, n_prior: int) -> str:
     if n_prior < MIN_PRIOR_SAMPLES:
         return "low"
     return raw
+
+
+def _chunks_from_docs(
+    warehouse: WarehouseRepo, docs: pd.DataFrame, *, k: int = 8
+) -> list[SearchHit]:
+    hits: list[SearchHit] = []
+    if docs is None or getattr(docs, "empty", True):
+        return hits
+    for _, row in docs.head(k * 2).iterrows():
+        doc_id = str(row.get("doc_id") or "")
+        if not doc_id:
+            continue
+        getter = getattr(warehouse, "get_document_text", None)
+        text = str(getter(doc_id) if callable(getter) else "") or str(row.get("title") or "")
+        snippet = text.strip()[:1200]
+        if len(snippet) < 20:
+            continue
+        filed = row.get("filed_at")
+        hits.append(
+            SearchHit(
+                chunk_id=f"{doc_id}:excerpt",
+                doc_id=doc_id,
+                text=snippet,
+                score=0.1,
+                ticker=str(row.get("ticker") or ""),
+                market=str(row.get("market") or ""),
+                doc_type=str(row.get("doc_type") or ""),
+                filed_at=filed if hasattr(filed, "date") else None,
+                title=str(row.get("title") or ""),
+            )
+        )
+        if len(hits) >= k:
+            break
+    return hits
+
+
+def _retrieve_chunks(
+    warehouse: WarehouseRepo,
+    *,
+    ticker: str,
+    market: str,
+    as_of: date,
+    reasons: list[str],
+    docs: pd.DataFrame,
+) -> list[SearchHit]:
+    """RAG。キーワード検索が空なら直近開示の本文抜粋に落とす。"""
+    from packages.core.llm.rag import retrieve
+
+    query = " ".join(str(c) for c in reasons) + " リスク 懸念 不確実性"
+    keyword = warehouse if callable(getattr(warehouse, "search_text", None)) else None
+    hits: list[SearchHit] = []
+    try:
+        hits = retrieve(
+            query,
+            ticker=ticker,
+            market=market,
+            k=8,
+            as_of=as_of,
+            keyword_search=keyword,
+        )
+    except Exception:
+        hits = []
+    if hits:
+        return hits
+    return _chunks_from_docs(warehouse, docs)
 
 
 def _validate_rec(rec: dict[str, Any]) -> None:
@@ -340,7 +405,14 @@ def _strategist_body(
                     roic=row.get("roic"),
                     realized_vol=row.get("realized_vol_60d"),
                     reason_codes=reasons,
-                    retrieved_chunks=[],
+                    retrieved_chunks=_retrieve_chunks(
+                        warehouse,
+                        ticker=ticker,
+                        market=market,
+                        as_of=as_of,
+                        reasons=reasons,
+                        docs=docs,
+                    ),
                     hit_rate_prior=prior.hit_rate,
                     n_prior_samples=prior.n_samples,
                     avg_excess_return=prior.avg_excess,

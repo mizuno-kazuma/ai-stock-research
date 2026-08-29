@@ -31,6 +31,7 @@ from typing import Any, Literal, Self
 import duckdb
 
 from packages.core.config import Settings, get_settings
+from packages.core.interfaces.storage import SearchHit
 
 logger = logging.getLogger(__name__)
 
@@ -742,6 +743,60 @@ class DuckDBRepo:
             return text
         return None
 
+    def search_text(
+        self,
+        query: str,
+        *,
+        k: int,
+        ticker: str | None = None,
+        market: str | None = None,
+        as_of: dt.date | None = None,
+        doc_types: list[str] | None = None,
+    ) -> list[SearchHit]:
+        """開示タイトルと本文からキーワード検索する（ハイブリッド RAG の片側）。"""
+        import re
+
+        terms = [t.lower() for t in re.findall(r"[0-9A-Za-z一-龥ぁ-んァ-ン]{2,}", query)]
+        terms = terms[:8] or ([query.strip().lower()] if query.strip() else [])
+        kwargs: dict[str, Any] = {"limit": 80}
+        if ticker:
+            kwargs["ticker"] = ticker
+        if market:
+            kwargs["market"] = market
+        if as_of is not None:
+            kwargs["until"] = as_of
+        if doc_types:
+            kwargs["doc_type"] = doc_types[0]
+        docs = self.get_documents(**kwargs)
+        hits: list[SearchHit] = []
+        for doc in docs:
+            hay = f"{doc.get('title') or ''} {self.get_document_text(str(doc['doc_id'])) or ''}"
+            lowered = hay.lower()
+            if terms and not any(term in lowered for term in terms):
+                continue
+            snippet = hay.strip()[:1200]
+            if len(snippet) < 20:
+                continue
+            filed = doc.get("filed_at")
+            if as_of is not None and hasattr(filed, "date") and filed.date() > as_of:
+                continue
+            hits.append(
+                SearchHit(
+                    chunk_id=f"{doc['doc_id']}:kw",
+                    doc_id=str(doc["doc_id"]),
+                    text=snippet,
+                    score=1.0 / (len(hits) + 1),
+                    ticker=doc.get("ticker"),
+                    market=doc.get("market"),
+                    doc_type=doc.get("doc_type"),
+                    filed_at=filed if isinstance(filed, dt.datetime) else None,
+                    title=doc.get("title"),
+                )
+            )
+            if len(hits) >= k:
+                break
+        return hits
+
     def read_documents(
         self,
         *,
@@ -977,6 +1032,16 @@ class DuckDBRepo:
         self.insert_recommendations([payload])
         return str(payload["rec_id"])
 
+    def update_recommendation(self, rec_id: str, fields: dict[str, Any]) -> int:
+        """Critic が verdict と修正後本文を書き戻す。"""
+        existing = self.query_one("SELECT * FROM recommendations WHERE rec_id = ?", [rec_id])
+        if existing is None:
+            return 0
+        merged = dict(existing)
+        merged.update(fields)
+        merged["rec_id"] = rec_id
+        return self.upsert("recommendations", [merged], key_columns=["rec_id"])
+
     @staticmethod
     def _validate_recommendation(r: dict[str, Any]) -> None:
         rec_id = r.get("rec_id")
@@ -1097,10 +1162,21 @@ class DuckDBRepo:
             "recommendation_outcomes", rows, defaults={"evaluated_at": _now()}
         )
 
+    def read_recommendation_outcomes(
+        self, *, market: str | None = None, horizon: str | None = None, since: dt.date | None = None
+    ) -> Any:
+        import pandas as pd
+
+        rows = self.get_recommendation_outcomes(
+            market=market, horizon=horizon, since=since, limit=2_000
+        )
+        return pd.DataFrame(rows)
+
     def get_recommendation_outcomes(
         self,
         *,
         rec_id: str | None = None,
+        market: str | None = None,
         horizon: str | None = None,
         since: dt.date | None = None,
         limit: int = 500,
@@ -1110,6 +1186,9 @@ class DuckDBRepo:
         if rec_id:
             where.append("o.rec_id = ?")
             params.append(rec_id)
+        if market:
+            where.append("r.market = ?")
+            params.append(market)
         if horizon:
             where.append("o.horizon = ?")
             params.append(horizon)

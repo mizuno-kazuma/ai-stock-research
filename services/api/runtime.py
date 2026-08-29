@@ -35,6 +35,9 @@ JOB_FN_NAMES = {
     "strategist": "strategist",
     "critic": "critic",
     "evaluator": "evaluator",
+    "weekly_review": "weekly_review",
+    "model_retrain": "model_retrain",
+    "garch_refit": "garch_refit",
 }
 
 
@@ -76,6 +79,7 @@ def kick_agent_job(
     from services.agent.jobs.collector import collector
     from services.agent.jobs.critic import critic
     from services.agent.jobs.evaluator import evaluator
+    from services.agent.jobs.maintenance import garch_refit, model_retrain, weekly_review
     from services.agent.jobs.researcher import researcher
     from services.agent.jobs.strategist import strategist
     from services.agent.main import session_as_of
@@ -93,6 +97,9 @@ def kick_agent_job(
             "strategist": strategist,
             "critic": critic,
             "evaluator": evaluator,
+            "weekly_review": weekly_review,
+            "model_retrain": model_retrain,
+            "garch_refit": garch_refit,
         }
         inner_name = JOB_FN_NAMES.get(job_name)
         if job_name == "backtest":
@@ -114,16 +121,18 @@ def kick_agent_job(
             "trigger": "manual",
             "parent_run_id": run_id,
         }
-        if inner_name in {"researcher", "strategist", "critic", "evaluator"}:
+        if inner_name in {"researcher", "strategist", "critic", "evaluator", "weekly_review"}:
             kwargs["router"] = _maybe_router(state, st, wh)
         if inner_name == "analyst":
             kwargs["ranker"] = try_load_ranker(state.settings, market=mkt)
-        if inner_name in {"strategist", "evaluator"}:
+        if inner_name in {"strategist", "evaluator", "weekly_review"}:
             kwargs["memory"] = st
         if inner_name == "critic":
             kwargs["jquants_plan"] = str(
                 getattr(state.settings, "jquants_plan", "free") or "free"
             )
+        if inner_name == "model_retrain":
+            kwargs["data_dir"] = getattr(state.settings, "data_dir", None)
         result = fn(mkt, day, **kwargs)
         status, metrics, error_type, error_message, failed_steps = _payload_from_result(result)
         state.sqlite.update_job_run(

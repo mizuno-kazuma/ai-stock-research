@@ -46,6 +46,9 @@ def mechanical_checks(
 
     for raw in rec.get("citations") or []:
         cit = raw if isinstance(raw, Citation) else Citation.model_validate(raw)
+        # 定量カードの合成引用（quant:）は開示資料ではないので本文検証をしない。
+        if str(cit.doc_id).startswith("quant:"):
+            continue
         if warehouse is None:
             continue
         verdict = verify_citation(
@@ -103,6 +106,30 @@ def mechanical_checks(
         issues.append(Issue("major", "overconfident_language"))
 
     return issues
+
+
+REVISED_FIELDS = {"thesis_ja", "bear_case_ja", "invalidation_ja", "conviction"}
+
+
+def _apply_revised_fields(rec: dict[str, Any], revised: dict[str, str] | None) -> bool:
+    """Critic の修正案をカード本文に書き戻す（docs/08 §7.4）。"""
+    if not revised:
+        return False
+    applied = False
+    for key, value in revised.items():
+        if key not in REVISED_FIELDS:
+            continue
+        text = str(value or "").strip()
+        if not text:
+            continue
+        if key == "conviction":
+            if text not in {"low", "medium", "high"}:
+                continue
+            if (rec.get("n_prior_samples") or 0) < MIN_PRIOR_SAMPLES:
+                text = "low"
+        rec[key] = text
+        applied = True
+    return applied
 
 
 def _verdict_from_issues(issues: list[Issue]) -> str:
@@ -166,16 +193,27 @@ def critic(
                 if resp.parsed is not None:
                     verdict = resp.parsed.verdict
                     notes = resp.parsed.notes_ja
+                    applied = _apply_revised_fields(rec, resp.parsed.revised_fields)
+                    if applied:
+                        notes = notes or "Critic の修正案を本文に反映しました。"
             except (CostCapExceeded, KillSwitchActive):
                 llm_capped = True
             except Exception:
                 pass
+        if len((rec.get("bear_case_ja") or "").strip()) < 20:
+            verdict = "rejected"
         rec["critic_verdict"] = verdict
         rec["critic_notes_ja"] = notes
         rec["critic_issues"] = [i.__dict__ for i in issues]
-        warehouse.update_recommendation(
-            rec_id, {"critic_verdict": verdict, "critic_notes_ja": notes}
-        )
+        payload = {
+            "critic_verdict": verdict,
+            "critic_notes_ja": notes,
+            "thesis_ja": rec.get("thesis_ja"),
+            "bear_case_ja": rec.get("bear_case_ja"),
+            "invalidation_ja": rec.get("invalidation_ja"),
+            "conviction": rec.get("conviction"),
+        }
+        warehouse.update_recommendation(rec_id, payload)
         counts[verdict] = counts.get(verdict, 0) + 1
 
     units = [str(r.get("rec_id")) for r in pending]

@@ -77,3 +77,9 @@ class EvaluatorOutput(BaseModel):
     lessons: list[Lesson] = Field(default_factory=list)
     calibration_note_ja: str = ""
     contradicted_memory_ids: list[str] = Field(default_factory=list)
+
+
+class WeeklyReviewOutput(BaseModel):
+    summary_ja: str = Field(min_length=20, max_length=1200)
+    lessons: list[Lesson] = Field(default_factory=list)
+    action_items_ja: list[str] = Field(default_factory=list)

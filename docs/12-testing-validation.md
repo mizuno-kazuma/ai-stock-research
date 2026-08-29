@@ -762,7 +762,7 @@ def test_pipeline_fails_when_prices_unavailable():
     assert result.status == "failed"
 ```
 
-実装の回帰テストは `tests/unit/agent/test_pipeline_fixes.py`。ML 予測区間が無くても Critic まで到達すること、INTEGER 列の NaN が INSERT で落ちないこと、開示 0 件かつ既存カバレッジ無しは Collector を partial にすること、為替スポット無しだけで Analyst を partial にしないことを固定する。
+実装の回帰テストは `tests/unit/agent/test_pipeline_fixes.py` と `tests/unit/agent/test_remaining_jobs.py`。ML 予測区間が無くても Critic まで到達すること、INTEGER 列の NaN が INSERT で落ちないこと、開示 0 件かつ既存カバレッジ無しは Collector を partial にすること、為替スポット無しだけで Analyst を partial にしないこと、実績のベンチマークと MFE/MAE、Critic の `revised_fields` 反映、Researcher の要約永続化、週次ジョブが `job_runs` を残すことを固定する。
 
 ## 11. E2E テスト（Playwright）
 

@@ -269,7 +269,7 @@ Rank IC が 0.02 を下回る場合、モデルに実用的な予測力がない
 | 月次 | 重み更新の承認判断 | `.cursor/skills/agent-eval-loop/` |
 | 月次 | LLM コストの内訳確認とプロンプト最適化 | |
 | 四半期 | `agent_memory` の棚卸し | `.cursor/skills/agent-eval-loop/` |
-| 四半期 | プロンプトの改善（A/B比較） | [07](07-llm-rag.md) §5.6 |
+| 四半期 | プロンプトの改善（A/B比較） | [07](07-llm-rag.md) §5.7 |
 | 年次 | バックアップからの復旧手順の実施 | `.cursor/skills/verify-windows-runtime/` |
 | 環境不調時 | WSL2 / Tailscale / 文字コードの切り分け | `.cursor/skills/verify-windows-runtime/` |
 

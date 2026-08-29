@@ -281,11 +281,64 @@ class FakeWarehouse:
     def get_document_text(self, doc_id: str, *, page: int | None = None) -> str | None:
         return self.doc_text.get(doc_id)
 
-    def upsert_document_summaries(self, df: pd.DataFrame) -> int:
-        return len(df)
+    def search_text(
+        self,
+        query: str,
+        *,
+        k: int,
+        ticker: str | None = None,
+        market: str | None = None,
+        as_of: date | None = None,
+        doc_types: list[str] | None = None,
+    ) -> list[SearchHit]:
+        q = (query or "").lower()
+        hits: list[SearchHit] = []
+        for doc_id, row in self.documents.items():
+            if ticker and str(row.get("ticker")) != str(ticker):
+                continue
+            if market and str(row.get("market")) != str(market):
+                continue
+            hay = f"{row.get('title') or ''} {self.doc_text.get(doc_id) or ''}"
+            if q and q.split() and not any(part in hay.lower() for part in q.split() if len(part) >= 2):
+                continue
+            snippet = hay.strip()[:1200]
+            if len(snippet) < 20:
+                continue
+            hits.append(
+                SearchHit(
+                    chunk_id=f"{doc_id}:kw",
+                    doc_id=str(doc_id),
+                    text=snippet,
+                    ticker=row.get("ticker"),
+                    market=row.get("market"),
+                    title=row.get("title"),
+                    filed_at=row.get("filed_at") if hasattr(row.get("filed_at"), "date") else None,
+                )
+            )
+            if len(hits) >= k:
+                break
+        return hits
 
-    def find_summary(self, *, doc_id: str, prompt_hash: str, input_hash: str) -> dict[str, Any] | None:
-        return self.summaries.get((doc_id, prompt_hash, input_hash))
+    def upsert_document_summaries(self, rows: Any) -> int:
+        records = rows.to_dict(orient="records") if isinstance(rows, pd.DataFrame) else list(rows)
+        for item in records:
+            key = (
+                str(item.get("doc_id")),
+                str(item.get("prompt_hash") or ""),
+                str(item.get("input_hash") or ""),
+            )
+            self.summaries[key] = item
+        return len(records)
+
+    def find_summary(
+        self, *, doc_id: str, prompt_hash: str | None = None, input_hash: str | None = None
+    ) -> dict[str, Any] | None:
+        if prompt_hash is not None and input_hash is not None:
+            return self.summaries.get((doc_id, prompt_hash, input_hash))
+        for (did, _p, _i), row in self.summaries.items():
+            if did == doc_id:
+                return row
+        return None
 
     def upsert_macro_series(self, df: pd.DataFrame) -> int:
         return len(df)
@@ -303,9 +356,13 @@ class FakeWarehouse:
         rows = [r for r in self.macro_rows if r.get("series_id") == series_id]
         return rows[: int(limit)]
 
-    def upsert_features_daily(self, df: pd.DataFrame) -> int:
-        self.features = df
-        return len(df)
+    def upsert_features_daily(self, df: Any) -> int:
+        incoming = df if isinstance(df, pd.DataFrame) else pd.DataFrame(list(df))
+        if getattr(self.features, "empty", True):
+            self.features = incoming
+        else:
+            self.features = pd.concat([self.features, incoming], ignore_index=True)
+        return len(incoming)
 
     def read_features_daily(self, **kwargs: Any) -> pd.DataFrame:
         return self.features.copy()
@@ -356,7 +413,12 @@ class FakeWarehouse:
         return len(rows)
 
     def read_recommendation_outcomes(self, **kwargs: Any) -> pd.DataFrame:
-        return pd.DataFrame(self.outcomes)
+        rows = list(self.outcomes)
+        if kwargs.get("market") is not None:
+            rows = [r for r in rows if r.get("market") == kwargs["market"]]
+        if kwargs.get("horizon") is not None:
+            rows = [r for r in rows if r.get("horizon") == kwargs["horizon"]]
+        return pd.DataFrame(rows)
 
     def upsert_fx_forecasts(self, df: pd.DataFrame) -> int:
         self.fx_rows.extend(df.to_dict(orient="records"))

@@ -244,6 +244,8 @@ independent of the OS):
 | critic | レビュー | 平日 06:42 (JST) |
 | evaluator | 実績評価 | 平日 06:47 (JST) |
 | weekly_deep | 週次の深掘り | 土曜 09:00 (JST) |
+| model_retrain | ranker 再学習 | 第1土曜 10:00 (JST) |
+| garch_refit | GARCH 再推定 | 月曜 07:00 (JST) |
 
 Caption: `スケジュールはアプリ内のスケジューラで管理しています。OSのタスクスケジューラやcronは
 使用していません。PCがスリープしていた場合、復帰後にまとめて1回だけ実行されます。`

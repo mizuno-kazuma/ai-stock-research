@@ -234,15 +234,73 @@ def run_startup_catchup() -> None:
 
 
 def run_weekly_review() -> None:
-    logger.info("weekly_review: deep 層は pipeline 側で別途起動する")
+    from services.agent.jobs.maintenance import weekly_review
+    from services.agent.wiring import pipeline_dependencies
+
+    warehouse, sqlite, owned = _storage_pair()
+    try:
+        state = _adapt_state(sqlite)
+        adapted_wh = _adapt_warehouse(warehouse)
+        for market in ("JP", "US"):
+            extras = pipeline_dependencies(state, adapted_wh, market=market)
+            weekly_review(
+                market,
+                session_as_of(market),
+                state=state,
+                warehouse=adapted_wh,
+                memory=state,
+                router=extras.get("router"),
+                trigger="schedule",
+            )
+    finally:
+        if owned:
+            warehouse.close()
+            sqlite.close()
 
 
 def run_model_retrain() -> None:
-    logger.info("model_retrain: LightGBM 再学習は月次。実装は ranker.train_ranker")
+    from packages.core.config import get_settings
+    from services.agent.jobs.maintenance import model_retrain
+
+    warehouse, sqlite, owned = _storage_pair()
+    try:
+        state = _adapt_state(sqlite)
+        adapted_wh = _adapt_warehouse(warehouse)
+        data_dir = get_settings().data_dir
+        for market in ("JP", "US"):
+            model_retrain(
+                market,
+                session_as_of(market),
+                state=state,
+                warehouse=adapted_wh,
+                data_dir=data_dir,
+                trigger="schedule",
+            )
+    finally:
+        if owned:
+            warehouse.close()
+            sqlite.close()
 
 
 def refit_garch() -> None:
-    logger.info("garch_refit: 週次パラメータ再推定")
+    from services.agent.jobs.maintenance import garch_refit
+
+    warehouse, sqlite, owned = _storage_pair()
+    try:
+        state = _adapt_state(sqlite)
+        adapted_wh = _adapt_warehouse(warehouse)
+        for market in ("JP", "US"):
+            garch_refit(
+                market,
+                session_as_of(market),
+                state=state,
+                warehouse=adapted_wh,
+                trigger="schedule",
+            )
+    finally:
+        if owned:
+            warehouse.close()
+            sqlite.close()
 
 
 def resume_interrupted_jobs(*, state: Any | None = None, max_chain: int = 5) -> list[int]:
@@ -413,6 +471,29 @@ def _adapt_state(sqlite: Any) -> Any:
         def save_rate_limit_state(self, state: Any) -> None:
             self._i.save_rate_limit_state(state)
 
+        def get_active_factor_weights(self, *, market: str, horizon: str) -> dict | None:
+            getter = getattr(self._i, "get_active_weight_set", None)
+            if not callable(getter):
+                return None
+            row = getter(market, horizon)
+            if row is None:
+                return None
+            weights = getattr(row, "weights", None)
+            if isinstance(weights, str):
+                import json
+
+                weights = json.loads(weights)
+            return {
+                "weight_set_id": getattr(row, "weight_set_id", None),
+                "weights": weights,
+                "is_active": bool(getattr(row, "is_active", False)),
+            }
+
+        def insert_factor_weights(self, row: dict) -> str:
+            payload = dict(row)
+            created = self._i.upsert_weight_set(**payload)
+            return str(getattr(created, "weight_set_id", None) or payload.get("weight_set_id") or "")
+
         def __getattr__(self, name: str) -> Any:
             return getattr(self._i, name)
 
@@ -459,10 +540,30 @@ def _adapt_warehouse(duck: Any) -> Any:
             return pd.DataFrame(self._i.get_documents(**mapped) or [])
 
         def find_summary(self, **kwargs: Any) -> dict | None:
+            finder = getattr(self._i, "find_summary", None)
+            if callable(finder):
+                return finder(**kwargs)
             doc_id = kwargs.get("doc_id")
             if doc_id is None:
                 return None
             return self._i.get_document_summary(doc_id)
+
+        def read_recommendation_outcomes(self, **kwargs: Any) -> Any:
+            reader = getattr(self._i, "read_recommendation_outcomes", None)
+            if callable(reader):
+                try:
+                    return reader(**kwargs)
+                except TypeError:
+                    return reader()
+            getter = getattr(self._i, "get_recommendation_outcomes", None)
+            import pandas as pd
+
+            if not callable(getter):
+                return pd.DataFrame()
+            mapped = {
+                k: v for k, v in kwargs.items() if k in {"rec_id", "market", "horizon", "since", "limit"}
+            }
+            return pd.DataFrame(getter(**mapped) or [])
 
         def record_data_gap(self, **kwargs: Any) -> None:
             method = getattr(self._i, "record_data_gap", None)

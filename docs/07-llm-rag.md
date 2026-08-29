@@ -147,7 +147,7 @@ class LLMRouter:
 | 推奨の論拠生成（thesis + bear case） | `default` | 推論の質が結果を左右する。件数は日次10件程度 |
 | Critic の敵対的レビュー | `default` | 論理の検証が主。手を抜くと機能しない |
 | Evaluator の教訓抽出 | `default` | 日次1回 |
-| 週次ポートフォリオレビュー | `deep` | 週1回。全保有銘柄と全推奨履歴を1回のコンテキストに入れる |
+| 週次ポートフォリオレビュー | `deep` | 週1回。`weekly_review` ジョブが土曜 09:00 に起動し、直近の推奨と実績を1回のコンテキストに入れる。API キーが無ければ `partial` で集計だけ残す |
 | 戦略・重み設計の再考 | `deep` | 月1回程度 |
 | 埋め込み生成 | （embedding） | |
 
@@ -619,7 +619,35 @@ critical に該当するもの:
 - 結果の良し悪しではなく、再現しそうな規則性のみを教訓にしてください。
 ```
 
-### 5.6 プロンプトのバージョン管理
+### 5.6 週次深掘り（`weekly_review.jinja`）
+
+`deep` 層。土曜 09:00 の `weekly_review` ジョブが使う。API キーが無ければジョブは LLM を呼ばず、件数と的中率だけ `job_runs.metrics` に残して `partial`。
+
+```jinja
+{# version: 1 #}
+{# tier: deep #}
+## 週次深掘りレビュー
+
+対象日: {{ as_of }}
+推奨件数（直近）: {{ n_recs }}
+確定した実績: {{ n_outcomes }}
+的中率: {{ hit_rate }}
+確信度別的中率: {{ hit_rate_by_conviction }}
+重み提案の有無: {{ weight_proposal }}
+
+## タスク
+
+1. **summary_ja**: 今週の推奨と実績を3-8行で要約する。数字を入れる。
+2. **lessons**: 週次で残すべき教訓。n_observations >= 10 のものだけ。
+   日次 Evaluator と重複する一般論は出さない。
+3. **action_items_ja**: 来週の運用で確認すべき具体的な項目を最大5件。
+
+「必ず」「確実に」は使わない。サンプルが足りなければその旨を summary_ja に書く。
+```
+
+出力スキーマは `WeeklyReviewOutput`（`summary_ja` / `lessons` / `action_items_ja`）。保有株数・評価額は渡さない（§7）。
+
+### 5.7 プロンプトのバージョン管理
 
 | 項目 | 規則 |
 | --- | --- |

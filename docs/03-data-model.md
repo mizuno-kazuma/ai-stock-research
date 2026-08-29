@@ -759,7 +759,7 @@ CREATE TABLE llm_calls (
     job_run_id      INTEGER,
     tier            TEXT NOT NULL,      -- 'bulk'|'default'|'deep'
     model_id        TEXT NOT NULL,
-    purpose         TEXT NOT NULL,      -- 'doc_summary'|'thesis'|'critic'|'evaluator'
+    purpose         TEXT NOT NULL,      -- 'doc_summary'|'thesis'|'critic'|'evaluator'|'weekly_review'
     entity          TEXT,               -- ticker や doc_id
     input_tokens    INTEGER NOT NULL,
     output_tokens   INTEGER NOT NULL,
