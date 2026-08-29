@@ -122,7 +122,7 @@ All numbers, names, dates match the spec examples exactly (7203 トヨタ自動�
 - `MetricCardGrid`: 4 metric cards (TOPIX, USD/JPY, portfolio value, daily P/L) with DirectionValue
 - `RecommendationHighlights`: 3 compact cards (ticker, badge row, expected return, bull + bear)
 - `AlertFeed`: scrollable list with severity dot (color-coded), title, timestamp
-- `FilingsToday`: 6 rows with time, ticker, doc type, title
+- `FilingsThisWeek`: 6 rows with time, ticker, doc type, title
 - `WatchlistTable`: dense DataTable 8 rows
 - `FxSnapshotCard`: sparkline + forecast value
 - `ModelHealthPanel`: 4 metric rows

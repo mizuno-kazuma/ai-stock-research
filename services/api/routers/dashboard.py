@@ -23,7 +23,6 @@ from packages.schemas.dashboard import (
     VolRegime,
     WatchlistFiling,
 )
-from packages.core.factors.calendar import TradingCalendar
 from packages.schemas.recommendations import RecommendationSummary
 from services.api.deps import AppState, User, get_app_state, require_user
 from services.api.envelope import wrap
@@ -193,8 +192,8 @@ def _dashboard_from_seed(state: AppState, *, market: str, as_of: dt.date) -> Das
 
 
 def _filings_range(as_of: dt.date) -> tuple[dt.date, dt.date]:
-    """「本日の開示」は当日と前営業日を見る。深夜起動で当日が空でも前日分が出る。"""
-    start = TradingCalendar().prev_business_day(as_of)
+    """「今週の開示」は as_of を含む暦週の月曜から as_of まで（両端含む）。"""
+    start = as_of - dt.timedelta(days=as_of.weekday())
     return start, as_of
 
 
