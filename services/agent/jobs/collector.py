@@ -25,6 +25,39 @@ COLLECTOR_STEPS: tuple[tuple[str, bool], ...] = (
     ("earnings_calendar", False),
 )
 
+# 既存カバレッジがある日は、訂正取り込み用にこの日数だけ重ねて再取得する。
+INCREMENTAL_OVERLAP_DAYS = 5
+
+
+def coverage_lookback_days(
+    configured: int,
+    *,
+    latest: date | None,
+    end: date,
+    overlap_days: int = INCREMENTAL_OVERLAP_DAYS,
+) -> int:
+    """倉庫に既にある期間は再取得しない。lookback をギャップ + overlap に縮める。"""
+    if configured <= 0 or latest is None:
+        return configured
+    gap = (end - latest).days + overlap_days
+    return max(0, min(configured, gap))
+
+
+def _latest_coverage(warehouse: Any, table: str, market: str | None) -> date | None:
+    getter = getattr(warehouse, "latest_coverage_date", None)
+    if not callable(getter):
+        return None
+    try:
+        value = getter(table, market=market)
+    except Exception:
+        return None
+    if value is None:
+        return None
+    if isinstance(value, date):
+        return value
+    text = str(value)
+    return date.fromisoformat(text[:10])
+
 
 def _secret(settings: Any, name: str) -> str:
     value = getattr(settings, name, None)
@@ -111,7 +144,6 @@ def collector(
             elif overall != "failed":
                 overall = "partial"
 
-    names = [n for n, _ in COLLECTOR_STEPS]
     done: list[str] = []
 
     def _one(name: str) -> None:
@@ -196,6 +228,8 @@ def builtin_connector_steps(
         fetch_kwargs: dict[str, Any] | None = None,
         lookback_days: int = 0,
         apply_delay: bool = True,
+        coverage_table: str | None = None,
+        skip_if_fresh_days: int = 0,
     ) -> dict[str, Any]:
         from packages.core.config import get_settings
         from packages.core.connectors import get_connector
@@ -213,7 +247,24 @@ def builtin_connector_steps(
         delay = int(getattr(connector, "delay_weeks", 0) or 0) if apply_delay else 0
         if delay:
             end = as_of - timedelta(weeks=delay)
-        start = end - timedelta(days=lookback_days) if lookback_days else end
+        if skip_if_fresh_days and coverage_table:
+            latest = _latest_coverage(
+                warehouse, coverage_table, None if coverage_table == "macro_series" else market
+            )
+            if latest is not None and (as_of - latest).days < skip_if_fresh_days:
+                return {
+                    "skipped": True,
+                    "reason": "fresh",
+                    "latest": latest.isoformat(),
+                    "window_end": end.isoformat(),
+                }
+        lookback = lookback_days
+        if lookback and coverage_table:
+            latest = _latest_coverage(
+                warehouse, coverage_table, None if coverage_table == "macro_series" else market
+            )
+            lookback = coverage_lookback_days(lookback, latest=latest, end=end)
+        start = end - timedelta(days=lookback) if lookback else end
         window = FetchWindow(start=start, end=end)
         batches = 0
         rows = 0
@@ -239,6 +290,8 @@ def builtin_connector_steps(
                     market,
                     as_of,
                     fetch_kwargs={"endpoint": "equities_master"},
+                    coverage_table="securities",
+                    skip_if_fresh_days=7,
                 )
             if step == "prices":
                 if market == "JP":
@@ -248,6 +301,7 @@ def builtin_connector_steps(
                         as_of,
                         fetch_kwargs={"endpoint": "equities_bars_daily"},
                         lookback_days=90,
+                        coverage_table="prices_daily",
                     )
                 symbols = _watchlist_symbols(state, "US")
                 if not symbols:
@@ -259,6 +313,7 @@ def builtin_connector_steps(
                     fetch_kwargs={"symbols": symbols, "endpoint": "download_daily"},
                     lookback_days=30,
                     apply_delay=False,
+                    coverage_table="prices_daily",
                 )
             if step == "prices_live":
                 symbols = _watchlist_symbols(state, market)
@@ -281,13 +336,29 @@ def builtin_connector_steps(
                     as_of,
                     fetch_kwargs={"endpoint": "fins_summary"},
                     lookback_days=120,
+                    coverage_table="financials",
                 )
             if step == "documents":
                 if market == "JP":
-                    return _run("edinet", market, as_of, lookback_days=4, apply_delay=False)
+                    # 土日を含む短い窓だと平日が2-3日しかなく、空レスポンスを成功扱いにしていた。
+                    return _run(
+                        "edinet",
+                        market,
+                        as_of,
+                        lookback_days=14,
+                        apply_delay=False,
+                        coverage_table="documents",
+                    )
                 return {"skipped": True}
             if step == "macro":
-                return _run("fred", market, as_of, lookback_days=400, apply_delay=False)
+                return _run(
+                    "fred",
+                    market,
+                    as_of,
+                    lookback_days=400,
+                    apply_delay=False,
+                    coverage_table="macro_series",
+                )
             return {"skipped": True}
 
         return _fn

@@ -7,17 +7,38 @@ cron や Windows タスクスケジューラは使わない。ジョブ定義は
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
+import os
+import time
+from datetime import UTC, date, datetime, timedelta
+from datetime import time as dt_time
 from typing import Any
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
+JST = ZoneInfo("Asia/Tokyo")
+NY = ZoneInfo("America/New_York")
 
-def create_scheduler(*, db_url: str, timezone: str = "Asia/Tokyo") -> Any:
+_shared_warehouse: Any = None
+_shared_sqlite: Any = None
+
+
+def set_shared_storage(warehouse: Any, sqlite: Any) -> None:
+    """API プロセス内で DuckDB 接続を共有する。別プロセスのライタは作れない。"""
+    global _shared_warehouse, _shared_sqlite
+    _shared_warehouse = warehouse
+    _shared_sqlite = sqlite
+
+
+def create_scheduler(
+    *, db_url: str, timezone: str = "Asia/Tokyo", blocking: bool = True
+) -> Any:
     from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+    from apscheduler.schedulers.background import BackgroundScheduler
     from apscheduler.schedulers.blocking import BlockingScheduler
 
-    scheduler = BlockingScheduler(
+    scheduler_cls = BlockingScheduler if blocking else BackgroundScheduler
+    scheduler = scheduler_cls(
         timezone=timezone,
         jobstores={"default": SQLAlchemyJobStore(url=db_url)},
         job_defaults={
@@ -81,26 +102,130 @@ def create_scheduler(*, db_url: str, timezone: str = "Asia/Tokyo") -> Any:
         id="resume_check",
         replace_existing=True,
     )
+    scheduler.add_job(
+        run_startup_catchup,
+        "date",
+        run_date=datetime.now(ZoneInfo(timezone)) + timedelta(seconds=3),
+        id="startup_catchup",
+        replace_existing=True,
+        misfire_grace_time=86_400,
+    )
     return scheduler
 
 
-def run_pipeline_job(market: str) -> None:
+def session_as_of(market: str, *, now: datetime | None = None) -> date:
+    """直近の引け後バッチが対象にすべき日付。
+
+    日本株は 18:30 JST より前なら前営業日。米国株は現地 16:00 より前なら前営業日。
+    """
+    from packages.core.factors.calendar import DEFAULT_CALENDAR
+
+    cal = DEFAULT_CALENDAR
+    if market == "US":
+        current = datetime.now(NY) if now is None else _as_tz(now, NY)
+        day = current.date()
+        if current.time() < dt_time(16, 0) or not cal.is_business_day(day):
+            return cal.prev_business_day(day)
+        return day
+    current = datetime.now(JST) if now is None else _as_tz(now, JST)
+    day = current.date()
+    if current.time() < dt_time(18, 30) or not cal.is_business_day(day):
+        return cal.prev_business_day(day)
+    return day
+
+
+def _as_tz(value: datetime, tz: ZoneInfo) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=tz)
+    return value.astimezone(tz)
+
+
+def _open_warehouse(*, attempts: int = 18, delay_sec: float = 5.0) -> Any:
+    from packages.core.storage import DuckDBRepo
+
+    last: Exception | None = None
+    for index in range(attempts):
+        try:
+            return DuckDBRepo.open()
+        except Exception as exc:
+            last = exc
+            logger.warning(
+                "DuckDB を開けませんでした（%s/%s）: %s",
+                index + 1,
+                attempts,
+                exc,
+            )
+            time.sleep(delay_sec)
+    assert last is not None
+    raise last
+
+
+def _storage_pair() -> tuple[Any, Any, bool]:
+    from packages.core.storage import SQLiteRepo
+
+    if _shared_warehouse is not None and _shared_sqlite is not None:
+        return _shared_warehouse, _shared_sqlite, False
+    return _open_warehouse(), SQLiteRepo.open(), True
+
+
+def run_pipeline_job(market: str, as_of: date | None = None, trigger: str = "schedule") -> None:
     """スケジュールから呼ばれる。storage は遅延 import。"""
-    from datetime import date
-
-    from packages.core.storage import DuckDBRepo, SQLiteRepo
-
     from services.agent.pipeline import run_pipeline
 
-    as_of = date.today()
-    with DuckDBRepo.open() as warehouse, SQLiteRepo.open() as sqlite:
-        state = _adapt_state(sqlite)
+    day = as_of or session_as_of(market)
+    warehouse, sqlite, owned = _storage_pair()
+    try:
         run_pipeline(
             market,
-            as_of,
-            state=state,
+            day,
+            state=_adapt_state(sqlite),
             warehouse=_adapt_warehouse(warehouse),
+            trigger=trigger,
         )
+    finally:
+        if owned:
+            warehouse.close()
+            sqlite.close()
+
+
+def _needs_startup_pipeline(warehouse: Any, market: str, as_of: date) -> bool:
+    getter = getattr(warehouse, "get_recommendations", None)
+    if not callable(getter):
+        return True
+    rows = getter(market=market, as_of=as_of, limit=1) or []
+    return len(rows) == 0
+
+
+def run_startup_catchup() -> None:
+    """起動直後に中断ジョブを拾い、直近セッションのパイプラインが無ければ走らせる。"""
+    logger.info("startup catchup: begin")
+    pending: list[tuple[str, date]] = []
+    warehouse, sqlite, owned = _storage_pair()
+    try:
+        state = _adapt_state(sqlite)
+        resumed = resume_interrupted_jobs(state=state)
+        if resumed:
+            logger.info("startup catchup: resumed job_run_ids=%s", resumed)
+        markets = ["JP"]
+        getter = getattr(sqlite, "get_watchlist", None)
+        watch = getter() if callable(getter) else []
+        if any(getattr(item, "market", None) == "US" for item in watch):
+            markets.append("US")
+        for market in markets:
+            as_of = session_as_of(market)
+            if _needs_startup_pipeline(warehouse, market, as_of):
+                pending.append((market, as_of))
+            else:
+                logger.info("startup catchup: skip %s as_of=%s (recommendations exist)", market, as_of)
+    finally:
+        if owned:
+            warehouse.close()
+            sqlite.close()
+
+    for market, as_of in pending:
+        logger.info("startup catchup: pipeline %s as_of=%s", market, as_of)
+        run_pipeline_job(market, as_of=as_of, trigger="startup")
+    logger.info("startup catchup: done")
 
 
 def run_weekly_review() -> None:
@@ -116,46 +241,58 @@ def refit_garch() -> None:
 
 
 def resume_interrupted_jobs(*, state: Any | None = None, max_chain: int = 5) -> list[int]:
-    """15 分ごとに実行。running のまま 2 時間以上経過し、プロセスが死んでいれば再開。"""
+    """15 分ごとに実行。running のまま 2 時間以上経過し、プロセスが死んでいれば中断にする。
+
+    生存中のジョブは触らない。実行しない resume 用の job_run は作らない
+    （空の running が 2 時間ごとに増えるのを防ぐ）。
+    """
+    owned = False
     if state is None:
-        return []
+        from packages.core.storage import SQLiteRepo
+
+        state = _adapt_state(SQLiteRepo.open())
+        owned = True
+    try:
+        return _resume_interrupted_jobs(state, max_chain=max_chain)
+    finally:
+        if owned:
+            inner = getattr(state, "_i", None)
+            closer = getattr(inner, "close", None)
+            if callable(closer):
+                closer()
+
+
+def _resume_interrupted_jobs(state: Any, *, max_chain: int = 5) -> list[int]:
+    """15 分ごとに実行。running のまま 2 時間以上経過し、プロセスが死んでいれば中断にする。"""
+    del max_chain
     stale = state.find_job_runs(
         status="running",
         started_before=datetime.now(UTC) - timedelta(hours=2),
     )
-    resumed: list[int] = []
+    interrupted: list[int] = []
     for run in stale:
         if _is_process_alive(getattr(run, "pid", None)):
             continue
-        chain = 0
-        parent = getattr(run, "parent_run_id", None)
-        while parent is not None and chain <= max_chain:
-            chain += 1
-            parent_run = state.get_job_run(parent)
-            parent = None if parent_run is None else parent_run.parent_run_id
-        if chain >= max_chain:
-            state.record_job_run(
-                run.id, status="failed", error_type="resume_limit", error_message="再開連鎖が上限"
-            )
-            continue
-        state.record_job_run(run.id, status="interrupted")
-        new_id = state.create_job_run(
-            job_name=run.job_name,
-            market=run.market,
-            trigger="resume",
-            parent_run_id=run.id,
+        state.record_job_run(
+            run.id,
+            status="interrupted",
+            error_type="interrupted",
+            error_message="プロセスが生存していないため中断と判定しました",
         )
-        resumed.append(new_id)
-    return resumed
+        interrupted.append(int(run.id))
+    return interrupted
 
 
 def _is_process_alive(pid: int | None) -> bool:
-    if pid is None:
-        return False
+    """pid が取れない間は誤中断しない。起動時の mark_interrupted_jobs が掃除する。"""
+    if pid is None or int(pid) <= 0:
+        return True
     try:
-        import os
-
-        os.kill(pid, 0)
+        os.kill(int(pid), 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
         return True
     except OSError:
         return False
@@ -292,6 +429,9 @@ def _adapt_warehouse(duck: Any) -> Any:
             return pd.DataFrame(self._i.get_securities(**kwargs) or [])
 
         def read_scores_daily(self, **kwargs: Any) -> Any:
+            reader = getattr(self._i, "read_scores_daily", None)
+            if callable(reader):
+                return reader(**kwargs)
             import pandas as pd
 
             return pd.DataFrame(self._i.get_scores(**kwargs) or [])
@@ -397,10 +537,20 @@ def _adapt_warehouse(duck: Any) -> Any:
 
 def main() -> None:
     from packages.core.config import get_settings
+    from packages.core.storage import DuckDBRepo
 
     settings = get_settings()
+    try:
+        warehouse = DuckDBRepo.open(settings, read_only=False)
+    except Exception as exc:
+        logger.error(
+            "DuckDB は別プロセス（API）が使用中です。収集と起動時キャッチアップは "
+            "API プロセス内のスケジューラが担当します: %s",
+            exc,
+        )
+        return
+    warehouse.close()
     url = settings.database_url or f"sqlite:///{settings.state_db_path}"
-    # aiosqlite URL は APScheduler には使えないので同期に戻す。
     url = url.replace("sqlite+aiosqlite://", "sqlite://")
     scheduler = create_scheduler(db_url=url, timezone=settings.tz)
     logger.info("agent scheduler starting (tz=%s)", settings.tz)

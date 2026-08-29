@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from pathlib import Path
+from typing import Any
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -46,7 +46,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 def _open_duck(settings: Settings) -> DuckDBRepo:
-    # 画面からの手動ジョブが upsert するため、Phase A では API も書き込み接続で開く。
     repo = DuckDBRepo.open(settings, read_only=False)
     repo.init_db()
     return repo
@@ -75,7 +74,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     duck = _open_duck(settings)
     sqlite = SQLiteRepo.open(settings)
     sqlite.init_db()
-    sqlite.mark_interrupted_jobs()
+    sqlite.mark_interrupted_jobs(hours=0)
     payload = _load_payload(sqlite)
     app.state.api = AppState(
         settings=settings,
@@ -87,10 +86,26 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         duck_owned=True,
         sqlite_owned=True,
     )
+    scheduler = _start_agent_scheduler(settings, duck, sqlite)
     yield
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
     if duck:
         duck.close()
     sqlite.close()
+
+
+def _start_agent_scheduler(settings: Settings, duck: DuckDBRepo, sqlite: SQLiteRepo) -> Any:
+    """DuckDB は単一ライタのため、収集ジョブは API と同じプロセスで動かす。"""
+    from services.agent.main import create_scheduler, set_shared_storage
+
+    set_shared_storage(duck, sqlite)
+    url = settings.database_url or f"sqlite:///{settings.state_db_path}"
+    url = url.replace("sqlite+aiosqlite://", "sqlite://")
+    scheduler = create_scheduler(db_url=url, timezone=settings.tz, blocking=False)
+    scheduler.start()
+    logger.info("embedded agent scheduler started (tz=%s)", settings.tz)
+    return scheduler
 
 
 def create_app(

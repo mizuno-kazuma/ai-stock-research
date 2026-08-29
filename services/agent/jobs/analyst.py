@@ -5,20 +5,28 @@ LLM は使わない。部分失敗は機能縮退。
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 from packages.core.factors.pipeline import compute_features
 from packages.core.factors.scoring import score_cross_section
 from packages.core.interfaces.storage import JobRunRepo, WarehouseRepo
 from packages.core.models.arimax import forecast_fx
-from packages.core.models.garch import compute_vol_features
 from packages.core.models.ranker import FittedRanker
-from services.agent.deps import UpstreamFailed, begin_run, finish_run, require_not_failed
+from services.agent.deps import (
+    UpstreamFailed,
+    attach_step_failures,
+    begin_run,
+    finish_run,
+    first_step_error,
+    require_not_failed,
+)
 from services.agent.types import JobResult, StepResult
+
+# mom_12_1 / ret_252 に必要な約 252 営業日 + 余裕。全履歴を pandas に載せない。
+FEATURE_LOOKBACK_CALENDAR_DAYS = 420
 
 
 def analyst(
@@ -60,7 +68,8 @@ def analyst(
     # --- 特徴量 ---
     try:
         if prices is None:
-            prices = warehouse.read_prices_daily(market=market, end=as_of)
+            start = as_of - timedelta(days=FEATURE_LOOKBACK_CALENDAR_DAYS)
+            prices = warehouse.read_prices_daily(market=market, start=start, end=as_of)
         if securities is None:
             try:
                 securities = warehouse.read_securities(market=market, as_of=as_of)
@@ -77,46 +86,35 @@ def analyst(
             fx=fx,
         )
         features = compute_features(ctx)
+        n_features = int(len(features))
+        metrics["n_features"] = n_features
         if not features.empty:
-            warehouse.upsert_features_daily(features)
-        steps["features"] = StepResult(
-            status="success", metrics={"n": int(len(features))}
-        )
-        metrics["n_features"] = int(len(features))
+            try:
+                warehouse.upsert_features_daily(features)
+                steps["features"] = StepResult(
+                    status="success", metrics={"n": n_features}
+                )
+            except Exception as exc:
+                overall = "partial"
+                steps["features"] = StepResult(
+                    status="failed",
+                    error=f"保存に失敗: {exc}",
+                    metrics={"n": n_features},
+                )
+        else:
+            steps["features"] = StepResult(
+                status="success", metrics={"n": 0}
+            )
     except Exception as exc:
         overall = "partial"
         features = pd.DataFrame()
         steps["features"] = StepResult(status="failed", error=str(exc))
 
-    # --- GARCH（銘柄ごと。失敗は実現ボラへ） ---
-    garch_fallback = 0
-    if not features.empty and prices is not None and "adj_close" in prices.columns:
-        try:
-            work = prices.copy()
-            work["trade_date"] = pd.to_datetime(work["trade_date"]).dt.date
-            for ticker, g in work.groupby("ticker"):
-                g = g.sort_values("trade_date")
-                close = pd.to_numeric(g["adj_close"], errors="coerce")
-                log_ret = np.log(close.where(close > 0)).diff().dropna()
-                rv20 = features.loc[features["ticker"] == str(ticker), "realized_vol_20d"]
-                rv60 = features.loc[features["ticker"] == str(ticker), "realized_vol_60d"]
-                result = compute_vol_features(
-                    log_ret,
-                    realized_vol_20d=float(rv20.iloc[0]) if len(rv20) else None,
-                    realized_vol_60d=float(rv60.iloc[0]) if len(rv60) else None,
-                    quality_sink=warehouse,
-                    entity=str(ticker),
-                    as_of=as_of,
-                )
-                if "GARCH_FALLBACK" in result["quality_flags"]:
-                    garch_fallback += 1
-            steps["garch"] = StepResult(
-                status="success", metrics={"fallback": garch_fallback}
-            )
-        except Exception as exc:
-            overall = "partial"
-            steps["garch"] = StepResult(status="failed", error=str(exc))
-    metrics["garch_fallback"] = garch_fallback
+    # --- GARCH（日次では全銘柄推定しない。週次 refit_garch が担当） ---
+    # docs/04-analysis-engine.md §1.3.1: 全銘柄は実現ボラ。日次の銘柄ループは
+    # 結果を features に書き戻しておらず、数千銘柄で数時間かかる。
+    steps["garch"] = StepResult(status="skipped", metrics={"reason": "weekly_refit"})
+    metrics["garch_fallback"] = 0
 
     # --- 為替 ---
     try:
@@ -176,7 +174,15 @@ def analyst(
         overall = "failed" if features.empty else "partial"
         steps["scores"] = StepResult(status="failed", error=str(exc))
 
-    finish_run(state, run_id, status=overall, metrics=metrics)
+    metrics = attach_step_failures(metrics, steps)
+    job_error = first_step_error(steps) if overall in {"failed", "partial"} else None
+    finish_run(
+        state,
+        run_id,
+        status=overall,
+        metrics=metrics,
+        error=RuntimeError(job_error) if job_error else None,
+    )
     return JobResult(
         job_name="analyst",
         status=overall,
@@ -185,4 +191,5 @@ def analyst(
         run_id=run_id,
         steps=steps,
         metrics=metrics,
+        error=job_error,
     )

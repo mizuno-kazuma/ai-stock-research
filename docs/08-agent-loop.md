@@ -549,26 +549,22 @@ def with_checkpoint(job_run_id: int, phase: str, units: list[str], fn):
 ```python
 def resume_interrupted_jobs() -> None:
     """15分ごとに実行。Windows Update による再起動などで中断された
-    ジョブを検出し、チェックポイントから再開する。"""
+    ジョブを検出する。生存中のジョブは誤って中断しない。"""
     stale = repo.find_job_runs(
         status="running",
         started_before=utcnow() - timedelta(hours=2),   # 2時間以上 running
     )
     for run in stale:
         if is_process_alive(run.pid):
-            continue                 # まだ動いている
+            continue                 # まだ動いている（pid 未記録も生存扱い）
         repo.update_job_run(run.id, status="interrupted")
-        cp = load_checkpoint(run.id)
-        if cp is None:
-            logger.warning("チェックポイントなし。最初から実行する")
-        new_run = repo.create_job_run(job_name=run.job_name, trigger="resume",
-                                      parent_run_id=run.id)
-        enqueue(run.job_name, checkpoint=cp, job_run_id=new_run.id)
+        # 実行しない resume 用の running 行は作らない。
+        # 起動時キャッチアップが当日推奨の欠落を見て pipeline を再実行する。
 ```
 
-`is_process_alive(run.pid)` により、単に時間がかかっているだけのジョブを誤って再実行しない。
+`job_runs.pid` に開始時の PID を記録する。`is_process_alive(run.pid)` により、単に時間がかかっているだけのジョブを誤って中断しない。pid が NULL のレガシー行も生存扱いとし、API 起動時に `running` をまとめて `interrupted` にする。
 
-**再開の上限**: 同じ `parent_run_id` の連鎖が5回を超えたら再開を諦め、`failed` として通知する（無限ループの防止）。
+起動時キャッチアップは当日の推奨が無ければ pipeline を走らせる。同じ `parent_run_id` の連鎖で空の running を増やさない。
 
 ## 10. ガードレールの一覧
 
@@ -585,7 +581,7 @@ def resume_interrupted_jobs() -> None:
 | 推奨件数の上限 | Strategist | `agent.max_recommendations_per_day`（既定10） |
 | 同一セクター上限 | Strategist | 3件 |
 | 並行実行の禁止 | APScheduler `max_instances=1` | DuckDB の単一ライタ制約 |
-| 再開の連鎖上限 | `resume_interrupted_jobs` | 5回 |
+| 再開の誤発火防止 | `resume_interrupted_jobs` | pid 生存ならスキップ。空の resume 行は作らない |
 | API レート制限 | `TokenBucket`（SQLite永続化） | 再起動直後の制限超過を防ぐ |
 | PIT 違反の検出 | `assert_pit_safe` | 未来情報の混入時に例外 |
 | 遅延データの誤用 | Critic の機械的検証 | `critical` 判定で却下 |

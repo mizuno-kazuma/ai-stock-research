@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 import numpy as np
@@ -90,7 +90,9 @@ def researcher(
     metrics: dict[str, Any] = {"llm_capped": False, "n_summaries": 0}
     qual_rows: list[dict[str, Any]] = []
 
-    docs = warehouse.read_documents(market=market, filed_to=as_of)
+    docs = warehouse.read_documents(
+        market=market, filed_from=as_of - timedelta(days=14), filed_to=as_of
+    )
     if tickers:
         if not docs.empty and "ticker" in docs.columns:
             docs = docs.loc[docs["ticker"].astype(str).isin(tickers)]

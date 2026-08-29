@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import os
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
@@ -28,6 +29,7 @@ from sqlalchemy import (
     event,
     func,
     select,
+    text,
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import (
@@ -40,6 +42,7 @@ from sqlalchemy.orm import (
 from sqlalchemy.pool import StaticPool
 
 from packages.core.config import Settings, get_settings
+from packages.core.interfaces.storage import MemoryRecord
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +90,7 @@ class JobRun(Base):
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
     parent_run_id: Mapped[int | None] = mapped_column(Integer)
     git_commit: Mapped[str | None] = mapped_column(String(40))
+    pid: Mapped[int | None] = mapped_column(Integer)
 
     __table_args__ = (Index("idx_job_runs_name", "job_name", "started_at"),)
 
@@ -393,8 +397,19 @@ class SQLiteRepo:
     def init_db(self, *, seed_defaults: bool = True) -> None:
         """テーブルを作成し、既定の設定を入れる。冪等。"""
         Base.metadata.create_all(self.engine)
+        self._ensure_job_run_pid_column()
         if seed_defaults:
             self.ensure_default_settings()
+
+    def _ensure_job_run_pid_column(self) -> None:
+        """既存 DB に pid 列が無ければ追加する。create_all は列追加をしない。"""
+        if not str(self.url).startswith("sqlite"):
+            return
+        with self.engine.begin() as conn:
+            rows = conn.execute(text("PRAGMA table_info(job_runs)")).fetchall()
+            cols = {row[1] for row in rows}
+            if cols and "pid" not in cols:
+                conn.execute(text("ALTER TABLE job_runs ADD COLUMN pid INTEGER"))
 
     def ensure_default_settings(self) -> int:
         """未設定のキーだけ既定値で埋める。既存値は上書きしない。"""
@@ -461,6 +476,7 @@ class SQLiteRepo:
                 started_at=utc_now_iso(),
                 parent_run_id=parent_run_id,
                 git_commit=git_commit,
+                pid=os.getpid(),
             )
             s.add(row)
             s.flush()
@@ -543,16 +559,11 @@ class SQLiteRepo:
         rows = self.get_job_runs(job_name=job_name, limit=200)
         if market is not None:
             rows = [r for r in rows if r.market == market]
-        if on_date is not None:
-            target = on_date.isoformat()
-            matched: list[JobRun] = []
-            for row in rows:
-                started = _parse_iso(row.started_at)
-                if started is None:
-                    continue
-                if started.date().isoformat() == target:
-                    matched.append(row)
-            rows = matched
+        # job_runs は as_of を持たない。started_at は UTC なので、分析対象日
+        # （on_date / JST のセッション日）と実行日がずれる。JST 早朝は日付が
+        # 1日ずれ、起動時キャッチアップでは as_of が前営業日になる。
+        # 前段の成否は「同じ市場の最新実行」で判断する。
+        _ = on_date
         return rows[0] if rows else None
 
     def create_job_run(
@@ -625,12 +636,15 @@ class SQLiteRepo:
 
         docs/03-data-model.md §3.1。API 起動時に呼んで `interrupted` に倒す。
         """
-        cutoff = (
-            dt.datetime.now(dt.UTC) - dt.timedelta(hours=hours)
-        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-        stmt = select(JobRun).where(
-            JobRun.status == "running", JobRun.started_at < cutoff
-        )
+        if hours <= 0:
+            stmt = select(JobRun).where(JobRun.status == "running")
+        else:
+            cutoff = (
+                dt.datetime.now(dt.UTC) - dt.timedelta(hours=hours)
+            ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            stmt = select(JobRun).where(
+                JobRun.status == "running", JobRun.started_at < cutoff
+            )
         with self.session() as s:
             return list(s.execute(stmt).scalars().all())
 
@@ -1162,6 +1176,98 @@ class SQLiteRepo:
             s.delete(row)
             return True
 
+    def select_memory(
+        self,
+        *,
+        market: str | None = None,
+        sector: str | None = None,
+        ticker: str | None = None,
+        limit: int = 15,
+    ) -> list[MemoryRecord]:
+        """docs/08-agent-loop.md §6.2。active / 確信度 / 観測数で絞りスコープ一致を返す。"""
+        rows = self.get_agent_memories(
+            active_only=True,
+            min_confidence=0.6,
+            min_observations=10,
+            limit=max(limit * 8, 80),
+        )
+        picked: list[AgentMemory] = []
+        for row in rows:
+            if row.scope == "global":
+                picked.append(row)
+            elif row.scope == "market" and market and row.scope_value == market:
+                picked.append(row)
+            elif row.scope == "sector" and sector and row.scope_value == sector:
+                picked.append(row)
+            elif row.scope == "ticker" and ticker and row.scope_value == ticker:
+                picked.append(row)
+            if len(picked) >= limit:
+                break
+        return [_as_memory_record(row) for row in picked]
+
+    def list_memory(self, *, include_inactive: bool = False) -> list[MemoryRecord]:
+        rows = self.get_agent_memories(active_only=not include_inactive, limit=500)
+        return [_as_memory_record(row) for row in rows]
+
+    def insert_memory(self, record: MemoryRecord) -> str:
+        self.upsert_agent_memory(
+            memory_id=record.memory_id,
+            scope=record.scope,
+            scope_value=record.scope_value,
+            category=record.category,
+            lesson_ja=record.lesson_ja,
+            evidence_ja=record.evidence_ja,
+            derived_from=list(record.derived_from),
+            n_observations=record.n_observations,
+            confidence=record.confidence,
+            hit_rate_before=record.hit_rate_before,
+            hit_rate_after=record.hit_rate_after,
+            is_active=record.is_active,
+            superseded_by=record.superseded_by,
+            use_count=record.use_count,
+        )
+        return record.memory_id
+
+    def update_memory(self, memory_id: str, fields: dict[str, Any]) -> None:
+        payload = dict(fields)
+        payload["memory_id"] = memory_id
+        if "derived_from" in payload and isinstance(payload["derived_from"], (list, tuple)):
+            payload["derived_from"] = _json_dumps(list(payload["derived_from"]))
+        existing = self.get_agent_memory(memory_id)
+        if existing is None:
+            raise KeyError(f"agent_memory が見つかりません: {memory_id}")
+        merged = {
+            "memory_id": memory_id,
+            "scope": existing.scope,
+            "scope_value": existing.scope_value,
+            "category": existing.category,
+            "lesson_ja": existing.lesson_ja,
+            "evidence_ja": existing.evidence_ja,
+            "derived_from": existing.derived_from,
+            "n_observations": existing.n_observations,
+            "confidence": existing.confidence,
+            "hit_rate_before": existing.hit_rate_before,
+            "hit_rate_after": existing.hit_rate_after,
+            "is_active": existing.is_active,
+            "superseded_by": existing.superseded_by,
+            "use_count": existing.use_count,
+            "created_at": existing.created_at,
+        }
+        merged.update(payload)
+        self.upsert_agent_memory(**merged)
+
+    def touch_memory(self, memory_ids: list[str]) -> None:
+        now = utc_now_iso()
+        with self.session() as s:
+            for memory_id in memory_ids:
+                row = s.execute(
+                    select(AgentMemory).where(AgentMemory.memory_id == memory_id)
+                ).scalar_one_or_none()
+                if row is None:
+                    continue
+                row.use_count = int(row.use_count or 0) + 1
+                row.last_used_at = now
+
     # -- factor_weights -------------------------------------------------------
 
     def get_active_weight_set(self, market: str, horizon: str) -> FactorWeight | None:
@@ -1339,6 +1445,31 @@ def _parse_iso(value: str | None) -> dt.datetime | None:
         return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def _as_memory_record(row: AgentMemory) -> MemoryRecord:
+    derived = row.derived_from
+    if isinstance(derived, str):
+        parsed = _json_loads(derived)
+        derived = parsed if isinstance(parsed, list) else ([derived] if derived else [])
+    if not isinstance(derived, list):
+        derived = []
+    return MemoryRecord(
+        memory_id=str(row.memory_id),
+        scope=str(row.scope),
+        category=str(row.category),
+        lesson_ja=str(row.lesson_ja),
+        evidence_ja=str(row.evidence_ja),
+        n_observations=int(row.n_observations),
+        confidence=float(row.confidence),
+        scope_value=row.scope_value,
+        derived_from=[str(item) for item in derived],
+        hit_rate_before=row.hit_rate_before,
+        hit_rate_after=row.hit_rate_after,
+        is_active=bool(row.is_active),
+        superseded_by=row.superseded_by,
+        use_count=int(row.use_count or 0),
+    )
 
 
 def to_dict(row: Any, *, json_fields: Sequence[str] = ()) -> dict[str, Any]:

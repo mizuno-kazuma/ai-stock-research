@@ -35,6 +35,14 @@ logger = logging.getLogger(__name__)
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations" / "duckdb"
 
+_COVERAGE_TABLES: dict[str, tuple[str, bool]] = {
+    "prices_daily": ("trade_date", True),
+    "financials": ("filed_at", True),
+    "documents": ("filed_at", True),
+    "macro_series": ("observation_date", False),
+    "securities": ("valid_from", True),
+}
+
 # 推奨の不変条件（docs/03-data-model.md §2.9）
 MIN_BEAR_CASE_CHARS = 20
 MIN_PRIOR_SAMPLES_FOR_HIGH_CONVICTION = 20
@@ -326,7 +334,12 @@ class DuckDBRepo:
     @staticmethod
     def _coerce(value: Any) -> Any:
         """Pydantic / Enum 由来の値を DuckDB が扱える形にする。"""
-        if value is None or isinstance(value, (str, int, float, bool, dt.date, dt.datetime)):
+        if isinstance(value, dt.datetime):
+            # DuckDB TIMESTAMP は naive UTC。tz-aware を渡すと INSERT が落ちる。
+            if value.tzinfo is not None:
+                return value.astimezone(dt.UTC).replace(tzinfo=None)
+            return value
+        if value is None or isinstance(value, (str, int, float, bool, dt.date)):
             return value
         if isinstance(value, dt.timedelta):
             return value
@@ -508,6 +521,42 @@ class DuckDBRepo:
             params,
         )
         return pd.DataFrame(rows)
+
+    def latest_coverage_date(
+        self,
+        table: str,
+        *,
+        market: str | None = None,
+        date_col: str | None = None,
+    ) -> dt.date | None:
+        """テーブルに入っている最新日付。Collector の増分取得に使う。"""
+        spec = _COVERAGE_TABLES.get(table)
+        if spec is None:
+            raise ValueError(f"coverage 対象外のテーブル: {table}")
+        column, has_market = spec
+        col = date_col or column
+        if col != column:
+            raise ValueError(f"{table} の日付列は {column} です")
+        where = "1=1"
+        params: list[Any] = []
+        if has_market and market:
+            where = "market = ?"
+            params.append(market)
+        row = self.query_one(
+            f"SELECT MAX({col}) AS latest FROM {table} WHERE {where}",
+            params,
+        )
+        if not row:
+            return None
+        value = row.get("latest")
+        if value is None:
+            return None
+        if isinstance(value, dt.datetime):
+            return value.date()
+        if isinstance(value, dt.date):
+            return value
+        text = str(value)
+        return dt.date.fromisoformat(text[:10])
 
     def upsert_prices_live(self, rows: Iterable[Any]) -> int:
         return self.upsert("prices_live", rows, defaults={"ingested_at": _now()})
@@ -801,7 +850,11 @@ class DuckDBRepo:
         return pd.DataFrame(rows)
 
     def upsert_scores_daily(self, rows: Iterable[Any]) -> int:
-        return self.upsert("scores_daily", rows, defaults={"computed_at": _now()})
+        return self.upsert(
+            "scores_daily",
+            rows,
+            defaults={"computed_at": _now(), "feature_version": "v1.0.0"},
+        )
 
     def get_scores(
         self,

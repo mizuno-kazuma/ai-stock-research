@@ -32,7 +32,7 @@ from packages.core.llm.prompts import render_prompt
 from packages.core.llm.router import LLMRouter
 from packages.core.llm.schemas import Citation, ThesisOutput
 from services.agent.checkpoint import with_checkpoint
-from services.agent.deps import begin_run, finish_run
+from services.agent.deps import attach_step_failures, begin_run, finish_run, first_step_error
 from services.agent.types import JobResult, StepResult
 
 FALLBACK_BEAR = (
@@ -164,17 +164,63 @@ def strategist(
     run_id = begin_run(
         state, job_name="strategist", market=market, trigger=trigger, parent_run_id=parent_run_id
     )
+    try:
+        return _strategist_body(
+            run_id,
+            market,
+            as_of,
+            state=state,
+            warehouse=warehouse,
+            memory=memory,
+            router=router,
+            scores=scores,
+            outcomes=outcomes,
+            universe_filter=universe_filter,
+            max_per_day=max_per_day,
+            researcher_qual=researcher_qual,
+        )
+    except Exception as exc:
+        finish_run(state, run_id, status="failed", error=exc)
+        raise
+
+
+def _strategist_body(
+    run_id: int,
+    market: str,
+    as_of: date,
+    *,
+    state: JobRunRepo,
+    warehouse: WarehouseRepo,
+    memory: MemoryRepo | None,
+    router: LLMRouter | None,
+    scores: pd.DataFrame | None,
+    outcomes: pd.DataFrame | None,
+    universe_filter: UniverseFilter | None,
+    max_per_day: int,
+    researcher_qual: list[dict[str, Any]] | None,
+) -> JobResult:
     if scores is None:
         scores = warehouse.read_scores_daily(as_of=as_of, market=market)
     if scores is None or scores.empty:
-        finish_run(state, run_id, status="failed", metrics={"reason": "no_scores"})
+        err = RuntimeError(
+            "scores が空です。先に分析ジョブを成功させてください。"
+        )
+        finish_run(
+            state,
+            run_id,
+            status="failed",
+            metrics={"reason": "no_scores", "failed_steps": ["scores"]},
+            error=err,
+        )
         return JobResult(
             job_name="strategist",
             status="failed",
             market=market,
             as_of=as_of,
             run_id=run_id,
-            error="scores が空",
+            error=str(err),
+            steps={"scores": StepResult(status="failed", error=str(err))},
+            metrics={"reason": "no_scores"},
         )
 
     work = scores.copy()
@@ -317,19 +363,36 @@ def strategist(
     status = "partial" if llm_capped or not recs else "success"
     if not recs and candidates.empty:
         status = "partial"
-    metrics = {
-        "n_candidates": int(len(candidates)),
-        "n_recs": len(recs),
-        "llm_capped": llm_capped,
-    }
-    finish_run(state, run_id, status=status, metrics=metrics)
+    steps = {"cards": StepResult(status=status)}
+    if status != "success" and not recs:
+        steps["cards"] = StepResult(
+            status="failed" if status == "failed" else "partial",
+            error="推奨カードを1件も生成できませんでした",
+        )
+    metrics = attach_step_failures(
+        {
+            "n_candidates": int(len(candidates)),
+            "n_recs": len(recs),
+            "llm_capped": llm_capped,
+        },
+        steps,
+    )
+    job_error = first_step_error(steps) if status in {"failed", "partial"} else None
+    finish_run(
+        state,
+        run_id,
+        status=status,
+        metrics=metrics,
+        error=RuntimeError(job_error) if job_error else None,
+    )
     return JobResult(
         job_name="strategist",
         status=status,
         market=market,
         as_of=as_of,
         run_id=run_id,
-        steps={"cards": StepResult(status=status)},
+        steps=steps,
         metrics=metrics,
         recs=recs,
+        error=job_error,
     )

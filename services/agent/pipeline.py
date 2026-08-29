@@ -39,6 +39,47 @@ def run_pipeline(
         state, job_name="pipeline", market=market, trigger=trigger
     )
     jobs: dict[str, JobResult] = {}
+    try:
+        return _run_pipeline_jobs(
+            pipeline_id,
+            market,
+            as_of,
+            state=state,
+            warehouse=warehouse,
+            router=router,
+            ranker=ranker,
+            collector_steps=collector_steps,
+            memory=memory,
+            trigger=trigger,
+            kwargs=kwargs,
+            jobs=jobs,
+        )
+    except Exception as exc:
+        finish_run(
+            state,
+            pipeline_id,
+            status="failed",
+            metrics={"jobs": {k: v.status for k, v in jobs.items()}},
+            error=exc,
+        )
+        raise
+
+
+def _run_pipeline_jobs(
+    pipeline_id: int,
+    market: str,
+    as_of: date,
+    *,
+    state: StateRepo,
+    warehouse: WarehouseRepo,
+    router: LLMRouter | None,
+    ranker: FittedRanker | None,
+    collector_steps: dict | None,
+    memory: MemoryRepo | None,
+    trigger: str,
+    kwargs: dict[str, Any],
+    jobs: dict[str, JobResult],
+) -> PipelineResult:
 
     coll = collector(
         market,

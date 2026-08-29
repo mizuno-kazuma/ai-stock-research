@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -47,6 +48,7 @@ class FakeStateRepo:
             market=market,
             trigger=trigger,
             parent_run_id=parent_run_id,
+            pid=os.getpid(),
         )
         return run_id
 
@@ -221,7 +223,32 @@ class FakeWarehouse:
         tickers = kwargs.get("tickers")
         if tickers and not df.empty and "ticker" in df.columns:
             df = df.loc[df["ticker"].astype(str).isin([str(t) for t in tickers])]
+        start = kwargs.get("start")
+        end = kwargs.get("end")
+        if (start or end) and not df.empty and "trade_date" in df.columns:
+            dates = pd.to_datetime(df["trade_date"]).dt.date
+            if start:
+                df = df.loc[dates >= start]
+                dates = pd.to_datetime(df["trade_date"]).dt.date
+            if end:
+                df = df.loc[dates <= end]
         return df
+
+    def latest_coverage_date(
+        self, table: str, *, market: str | None = None, date_col: str | None = None
+    ) -> date | None:
+        if table != "prices_daily" or self.prices.empty or "trade_date" not in self.prices.columns:
+            return None
+        work = self.prices
+        if market and "market" in work.columns:
+            work = work.loc[work["market"].astype(str) == market]
+        if work.empty:
+            return None
+        dates = pd.to_datetime(work["trade_date"], errors="coerce")
+        latest = dates.max()
+        if pd.isna(latest):
+            return None
+        return latest.date()
 
     def upsert_prices_live(self, df: pd.DataFrame) -> int:
         raise AssertionError("prices_live をモデル経路から呼んではいけない")

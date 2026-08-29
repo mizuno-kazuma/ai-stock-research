@@ -676,7 +676,8 @@ CREATE TABLE job_runs (
     error_traceback TEXT,
     retry_count     INTEGER DEFAULT 0,
     parent_run_id   INTEGER,
-    git_commit      TEXT
+    git_commit      TEXT,
+    pid             INTEGER             -- 実行プロセス。生存確認に使う
 );
 CREATE INDEX idx_job_runs_name ON job_runs(job_name, started_at DESC);
 ```
@@ -690,7 +691,7 @@ CREATE INDEX idx_job_runs_name ON job_runs(job_name, started_at DESC);
  "api_calls_used": 42}
 ```
 
-**Windows Update による再起動後、`status='running'` のまま残ったレコードを起動時に検出し、`checkpoint` から再開する。** 起動時処理で `status='running'` かつ `started_at` が6時間以上前のものを `interrupted` として扱い、自動で再開ジョブをキューに入れる。
+**Windows Update による再起動後、`status='running'` のまま残ったレコードを起動時に検出し、`checkpoint` から再開する。** API 起動時は新しいプロセスなので、`running` の行はすべて前プロセスの残骸として `interrupted` にする。15分ごとの `resume_interrupted_jobs` は `pid` が生存していれば触らず、死んでから2時間以上 `running` の行だけを `interrupted` にする。実行しない resume 用の job_run は作らない。
 
 ### 3.2 `agent_memory`（フィードバックループの実体）
 
