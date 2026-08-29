@@ -37,6 +37,7 @@ import { Badge, SectionCard } from "../components/ui";
 import { DirectionValue, ForecastValue, MetricCard, NullableText, ScoreBadge } from "../components/values";
 import { ALERT_CATEGORY_LABEL_JA } from "../lib/labels";
 import type { Alert, WatchlistRow } from "../lib/api-types";
+import { formatFilingsWeekLabel } from "../lib/filings-week";
 import { useDashboard } from "../lib/queries";
 
 const watchlistColumns: Array<Column<WatchlistRow>> = [
@@ -151,6 +152,7 @@ export default function DashboardPage() {
           const isJp = prefs.market === "JP";
           const fx = data.fx;
           const portfolio = data.portfolio_snapshot;
+          const filingsWeek = formatFilingsWeekLabel(data.as_of ?? meta?.as_of);
 
           return (
             <div className="space-y-4">
@@ -264,7 +266,7 @@ export default function DashboardPage() {
                 {/* 5. 今週の開示 */}
                 <SectionCard
                   title="今週の開示"
-                  subtitle={`${data.new_filings_count}件`}
+                  subtitle={`${data.new_filings_count}件${filingsWeek ? ` · ${filingsWeek}` : ""}`}
                   actions={
                     <Link href="/filings" className="btn btn-ghost">
                       すべて見る
@@ -275,7 +277,9 @@ export default function DashboardPage() {
                 >
                   {data.watchlist_filings.length === 0 ? (
                     <p className="px-4 py-6 text-body-sm text-fg-tertiary">
-                      保有・ウォッチ銘柄の今週の開示はありません。
+                      {filingsWeek
+                        ? `保有・ウォッチ銘柄の今週（${filingsWeek}）の開示はありません。`
+                        : "保有・ウォッチ銘柄の今週の開示はありません。"}
                       <Link href="/filings" className="text-accent ml-1">
                         全銘柄の開示一覧
                       </Link>

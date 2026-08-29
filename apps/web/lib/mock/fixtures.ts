@@ -532,6 +532,7 @@ export const DASHBOARD: DashboardData = {
       { ticker: "6758", name_local: "ソニーグループ", change_pct: -0.0082 },
     ],
   },
+  // MOCK_AS_OF=2026-08-22 の週に入るフィクスチャ件数。ライブ API の保証値ではない。
   new_filings_count: 6,
   watchlist: WATCHLIST,
   watchlist_filings: [],
