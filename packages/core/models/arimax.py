@@ -63,16 +63,20 @@ class FxForecastBundle:
         ):
             if fc is None:
                 continue
+            lo80, hi80, lo95, hi95 = _interval_bands(fc)
             rows.append(
                 {
                     "as_of": self.as_of,
                     "pair": self.pair,
                     "horizon_days": self.horizon,
                     "model_id": model_id,
-                    "point": fc.point,
-                    "ci_lo": fc.lo,
-                    "ci_hi": fc.hi,
-                    "alpha": fc.alpha,
+                    "point_forecast": fc.point,
+                    "ci_lo_80": lo80,
+                    "ci_hi_80": hi80,
+                    "ci_lo_95": lo95,
+                    "ci_hi_95": hi95,
+                    "vol_forecast_ann": self.garch_vol_ann,
+                    "baseline_model_id": "random_walk",
                     "beats_baseline": (
                         False
                         if model_id == "random_walk"
@@ -80,10 +84,10 @@ class FxForecastBundle:
                         if self.dm is not None
                         else False
                     ),
+                    "is_baseline": model_id == "random_walk",
+                    "dm_statistic": None if self.dm is None else self.dm.stat,
                     "dm_pvalue": None if self.dm is None else self.dm.pvalue,
-                    "garch_vol_ann": self.garch_vol_ann,
                     "directional_accuracy_60d": self.directional_accuracy_60d,
-                    "notes": fc.notes or self.notes,
                 }
             )
         return rows
@@ -107,6 +111,30 @@ def random_walk_forecast(
         hi=float(spot + width),
         alpha=alpha,
         notes="random_walk: forecast=spot, CI=z*sigma*sqrt(h)",
+    )
+
+
+def _interval_bands(fc: Forecast) -> tuple[float, float, float, float]:
+    """1組の (lo, hi, alpha) から 80% / 95% 区間を作る。
+
+    `fx_forecasts` は両方が NOT NULL。点を中心に、正規近似の z 比で幅を写す。
+    """
+    point = float(fc.point)
+    half = max(abs(float(fc.hi) - float(fc.lo)) / 2.0, 0.0)
+    alpha = float(fc.alpha) if fc.alpha is not None else 0.05
+    if not (0.0 < alpha < 1.0):
+        alpha = 0.05
+    z_src = float(norm_ppf(1.0 - alpha / 2.0))
+    z80 = float(norm_ppf(0.90))
+    z95 = float(norm_ppf(0.975))
+    if not np.isfinite(z_src) or z_src <= 0:
+        z_src = z95
+    sigma = half / z_src if half > 0 else 0.0
+    return (
+        point - sigma * z80,
+        point + sigma * z80,
+        point - sigma * z95,
+        point + sigma * z95,
     )
 
 

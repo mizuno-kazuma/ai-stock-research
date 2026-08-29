@@ -714,6 +714,10 @@ def test_full_pipeline_with_fixtures():
         assert rec.expected_ret_lo is not None
 ```
 
+### T-INT-01b: 推奨・為替の列名が DuckDB スキーマと一致すること
+
+`build_recommendation` は `conviction_score` と `ml_pred` を必ず入れる。`FxForecastBundle.as_rows()` は `point_forecast` / `ci_lo_80` / `ci_hi_80` / `ci_lo_95` / `ci_hi_95` で出す。DEFAULT のない NOT NULL 列が欠けていれば `StorageError` になり、ConstraintException の列不明エラーにはしない。回帰は `tests/unit/agent/test_pipeline_fixes.py`。
+
 ### T-INT-02: チェックポイントからの再開
 
 ```python

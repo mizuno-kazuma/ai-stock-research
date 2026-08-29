@@ -190,6 +190,7 @@ def test_conviction_forced_to_low_when_few_samples() -> None:
         data_freshness=[],
     )
     assert rec["conviction"] == "low"
+    assert rec["conviction_score"] == 0.8
 
 
 def test_critic_rejects_boilerplate_bear_case() -> None:

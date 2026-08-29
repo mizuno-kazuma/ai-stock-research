@@ -441,6 +441,9 @@ CREATE INDEX idx_rec_ticker ON recommendations(ticker, market, as_of DESC);
 4. `expected_ret_lo` / `expected_ret_hi` が NULL なら挿入を拒否する
 5. `hit_rate_prior` が NULL、または `n_prior_samples < 20` の場合は `conviction` を `low` に強制する
 6. `critic_verdict = 'rejected'` の推奨は UI に出さない（保存はする。学習材料になる）
+7. `conviction_score` が NULL、非有限、または 0.0..1.0 の外なら挿入を拒否する
+
+`upsert` は DEFAULT のない NOT NULL 列が欠けている／NULL のとき、DuckDB の ConstraintException より先に列名付きの `StorageError` を返す。
 
 ### 2.10 `recommendation_outcomes`（実績。フィードバックループの入力）
 
@@ -494,6 +497,8 @@ CREATE TABLE fx_forecasts (
 ```
 
 **`beats_baseline = FALSE` の場合、UIは「ランダムウォークに対する優位性は確認できていない」と明示表示する。** 点推定だけを見せることを禁止する。
+
+`FxForecastBundle.as_rows()` は上表の列名で出す（`point` / `ci_lo` ではなく `point_forecast` / `ci_lo_80` / `ci_hi_80` / `ci_lo_95` / `ci_hi_95`）。80% と 95% の両方を必ず埋める。
 
 ### 2.12 `macro_series`（マクロ指標。vintage あり）
 

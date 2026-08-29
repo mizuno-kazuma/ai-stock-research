@@ -242,6 +242,8 @@ class LLMRouter:
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
+            # Claude 5 は temperature=1 以外を拒否する。未対応パラメータは落とす。
+            "drop_params": True,
         }
         if response_schema is not None:
             kwargs["response_format"] = {"type": "json_object"}
@@ -348,6 +350,7 @@ def _default_completion() -> CompletionFn:
     try:
         import litellm
 
+        litellm.drop_params = True
         return litellm.completion
     except ImportError as exc:
         def _missing(**kwargs: Any) -> Any:

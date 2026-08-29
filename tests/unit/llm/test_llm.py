@@ -86,6 +86,18 @@ def test_router_reads_models_yaml_not_hardcoded() -> None:
     assert "gemini-3.7-flash" not in text
 
 
+def test_router_asks_litellm_to_drop_unsupported_params() -> None:
+    seen: dict[str, object] = {}
+
+    def fn(**kwargs):
+        seen.update(kwargs)
+        return {"content": "{}", "input_tokens": 1, "output_tokens": 1}
+
+    router = LLMRouter(completion_fn=fn)
+    router.complete(tier="default", purpose="x", messages=[{"role": "user", "content": "hi"}])
+    assert seen.get("drop_params") is True
+
+
 def test_cost_guard_raises_and_records_kill() -> None:
     state = FakeStateRepo()
     guard = CostGuard(

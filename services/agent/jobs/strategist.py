@@ -5,6 +5,7 @@ LLM が止まっても定量スコアだけでカードを出す。不完全な�
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date
 from typing import Any
@@ -30,9 +31,12 @@ from packages.core.llm.errors import (
 from packages.core.llm.prompts import render_prompt
 from packages.core.llm.router import LLMRouter
 from packages.core.llm.schemas import Citation, ThesisOutput
+from packages.core.storage import InvariantViolation, StorageError
 from services.agent.checkpoint import with_checkpoint
 from services.agent.deps import attach_step_failures, begin_run, finish_run, first_step_error
 from services.agent.types import JobResult, StepResult
+
+logger = logging.getLogger(__name__)
 
 FALLBACK_BEAR = (
     "定量スコア上位だが、開示資料の定性分析が停止または不足しているため、"
@@ -76,6 +80,19 @@ def _force_conviction(raw: str, n_prior: int) -> str:
     if n_prior < MIN_PRIOR_SAMPLES:
         return "low"
     return raw
+
+
+def _conviction_score(row: pd.Series) -> float:
+    """quant_score（0-100）を 0.0..1.0 に写す。欠損・非有限は 0.5。"""
+    raw = _finite(row.get("quant_score"))
+    if raw is None:
+        return 0.5
+    score = raw / 100.0
+    if score < 0.0:
+        return 0.0
+    if score > 1.0:
+        return 1.0
+    return score
 
 
 def _chunks_from_docs(
@@ -153,6 +170,14 @@ def _validate_rec(rec: dict[str, Any]) -> None:
         raise InvariantViolationError("citations が空です")
     if not (rec.get("invalidation_ja") or "").strip():
         raise InvariantViolationError("invalidation_ja が空です")
+    if not (rec.get("thesis_ja") or "").strip():
+        raise InvariantViolationError("thesis_ja が空です")
+    score = _finite(rec.get("conviction_score"))
+    if score is None or score < 0.0 or score > 1.0:
+        raise InvariantViolationError("conviction_score がありません")
+    rec["conviction_score"] = score
+    if not rec.get("reason_codes"):
+        raise InvariantViolationError("reason_codes が空です")
 
 
 def build_recommendation(
@@ -168,7 +193,7 @@ def build_recommendation(
     data_freshness: list[dict[str, Any]],
 ) -> dict[str, Any]:
     action = determine_action(row, is_held=False) or "watch"
-    conv_score = float(row.get("quant_score") or 50.0) / 100.0
+    conv_score = _conviction_score(row)
     if thesis is not None:
         raw_conv = thesis.conviction
         thesis_ja = thesis.thesis_ja
@@ -209,6 +234,10 @@ def build_recommendation(
         level = raw_conv if order[raw_conv] <= order[level] else level
     level = _force_conviction(level, n_prior_samples)
     expected_ret, expected_lo, expected_hi = _interval_from_row(row)
+    ml_pred = _finite(row.get("ml_pred_h20"))
+    reasons = [str(c) for c in (row.get("reason_codes") or []) if str(c).strip()]
+    if not reasons:
+        reasons = ["MODEL_LOW_CONFIDENCE"]
     rec = {
         "rec_id": str(uuid.uuid4()),
         "as_of": as_of,
@@ -216,10 +245,11 @@ def build_recommendation(
         "ticker": str(row.get("ticker")),
         "action": action,
         "horizon": "H20",
-        "quant_score": row.get("quant_score"),
-        "qual_score": row.get("qual_score"),
-        "total_score": row.get("total_score"),
-        "ml_pred_h20": row.get("ml_pred_h20"),
+        "quant_score": _finite(row.get("quant_score")),
+        "qual_score": _finite(row.get("qual_score")),
+        "total_score": _finite(row.get("total_score")),
+        "ml_pred": ml_pred,
+        "ml_pred_h20": ml_pred,
         "expected_ret": expected_ret,
         "expected_ret_lo": expected_lo,
         "expected_ret_hi": expected_hi,
@@ -227,9 +257,10 @@ def build_recommendation(
         "bear_case_ja": bear,
         "invalidation_ja": inval,
         "conviction": level,
+        "conviction_score": conv_score,
         "n_prior_samples": n_prior_samples,
         "hit_rate_prior": hit_rate_prior,
-        "reason_codes": row.get("reason_codes") or [],
+        "reason_codes": reasons,
         "citations": citations,
         "source_doc_ids": source_doc_ids,
         "memory_ids_used": memory_ids,
@@ -450,7 +481,8 @@ def _strategist_body(
             recs.append(rec)
             if memory is not None and mem_ids:
                 memory.touch_memory(mem_ids)
-        except InvariantViolationError:
+        except (InvariantViolationError, InvariantViolation, StorageError) as exc:
+            logger.warning("strategist: discard ticker=%s: %s", ticker, exc)
             discarded += 1
             return
 
