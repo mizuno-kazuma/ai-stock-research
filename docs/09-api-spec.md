@@ -110,7 +110,7 @@ GET /api/v1/dashboard?market=JP&as_of=2026-08-22
       "top_movers": [{"ticker": "6758", "change_pct": 0.0231}]
     },
     "new_filings_count": 34,
-    "watchlist_filings": [ /* 保有・ウォッチリスト銘柄の新着開示 */ ],
+    "watchlist_filings": [ /* 保有・ウォッチリスト銘柄の今週の開示 */ ],
     "model_health": {
       "rank_ic_20d": 0.041, "rank_ic_percentile_1y": 0.62,
       "status": "normal",
@@ -125,6 +125,9 @@ GET /api/v1/dashboard?market=JP&as_of=2026-08-22
   "meta": { "...": "..." }
 }
 ```
+
+`new_filings_count` と `watchlist_filings` の対象期間は `as_of` を含む暦週（月曜始まり、
+`as_of` 当日を含む）。画面ラベルは「今週の開示」。
 
 ### 2.2 推奨
 

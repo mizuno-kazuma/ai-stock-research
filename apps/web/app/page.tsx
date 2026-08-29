@@ -261,9 +261,9 @@ export default function DashboardPage() {
               </div>
 
               <div className="grid gap-4 desktop:grid-cols-2">
-                {/* 5. 本日の開示 */}
+                {/* 5. 今週の開示 */}
                 <SectionCard
-                  title="本日の開示"
+                  title="今週の開示"
                   subtitle={`${data.new_filings_count}件`}
                   actions={
                     <Link href="/filings" className="btn btn-ghost">
@@ -275,7 +275,7 @@ export default function DashboardPage() {
                 >
                   {data.watchlist_filings.length === 0 ? (
                     <p className="px-4 py-6 text-body-sm text-fg-tertiary">
-                      保有・ウォッチ銘柄の新しい開示はありません。
+                      保有・ウォッチ銘柄の今週の開示はありません。
                       <Link href="/filings" className="text-accent ml-1">
                         全銘柄の開示一覧
                       </Link>

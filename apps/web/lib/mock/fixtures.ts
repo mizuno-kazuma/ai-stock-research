@@ -709,6 +709,8 @@ export const FILINGS: DocumentSummaryRow[] = [
   { doc_id: "f009", ticker: "8058", market: "JP", name_local: "三菱商事", doc_type: "earnings_flash", title: "2027年3月期 第1四半期決算短信", filed_at: "2026-08-20T06:15:00Z", source: "edinet", has_summary: false, has_local_copy: true, guidance_tone: null, summary_preview_ja: null, info_value_score: 54, estimated_summary_cost_usd: 0.008 },
 ];
 
+DASHBOARD.watchlist_filings = FILINGS.slice(0, 6);
+
 export const FILING_SUMMARIES: Record<string, DocumentSummary> = {
   f001: {
     doc_id: "f001",
