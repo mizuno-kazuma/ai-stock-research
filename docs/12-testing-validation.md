@@ -697,6 +697,15 @@ def test_partial_data_returns_200_with_warnings(client, broken_tdnet):
     assert any(w["code"] == "SECTION_UNAVAILABLE" for w in r.json()["warnings"])
 ```
 
+### T-API-05: `market=auto` が JP / US に解決されること
+
+```python
+def test_dashboard_auto_market_resolves_to_jp_or_us(client):
+    r = client.get("/api/v1/dashboard?market=auto")
+    assert r.status_code == 200
+    assert r.json()["data"]["market"] in ("JP", "US")
+```
+
 ## 10. 結合テスト
 
 ### T-INT-01: パイプライン全体（モックデータ）

@@ -29,7 +29,7 @@ from services.api.errors import not_found, validation_error
 from services.api.events import sse_iterator
 from services.api.mapping import job_from_row, memory_from_row
 from services.api.runtime import kick_agent_job
-from services.api.util import as_list, utc_now
+from services.api.util import as_list, resolve_market, utc_now
 
 router = APIRouter(tags=["agent"])
 
@@ -98,6 +98,8 @@ def run_job(
 ) -> Envelope[JobRunSchema]:
     if job_name not in KNOWN_JOBS:
         raise validation_error(f"未知のジョブ名です: {job_name}")
+    if market:
+        market = resolve_market(market)
     run_id = state.sqlite.start_job_run(job_name, trigger="manual", market=market)
     state.bus.publish_nowait(
         "job_progress",

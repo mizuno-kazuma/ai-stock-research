@@ -851,7 +851,7 @@ CREATE TABLE settings (
 | `ui.direction_colors` | string | `"jp"` | `"jp"`（赤=上昇）または `"us"`（緑=上昇） |
 | `ui.theme` | string | `"dark"` | `"dark"` / `"light"` / `"system"` |
 | `ui.base_currency` | string | `"JPY"` | 評価額の表示通貨 |
-| `ui.default_market` | string | `"JP"` | 初期表示市場 |
+| `ui.default_market` | string | `"JP"` | 初期表示市場。`"JP"` / `"US"` / `"auto"`（日本時間15時未満は JP、以降は US） |
 | `llm.daily_cap_usd` | number | `1.0` | 日次コスト上限 |
 | `llm.monthly_cap_usd` | number | `20.0` | 月次コスト上限 |
 | `llm.kill_switch` | boolean | `false` | 全LLM呼び出しの停止 |

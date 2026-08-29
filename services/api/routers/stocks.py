@@ -29,7 +29,7 @@ from services.api.envelope import wrap
 from services.api.errors import not_found
 from services.api.mapping import document_from_row, map_doc_type, recommendation_from_row, recommendation_from_seed, security_from_row
 from services.api.routers.recommendations import _seed_cards
-from services.api.util import as_date, as_utc, parse_range_start
+from services.api.util import as_date, as_utc, parse_range_start, resolve_market
 
 router = APIRouter(tags=["stocks"])
 
@@ -56,6 +56,8 @@ def search_stocks(
     _user: User = Depends(require_user),
     state: AppState = Depends(get_app_state),
 ) -> Envelope[SecuritySearchResult]:
+    if market:
+        market = resolve_market(market)
     rows = state.duck.search_securities(q, market=market, limit=limit)
     items = [
         SecuritySearchHit(

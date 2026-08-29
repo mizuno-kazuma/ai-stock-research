@@ -17,7 +17,7 @@ from services.api.deps import AppState, User, get_app_state, require_user
 from services.api.envelope import wrap
 from services.api.errors import data_not_ready, not_found
 from services.api.mapping import recommendation_from_row, recommendation_from_seed
-from services.api.util import as_date, as_utc, split_csv, utc_now
+from services.api.util import as_date, as_utc, resolve_market, split_csv, utc_now
 
 router = APIRouter(tags=["recommendations"])
 
@@ -44,6 +44,8 @@ def list_recommendations(
     _user: User = Depends(require_user),
     state: AppState = Depends(get_app_state),
 ) -> Envelope[RecommendationList]:
+    if market:
+        market = resolve_market(market)
     actions = split_csv(action)
     convictions = split_csv(conviction)
     day = as_of

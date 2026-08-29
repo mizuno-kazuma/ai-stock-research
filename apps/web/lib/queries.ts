@@ -71,6 +71,7 @@ import {
   mapTradeAnalysis,
   mapWatchlistRow,
 } from "./api-map";
+import { resolveMarket } from "./market";
 import type {
   AgentCost,
   AgentJob,
@@ -205,11 +206,12 @@ function useApiMutation<TData, TVars>(
 /* ---------------------------- ダッシュボード ---------------------------- */
 
 async function fetchDashboard(market: Market): Promise<ApiResult<DashboardData>> {
+  const resolved = resolveMarket(market);
   const [dash, jobsRes, watchRes, recsRes] = await Promise.all([
-    apiGet<unknown>("/dashboard", { params: { market } }),
+    apiGet<unknown>("/dashboard", { params: { market: resolved } }),
     apiGet<unknown>("/agent/jobs", { params: { limit: 50 } }).catch(() => null),
     apiGet<unknown>("/watchlist").catch(() => null),
-    apiGet<unknown>("/recommendations", { params: { market } }).catch(() => null),
+    apiGet<unknown>("/recommendations", { params: { market: resolved } }).catch(() => null),
   ]);
   const mapped = mapDashboard(dash.data);
   const jobs = mapped.jobs.length ? mapped.jobs : unwrapItems(jobsRes?.data).map(mapAgentJob);
@@ -236,8 +238,8 @@ async function fetchDashboard(market: Market): Promise<ApiResult<DashboardData>>
 
 export const useDashboard = (market: Market) =>
   useQuery<ApiResult<DashboardData>, ApiError>({
-    queryKey: queryKeys.dashboard(market),
-    queryFn: () => fetchDashboard(market),
+    queryKey: queryKeys.dashboard(resolveMarket(market)),
+    queryFn: () => fetchDashboard(resolveMarket(market)),
     placeholderData: keepPreviousData,
     retry: (count, error) => error.isRetryable && count < 2,
   });

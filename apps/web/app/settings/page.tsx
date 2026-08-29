@@ -24,7 +24,8 @@ import {
 } from "../../components/states";
 import { Badge, Button, Notice, SectionCard, Toggle } from "../../components/ui";
 import { DirectionValue, NullableText } from "../../components/values";
-import type { DirectionColors, Horizon, Settings, ThemeMode } from "../../lib/api-types";
+import type { DefaultMarket, DirectionColors, Horizon, Settings, ThemeMode } from "../../lib/api-types";
+import { resolveMarket } from "../../lib/market";
 import {
   useAgentCost,
   useRebuildVectors,
@@ -143,10 +144,15 @@ function DisplaySection({ settings }: { settings: Settings }) {
           className="input"
           value={settings["ui.default_market"]}
           disabled={!online}
-          onChange={(e) => update.mutate({ "ui.default_market": e.target.value as Settings["ui.default_market"] })}
+          onChange={(e) => {
+            const next = e.target.value as DefaultMarket;
+            prefs.setPrefs({ market: resolveMarket(next) });
+            update.mutate({ "ui.default_market": next });
+          }}
         >
           <option value="JP">日本株</option>
           <option value="US">米国株</option>
+          <option value="auto">時刻で自動切替</option>
         </select>
         <span className="text-caption text-fg-muted">
           「時刻で自動切替」は日本時間15時までを日本株、それ以降を米国株として開きます。
@@ -617,7 +623,7 @@ function SettingsInner() {
       directionColors: data["ui.direction_colors"],
       theme: data["ui.theme"],
       density: data["ui.density"],
-      market: data["ui.default_market"],
+      market: resolveMarket(data["ui.default_market"]),
     });
     // 初回のサーバ値だけ取り込む
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -25,6 +25,8 @@ type RequiredKeys<T, K extends keyof T> = Omit<T, K> & { [P in K]-?: Exclude<T[P
 /* ------------------------------------------------------------------ */
 
 export type Market = "JP" | "US";
+/** 既定市場。`auto` は日本時間15時で JP / US を切り替える */
+export type DefaultMarket = Market | "auto";
 export type Horizon = "H5" | "H20";
 export type Conviction = "low" | "medium" | "high";
 export type RecAction = "watch" | "accumulate" | "reduce" | "avoid";
@@ -703,7 +705,7 @@ export type AlertCategory = "data" | "cost" | "model" | "runtime";
 export interface Settings {
   "ui.direction_colors": DirectionColors;
   "ui.theme": ThemeMode;
-  "ui.default_market": Market;
+  "ui.default_market": DefaultMarket;
   "ui.number_format": "jp" | "intl";
   "ui.density": "standard" | "dense";
   "llm.daily_cap_usd": number;

@@ -4,7 +4,31 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-from typing import Any
+from typing import Any, Literal
+from zoneinfo import ZoneInfo
+
+JST = ZoneInfo("Asia/Tokyo")
+#: 設定 `ui.default_market=auto` の切替時刻（docs/ui/screens/10-settings.md）。
+AUTO_MARKET_SWITCH_HOUR_JST = 15
+
+
+def resolve_market(market: str | None, *, now: dt.datetime | None = None) -> Literal["JP", "US"]:
+    """クエリの market を API が受け付ける JP / US にする。
+
+    `auto` は日本時間 15 時未満を JP、それ以降を US とする。
+    未指定・不明な値は JP。
+    """
+    if market == "JP" or market == "US":
+        return market
+    if market == "auto":
+        if now is None:
+            current = dt.datetime.now(JST)
+        elif now.tzinfo is None:
+            current = now.replace(tzinfo=JST)
+        else:
+            current = now.astimezone(JST)
+        return "JP" if current.hour < AUTO_MARKET_SWITCH_HOUR_JST else "US"
+    return "JP"
 
 
 def utc_now() -> dt.datetime:
