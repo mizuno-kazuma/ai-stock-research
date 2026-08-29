@@ -63,6 +63,10 @@ scheduler.add_job(resume_interrupted_jobs, "interval", minutes=15,
 
 **PCのスリープと Windows Update への対応**: `coalesce=True` と `misfire_grace_time` に加えて、15分ごとの `resume_interrupted_jobs` が中断ジョブを拾う。詳細は §9 と [15-windows-runtime.md](15-windows-runtime.md) §7。
 
+DuckDB は単一ライタのため、**スケジュールは API プロセスに内蔵する**（`services/api/main.py` の `_start_agent_scheduler`）。`ai-stock-agent.service` は API が止まっているときのフォールバックで、DuckDB が使用中なら終了コード 0 で抜ける（`Restart=on-failure`）。
+
+週次深掘り（`weekly_review`）は `deep` 層で直近の推奨と実績をレビューし、教訓候補を `agent_memory` に足す。キーが無ければ集計だけ残して `partial`。月次 `model_retrain` は `train_ranker` で `data/models/ranker_{market}_h20.pkl` を書き、サンプル不足なら成果物を残さない。月曜の `garch_refit` は対象銘柄の GARCH を再推定し、`features_daily.garch_vol_*` を更新する。
+
 ## 3. Collector
 
 ### 3.1 責務
@@ -100,6 +104,8 @@ def collector(market: str, as_of: date) -> CollectorResult:
 
 **`prices` のみを必須ステップとする。** 価格がなければ何も計算できないが、開示資料やマクロが取れなくても定量スコアは作れる。
 
+`documents` が 0 件で、かつ倉庫に既存の開示が無い場合は `partial` とする（空レスポンスを success にしない）。既存カバレッジがある日に新規 0 件なのは正常で success のまま。
+
 ### 3.3 出力
 
 - `job_runs` に `status`（`success` / `partial` / `failed`）と `metrics` を記録
@@ -125,8 +131,8 @@ LLM は使わない（純粋な計算処理）。
 | --- | --- |
 | 一部銘柄の特徴量計算が失敗 | その銘柄をスキップし `data_gaps` に記録。他の銘柄は処理する |
 | GARCH が収束しない | 実現ボラにフォールバックし `data_quality_flags` に記録 |
-| LightGBM モデルファイルが存在しない | `ml_pred` を NULL にし、`quant_score` のみで続行。「モデル未学習」を通知 |
-| 為替予測の外生変数が欠損 | ランダムウォークのみ出力する |
+| LightGBM モデルファイルが存在しない | `ml_pred` を NULL にし、`quant_score` のみで続行。「モデル未学習」を通知。Analyst 全体は partial にしない |
+| 為替スポットが倉庫に無い | 為替予測ステップを skip。Analyst 全体は partial にしない。スポットがあれば外生変数なしでも RW を出す |
 | 特徴量の欠損が多い銘柄（`n_missing > 15`） | スコアリング対象外にする |
 
 ### 4.3 品質チェック（実行後）
@@ -148,7 +154,7 @@ LLM は使わない（純粋な計算処理）。
 LLM を使って開示資料を読解し、定性スコアを算出する。
 
 1. 当日の分析対象銘柄を決定する（[05-scoring-screening.md](05-scoring-screening.md) §6.2 の優先順）
-2. 各銘柄の未要約の資料について LLM 要約を生成する（キャッシュミス分のみ）
+2. 各銘柄の未要約の資料について LLM 要約を生成する（キャッシュミス分のみ）。生成結果は `document_summaries` に upsert する
 3. リスク要因の前期比較を行う
 4. 銘柄単位の `qual_score` / `qual_confidence` を算出する
 
@@ -211,7 +217,7 @@ def aggregate_qual_score(summaries: list[Summary], as_of: date) -> QualResult:
 ### 6.2 プロンプトへの注入内容
 
 - 定量データ（全ファクターのz-score、ML予測と信頼区間、主要指標）
-- RAG で取得した関連チャンク（8件）
+- RAG で取得した関連チャンク（8件）。`retrieve`（キーワード検索）が空なら、直近開示の本文抜粋に落とす
 - 過去の類似ケースの実績（`hit_rate_prior`、`n_prior_samples`、平均超過リターン）
 - **`agent_memory` から選ばれた教訓（最大15件）**
 
@@ -235,7 +241,11 @@ LIMIT 15;
 
 ### 6.3 挿入前の検証
 
-`recommendations` テーブルの不変条件（[03-data-model.md](03-data-model.md) §2.9）をリポジトリ層で検証する。違反した場合は LLM を1回リトライし、それでも違反するなら**その推奨を破棄する**（不完全な推奨をUIに出さない）。
+`recommendations` テーブルの不変条件（[03-data-model.md](03-data-model.md) §2.9）をリポジトリ層で検証する。違反した場合は LLM を1回リトライし、それでも違反するなら**その推奨を破棄する**（不完全な推奨をUIに出さない）。検証例外は銘柄単位で捕捉し、パイプライン全体は落とさない。
+
+ML 予測区間が無い（モデル未学習）ときは、実現ボラティリティからホライズン幅を作る。それも無ければ ±20% の広いデフォルト区間を入れ、点推定は NULL のままにする。区間なしの推奨は不変条件で挿入できないため、情報の無さを幅で表現する。
+
+スケジュール実行（`run_pipeline_job`）は手動実行と同じく `LLMRouter` と学習済み ranker（`data/models/ranker_{market}_h20.pkl`）を注入する。成果物が無ければ ranker は None で、定量カードのみになる。
 
 ## 7. Critic
 
@@ -253,8 +263,10 @@ LLM に渡す前に、コードで検証できるものは検証する。これ�
 def mechanical_checks(rec: Recommendation) -> list[Issue]:
     issues = []
 
-    # (1) 引用の実在性
+    # (1) 引用の実在性。定量カードの合成引用（quant:）は開示資料ではないので検証しない。
     for c in rec.citations:
+        if str(c.doc_id).startswith("quant:"):
+            continue
         verdict = verify_citation(c)     # [07-llm-rag.md] §4.5
         if verdict in (CitationVerdict.DOC_NOT_FOUND, CitationVerdict.QUOTE_NOT_FOUND):
             issues.append(Issue("critical", "citation_not_found", detail=str(c)))
@@ -285,8 +297,10 @@ def mechanical_checks(rec: Recommendation) -> list[Issue]:
     elif rec.expected_ret_hi - rec.expected_ret_lo < 0.01:
         issues.append(Issue("major", "suspiciously_narrow_ci"))   # リークの疑い
 
-    # (7) PIT 違反
+    # (7) PIT 違反。定量カードの合成 ID は資料ではないのでスキップする。
     for doc_id in rec.source_doc_ids:
+        if str(doc_id).startswith("quant:"):
+            continue
         doc = repo.get_document(doc_id)
         if doc.filed_at.date() > rec.as_of:
             issues.append(Issue("critical", "future_document_cited"))
@@ -318,7 +332,7 @@ BOILERPLATE_PATTERNS = [
 | verdict | 動作 |
 | --- | --- |
 | `approved` | `critic_verdict='approved'` を記録。UIに表示される |
-| `revised` | Critic の修正案を適用して再保存。`critic_notes_ja` に修正内容を記録。UIには修正後のものを表示し、「レビューで修正済み」バッジを付ける |
+| `revised` | Critic の `revised_fields`（`thesis_ja` / `bear_case_ja` / `invalidation_ja` / `conviction`）をカード本文に適用して再保存。`critic_notes_ja` に修正内容を記録。母数不足なら conviction は low のまま。UIには修正後のものを表示し、「レビューで修正済み」バッジを付ける |
 | `rejected` | `critic_verdict='rejected'` を記録。**UIには表示しないが、テーブルには残す** |
 
 **却下された推奨を残す理由**: これが学習材料になる。「Strategist が生成したが Critic が却下した」パターンを Evaluator が分析し、Strategist のプロンプト改善に繋げる。エージェントコンソール画面では却下分も確認できる（開発者向けの表示）。
@@ -366,6 +380,8 @@ def evaluate_outcomes(as_of: date) -> list[Outcome]:
                 continue
             raw_ret = exit_ / entry - 1
             bench_ret = benchmark_return(r.market, entry_date, exit_date)
+            # JP: TOPIX / 1306 / 1306.T / ^TOPX の始値。US: SPX / SPY / ^GSPC。
+            # 倉庫に指数が無ければ 0 とし、metrics.benchmark_missing を立てる。
             excess = raw_ret - bench_ret
             # 的中判定: action の方向と excess_return の符号が一致するか
             expected_sign = {"watch": 1, "accumulate": 1, "reduce": -1, "avoid": -1}[r.action]
@@ -384,7 +400,9 @@ def evaluate_outcomes(as_of: date) -> list[Outcome]:
 
 **エントリーを翌営業日の始値にする理由**: `as_of` の終値時点で生成された推奨を、その日の終値で約定することは不可能である。この1ステップのズレを入れないと実績が甘くなる（[04-analysis-engine.md](04-analysis-engine.md) §3.2 と同じ理由）。
 
-`max_adverse_excursion`（期間中の最大不利変動）を記録する理由は、**「最終的に当たったが途中で大きく逆行した」推奨を識別する**ため。実運用では途中で耐えられずに損切りすることがあり、最終結果だけでは実用性が測れない。
+`max_adverse_excursion`（期間中の最大不利変動）を記録する理由は、**「最終的に当たったが途中で大きく逆行した」推奨を識別する**ため。実運用では途中で耐えられずに損切りすることがあり、最終結果だけでは実用性が測れない。高値・安値があればそれを使い、無ければ終値で代用する。
+
+ファクター重みの再フィットは実績が H20 で 100 件以上あるときだけ `propose_factor_weights` を呼び、`factor_weights` に `is_active=0`・`created_by=evaluator` で挿入する。自動では有効化しない。
 
 ### 8.3 集計指標
 

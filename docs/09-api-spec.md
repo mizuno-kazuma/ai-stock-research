@@ -414,6 +414,12 @@ GET  /api/v1/agent/critic-stats?days=30    # 却下率と理由の内訳
 GET  /api/v1/agent/events                  # SSE によるジョブ進捗のリアルタイム配信
 ```
 
+`POST /api/v1/agent/jobs/{job_name}/run` の `job_name` は次のいずれか。未知の値は 422。
+
+`collector` / `collector_jp` / `collector_us` / `analyst` / `researcher` / `strategist` / `critic` / `evaluator` / `weekly_review` / `model_retrain` / `garch_refit`
+
+日次 6 ジョブに加え、土曜の `weekly_review`、第1土曜の `model_retrain`、月曜の `garch_refit` を手動でも起動できる。`backtest` はこのパスでは受け付けず、`POST /api/v1/backtests` を使う。
+
 SSE のイベント形式:
 
 ```

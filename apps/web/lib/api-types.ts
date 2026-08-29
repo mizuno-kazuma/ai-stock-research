@@ -568,7 +568,10 @@ export type JobName =
   | "researcher"
   | "strategist"
   | "critic"
-  | "evaluator";
+  | "evaluator"
+  | "weekly_review"
+  | "model_retrain"
+  | "garch_refit";
 
 export type AgentJob = OptionalKeys<Omit<Schema["JobRun"], "status">, "attempt" | "retry_count"> & {
   status: JobStatus;

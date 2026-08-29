@@ -1,0 +1,38 @@
+{# version: 1 #}
+{# tier: deep #}
+## 週次深掘りレビュー
+
+対象日: {{ as_of }}
+推奨件数（直近）: {{ n_recs }}
+確定した実績: {{ n_outcomes }}
+的中率: {{ hit_rate }}
+確信度別的中率: {{ hit_rate_by_conviction }}
+重み提案の有無: {{ weight_proposal }}
+
+## 直近の推奨（要約）
+
+{% for r in recs %}
+- {{ r.as_of }} {{ r.ticker }} {{ r.action }} conviction={{ r.conviction }} verdict={{ r.critic_verdict }}
+  thesis: {{ r.thesis_ja }}
+  bear: {{ r.bear_case_ja }}
+{% endfor %}
+
+## 直近の実績
+
+{% for o in outcomes %}
+- {{ o.ticker }} {{ o.horizon }} excess={{ o.excess_return }} hit={{ o.is_hit }} MAE={{ o.max_adverse_excursion }}
+{% endfor %}
+
+## 既存の教訓
+
+{% for m in existing_memory %}
+- [{{ m.category }}] {{ m.lesson_ja }} (n={{ m.n_observations }}, conf={{ m.confidence }})
+{% endfor %}
+
+## タスク
+
+1. **summary_ja**: 今週の推奨と実績を3-8行で要約する。数字を入れる。
+2. **lessons**: 週次で残すべき教訓。n_observations >= 10 のものだけ。日次 Evaluator と重複する一般論は出さない。
+3. **action_items_ja**: 来週の運用で確認すべき具体的な項目を最大5件。
+
+「必ず」「確実に」は使わない。サンプルが足りなければその旨を summary_ja に書く。

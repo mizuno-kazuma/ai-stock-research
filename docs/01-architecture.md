@@ -207,7 +207,9 @@
 WSL2 (Ubuntu) 起動
   └─ systemd
       ├─ ai-stock-api.service     : uvicorn services.api.main:app --host 0.0.0.0 --port 8000
-      ├─ ai-stock-agent.service   : python -m services.agent.main   （APScheduler 常駐）
+      │                            （APScheduler を内蔵。DuckDB のライタもここ）
+      ├─ ai-stock-agent.service   : python -m services.agent.main
+      │                            （API 停止時のフォールバック。使用中なら終了コード 0）
       └─ ai-stock-web.service     : node apps/web/.next/standalone/server.js --port 3000
 
 Windows ホスト
@@ -248,7 +250,7 @@ Windows ホスト
 | yfinance が空を返す | 該当銘柄をスキップし `data_gaps` テーブルに記録。UIは「価格データ欠損」を表示 |
 | LLM がコストキャップに達した | 以降のLLM呼び出しを停止し、定量スコアのみで推奨を生成。UIに「定性分析は本日停止中」を表示 |
 | Windows Update による再起動 | systemd がサービスを再起動。各ジョブは `job_runs.checkpoint` から再開 |
-| DuckDB ファイルのロック競合 | API側は読み取り専用接続を使う。書き込みは agent プロセスのみに限定 |
+| DuckDB ファイルのロック競合 | 書き込みとスケジューラは API 同一プロセス。独立 `ai-stock-agent` はロック時に終了コード 0（再起動ループしない） |
 
 ## 10. 参照
 

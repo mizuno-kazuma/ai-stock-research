@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import math
 import threading
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
@@ -30,6 +31,7 @@ from typing import Any, Literal, Self
 import duckdb
 
 from packages.core.config import Settings, get_settings
+from packages.core.interfaces.storage import SearchHit
 
 logger = logging.getLogger(__name__)
 
@@ -333,13 +335,39 @@ class DuckDBRepo:
 
     @staticmethod
     def _coerce(value: Any) -> Any:
-        """Pydantic / Enum 由来の値を DuckDB が扱える形にする。"""
+        """Pydantic / Enum / pandas / numpy 由来の値を DuckDB が扱える形にする。
+
+        INTEGER 列に NaN を渡すと `Type DOUBLE with value nan can't be cast
+        to INT32` で落ちる。非有限の浮動小数は NULL にする。
+        """
+        if value is None:
+            return None
+        cls_name = type(value).__name__
+        if cls_name in {"NAType", "NaTType"}:
+            return None
         if isinstance(value, dt.datetime):
             # DuckDB TIMESTAMP は naive UTC。tz-aware を渡すと INSERT が落ちる。
             if value.tzinfo is not None:
                 return value.astimezone(dt.UTC).replace(tzinfo=None)
             return value
-        if value is None or isinstance(value, (str, int, float, bool, dt.date)):
+        if isinstance(value, (str, bool)):
+            return value
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+        if isinstance(value, float):
+            if not math.isfinite(value):
+                return None
+            return value
+        item = getattr(value, "item", None)
+        if callable(item) and not isinstance(value, (bytes, bytearray, memoryview)):
+            try:
+                native = item()
+            except Exception:
+                native = None
+            else:
+                if native is not value:
+                    return DuckDBRepo._coerce(native)
+        if isinstance(value, dt.date):
             return value
         if isinstance(value, dt.timedelta):
             return value
@@ -715,6 +743,60 @@ class DuckDBRepo:
             return text
         return None
 
+    def search_text(
+        self,
+        query: str,
+        *,
+        k: int,
+        ticker: str | None = None,
+        market: str | None = None,
+        as_of: dt.date | None = None,
+        doc_types: list[str] | None = None,
+    ) -> list[SearchHit]:
+        """開示タイトルと本文からキーワード検索する（ハイブリッド RAG の片側）。"""
+        import re
+
+        terms = [t.lower() for t in re.findall(r"[0-9A-Za-z一-龥ぁ-んァ-ン]{2,}", query)]
+        terms = terms[:8] or ([query.strip().lower()] if query.strip() else [])
+        kwargs: dict[str, Any] = {"limit": 80}
+        if ticker:
+            kwargs["ticker"] = ticker
+        if market:
+            kwargs["market"] = market
+        if as_of is not None:
+            kwargs["until"] = as_of
+        if doc_types:
+            kwargs["doc_type"] = doc_types[0]
+        docs = self.get_documents(**kwargs)
+        hits: list[SearchHit] = []
+        for doc in docs:
+            hay = f"{doc.get('title') or ''} {self.get_document_text(str(doc['doc_id'])) or ''}"
+            lowered = hay.lower()
+            if terms and not any(term in lowered for term in terms):
+                continue
+            snippet = hay.strip()[:1200]
+            if len(snippet) < 20:
+                continue
+            filed = doc.get("filed_at")
+            if as_of is not None and hasattr(filed, "date") and filed.date() > as_of:
+                continue
+            hits.append(
+                SearchHit(
+                    chunk_id=f"{doc['doc_id']}:kw",
+                    doc_id=str(doc["doc_id"]),
+                    text=snippet,
+                    score=1.0 / (len(hits) + 1),
+                    ticker=doc.get("ticker"),
+                    market=doc.get("market"),
+                    doc_type=doc.get("doc_type"),
+                    filed_at=filed if isinstance(filed, dt.datetime) else None,
+                    title=doc.get("title"),
+                )
+            )
+            if len(hits) >= k:
+                break
+        return hits
+
     def read_documents(
         self,
         *,
@@ -950,6 +1032,16 @@ class DuckDBRepo:
         self.insert_recommendations([payload])
         return str(payload["rec_id"])
 
+    def update_recommendation(self, rec_id: str, fields: dict[str, Any]) -> int:
+        """Critic が verdict と修正後本文を書き戻す。"""
+        existing = self.query_one("SELECT * FROM recommendations WHERE rec_id = ?", [rec_id])
+        if existing is None:
+            return 0
+        merged = dict(existing)
+        merged.update(fields)
+        merged["rec_id"] = rec_id
+        return self.upsert("recommendations", [merged], key_columns=["rec_id"])
+
     @staticmethod
     def _validate_recommendation(r: dict[str, Any]) -> None:
         rec_id = r.get("rec_id")
@@ -1070,10 +1162,21 @@ class DuckDBRepo:
             "recommendation_outcomes", rows, defaults={"evaluated_at": _now()}
         )
 
+    def read_recommendation_outcomes(
+        self, *, market: str | None = None, horizon: str | None = None, since: dt.date | None = None
+    ) -> Any:
+        import pandas as pd
+
+        rows = self.get_recommendation_outcomes(
+            market=market, horizon=horizon, since=since, limit=2_000
+        )
+        return pd.DataFrame(rows)
+
     def get_recommendation_outcomes(
         self,
         *,
         rec_id: str | None = None,
+        market: str | None = None,
         horizon: str | None = None,
         since: dt.date | None = None,
         limit: int = 500,
@@ -1083,6 +1186,9 @@ class DuckDBRepo:
         if rec_id:
             where.append("o.rec_id = ?")
             params.append(rec_id)
+        if market:
+            where.append("r.market = ?")
+            params.append(market)
         if horizon:
             where.append("o.horizon = ?")
             params.append(horizon)

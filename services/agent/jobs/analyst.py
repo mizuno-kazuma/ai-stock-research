@@ -27,6 +27,35 @@ from services.agent.types import JobResult, StepResult
 
 # mom_12_1 / ret_252 に必要な約 252 営業日 + 余裕。全履歴を pandas に載せない。
 FEATURE_LOOKBACK_CALENDAR_DAYS = 420
+FX_SERIES_ID = "DEXJPUS"
+FX_LOOKBACK_OBS = 400
+
+
+def _load_fx_spot(warehouse: WarehouseRepo, as_of: date) -> pd.DataFrame | None:
+    """macro_series の DEXJPUS を Analyst の入力形式に揃える。"""
+    getter = getattr(warehouse, "get_macro_as_of", None)
+    rows: list[Any]
+    if callable(getter):
+        try:
+            rows = list(getter(FX_SERIES_ID, as_of=as_of, limit=FX_LOOKBACK_OBS) or [])
+        except TypeError:
+            rows = list(getter(series_id=FX_SERIES_ID, as_of=as_of, limit=FX_LOOKBACK_OBS) or [])
+        except Exception:
+            rows = []
+    else:
+        reader = getattr(warehouse, "read_macro_as_of", None)
+        if not callable(reader):
+            return None
+        try:
+            frame = reader(series_ids=[FX_SERIES_ID], as_of=as_of)
+        except Exception:
+            return None
+        if frame is None or getattr(frame, "empty", True):
+            return None
+        return frame
+    if not rows:
+        return None
+    return pd.DataFrame(rows)
 
 
 def analyst(
@@ -75,6 +104,8 @@ def analyst(
                 securities = warehouse.read_securities(market=market, as_of=as_of)
             except Exception:
                 securities = None
+        if fx is None:
+            fx = _load_fx_spot(warehouse, as_of)
         from packages.core.factors.pipeline import build_pit_context
 
         ctx = build_pit_context(
@@ -118,18 +149,25 @@ def analyst(
 
     # --- 為替 ---
     try:
-        if fx is not None and not fx.empty and "value" in fx.columns:
-            spot = pd.Series(
-                pd.to_numeric(fx["value"], errors="coerce").to_numpy(),
-                index=pd.to_datetime(fx.get("observation_date", fx.get("trade_date"))),
-            )
-            bundle = forecast_fx(as_of=as_of, spot=spot, exog=None, horizon=5)
-            warehouse.upsert_fx_forecasts(pd.DataFrame(bundle.as_rows()))
-            steps["fx"] = StepResult(status="success")
+        if fx is None or getattr(fx, "empty", True):
+            steps["fx"] = StepResult(status="skipped", metrics={"reason": "spot_missing"})
         else:
-            steps["fx"] = StepResult(status="skipped", error="外生変数/スポット欠損")
-            if overall == "success":
-                overall = "partial"
+            value_col = "value" if "value" in fx.columns else None
+            if value_col is None:
+                steps["fx"] = StepResult(status="skipped", metrics={"reason": "spot_missing"})
+            else:
+                date_col = (
+                    "observation_date"
+                    if "observation_date" in fx.columns
+                    else "trade_date"
+                )
+                spot = pd.Series(
+                    pd.to_numeric(fx[value_col], errors="coerce").to_numpy(),
+                    index=pd.to_datetime(fx[date_col]),
+                )
+                bundle = forecast_fx(as_of=as_of, spot=spot, exog=None, horizon=5)
+                warehouse.upsert_fx_forecasts(pd.DataFrame(bundle.as_rows()))
+                steps["fx"] = StepResult(status="success")
     except Exception as exc:
         overall = "partial"
         steps["fx"] = StepResult(status="failed", error=str(exc))

@@ -1,4 +1,4 @@
-"""プロンプト / 要約キャッシュ（docs/07-llm-rag.md §5.6、docs/06-filings-access.md）。
+"""プロンプト / 要約キャッシュ（docs/07-llm-rag.md §5.7、docs/06-filings-access.md）。
 
 ハッシュがキャッシュキーになるため、プロンプトの些細な変更でも再計算が走る。
 過去分の一括再計算は自動で行わない。

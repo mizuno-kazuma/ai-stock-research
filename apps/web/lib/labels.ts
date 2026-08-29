@@ -15,6 +15,7 @@ import type {
   FactorKey,
   GuidanceTone,
   Horizon,
+  JobName,
   JobStatus,
   Market,
   MemoryCategory,
@@ -209,16 +210,16 @@ export const MODEL_KIND_LABEL_JA: Record<"ranker" | "garch" | "arimax" | "vecm",
   vecm: "VECM",
 };
 
-export const JOB_NAME_LABEL_JA: Record<
-  "collector" | "analyst" | "researcher" | "strategist" | "critic" | "evaluator",
-  string
-> = {
+export const JOB_NAME_LABEL_JA: Record<JobName, string> = {
   collector: "データ収集",
   analyst: "分析",
   researcher: "資料読解",
   strategist: "推奨生成",
   critic: "レビュー",
   evaluator: "実績評価",
+  weekly_review: "週次の深掘り",
+  model_retrain: "ranker 再学習",
+  garch_refit: "GARCH 再推定",
 };
 
 /** 理由コード。docs/ui/components.md §3.5 の完全な一覧 */

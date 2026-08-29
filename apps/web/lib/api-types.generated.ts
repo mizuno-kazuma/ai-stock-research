@@ -1582,7 +1582,7 @@ export interface components {
              * Purpose
              * @enum {string}
              */
-            purpose: "doc_summary" | "thesis" | "critic" | "evaluator" | "embedding";
+            purpose: "doc_summary" | "thesis" | "critic" | "evaluator" | "embedding" | "weekly_review";
             /** Share */
             share?: number | null;
             /**
@@ -3061,7 +3061,7 @@ export interface components {
              * Purpose
              * @enum {string}
              */
-            purpose: "doc_summary" | "thesis" | "critic" | "evaluator" | "embedding";
+            purpose: "doc_summary" | "thesis" | "critic" | "evaluator" | "embedding" | "weekly_review";
             /**
              * Status
              * @default success

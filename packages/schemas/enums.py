@@ -32,7 +32,9 @@ ModelKind = Literal["ranker", "garch", "arimax", "vecm"]
 MemoryCategory = Literal["lesson", "bias", "pattern", "caveat"]
 MemoryScope = Literal["global", "market", "sector", "ticker"]
 LLMTier = Literal["bulk", "default", "deep", "embedding"]
-LLMPurpose = Literal["doc_summary", "thesis", "critic", "evaluator", "embedding"]
+LLMPurpose = Literal[
+    "doc_summary", "thesis", "critic", "evaluator", "embedding", "weekly_review"
+]
 ComponentStatus = Literal["ok", "degraded", "failed", "capped", "disabled", "unknown"]
 SystemStatus = Literal["ok", "degraded", "failed"]
 SortDir = Literal["asc", "desc"]

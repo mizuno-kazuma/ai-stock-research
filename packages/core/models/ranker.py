@@ -8,7 +8,9 @@
 from __future__ import annotations
 
 import logging
+import pickle
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
@@ -301,3 +303,27 @@ def _design_matrix(features: pd.DataFrame, cols: list[str]) -> np.ndarray:
     return features.loc[:, cols].apply(pd.to_numeric, errors="coerce").fillna(0.0).to_numpy(
         dtype=float
     )
+
+
+def ranker_artifact_path(data_dir: Path, market: str, horizon: str = "h20") -> Path:
+    return Path(data_dir) / "models" / f"ranker_{market.lower()}_{horizon}.pkl"
+
+
+def save_fitted_ranker(ranker: FittedRanker, path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(pickle.dumps(ranker, protocol=pickle.HIGHEST_PROTOCOL))
+    return path
+
+
+def load_fitted_ranker(path: Path) -> FittedRanker | None:
+    if not path.exists():
+        return None
+    try:
+        obj = pickle.loads(path.read_bytes())
+    except Exception as exc:
+        logger.warning("ranker の読み込みに失敗しました (%s): %s", path, exc)
+        return None
+    if not isinstance(obj, FittedRanker):
+        logger.warning("ranker 成果物の型が違います: %s", type(obj))
+        return None
+    return obj

@@ -12,14 +12,14 @@ import pandas as pd
 
 from packages.core.backtest.engine import BacktestError, run_backtest
 from packages.core.factors.screening import UniverseFilter
-from packages.core.llm.cache import LLMCache, input_hash, prompt_hash
-from packages.core.llm.cost_guard import CostGuard
+from packages.core.llm.cache import input_hash, prompt_hash
 from packages.core.llm.prompts import render_prompt
 from packages.core.llm.router import LLMRouter
 from packages.core.llm.schemas import DocSummaryOutput
-from packages.core.storage import DuckDBRepo, SQLiteRepo, StorageError, get_vector_store
+from packages.core.storage import DuckDBRepo, StorageError, get_vector_store
 from packages.schemas.documents import DocumentChunk, DocumentChunkList, DocumentSummary
 from packages.schemas.model_lab import BacktestRequest, BacktestTrade, EquityCurvePoint
+from services.agent.wiring import build_llm_router, try_load_ranker
 from services.api.deps import AppState
 from services.api.mapping import document_summary_from_row
 from services.api.util import utc_now
@@ -35,23 +35,10 @@ JOB_FN_NAMES = {
     "strategist": "strategist",
     "critic": "critic",
     "evaluator": "evaluator",
+    "weekly_review": "weekly_review",
+    "model_retrain": "model_retrain",
+    "garch_refit": "garch_refit",
 }
-
-
-def llm_keys_configured(settings: Any) -> bool:
-    keys = (
-        getattr(settings, "gemini_api_key", None),
-        getattr(settings, "openai_api_key", None),
-        getattr(settings, "anthropic_api_key", None),
-    )
-    for key in keys:
-        if key is None:
-            continue
-        getter = getattr(key, "get_secret_value", None)
-        value = getter() if callable(getter) else str(key)
-        if value:
-            return True
-    return False
 
 
 def _adapt(state: AppState, warehouse: Any | None = None) -> tuple[Any, Any]:
@@ -68,25 +55,7 @@ def _write_warehouse(state: AppState):
 
 
 def _maybe_router(state: AppState, adapted_state: Any, adapted_wh: Any) -> LLMRouter | None:
-    if not llm_keys_configured(state.settings):
-        return None
-    cap = float(state.sqlite.get_setting("llm.daily_cap_usd", state.settings.llm_daily_cap_usd) or 1.0)
-    monthly = float(
-        state.sqlite.get_setting("llm.monthly_cap_usd", state.settings.llm_monthly_cap_usd) or 20.0
-    )
-    kill = bool(state.sqlite.get_setting("llm.kill_switch", False) or state.settings.llm_kill_switch)
-    guard = CostGuard(
-        daily_cap=cap,
-        monthly_cap=monthly,
-        call_log=adapted_state,
-        budget=adapted_state,
-        kill_switch=kill,
-    )
-    return LLMRouter(
-        cost_guard=guard,
-        call_log=adapted_state,
-        cache=LLMCache(warehouse=adapted_wh),
-    )
+    return build_llm_router(adapted_state, adapted_wh, state.settings)
 
 
 def _job_market(job_name: str, market: str | None) -> str:
@@ -110,6 +79,7 @@ def kick_agent_job(
     from services.agent.jobs.collector import collector
     from services.agent.jobs.critic import critic
     from services.agent.jobs.evaluator import evaluator
+    from services.agent.jobs.maintenance import garch_refit, model_retrain, weekly_review
     from services.agent.jobs.researcher import researcher
     from services.agent.jobs.strategist import strategist
     from services.agent.main import session_as_of
@@ -127,6 +97,9 @@ def kick_agent_job(
             "strategist": strategist,
             "critic": critic,
             "evaluator": evaluator,
+            "weekly_review": weekly_review,
+            "model_retrain": model_retrain,
+            "garch_refit": garch_refit,
         }
         inner_name = JOB_FN_NAMES.get(job_name)
         if job_name == "backtest":
@@ -148,10 +121,18 @@ def kick_agent_job(
             "trigger": "manual",
             "parent_run_id": run_id,
         }
-        if inner_name in {"researcher", "strategist", "critic", "evaluator"}:
+        if inner_name in {"researcher", "strategist", "critic", "evaluator", "weekly_review"}:
             kwargs["router"] = _maybe_router(state, st, wh)
-        if inner_name in {"strategist", "evaluator"}:
+        if inner_name == "analyst":
+            kwargs["ranker"] = try_load_ranker(state.settings, market=mkt)
+        if inner_name in {"strategist", "evaluator", "weekly_review"}:
             kwargs["memory"] = st
+        if inner_name == "critic":
+            kwargs["jquants_plan"] = str(
+                getattr(state.settings, "jquants_plan", "free") or "free"
+            )
+        if inner_name == "model_retrain":
+            kwargs["data_dir"] = getattr(state.settings, "data_dir", None)
         result = fn(mkt, day, **kwargs)
         status, metrics, error_type, error_message, failed_steps = _payload_from_result(result)
         state.sqlite.update_job_run(

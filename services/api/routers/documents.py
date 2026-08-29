@@ -18,15 +18,12 @@ from packages.schemas.documents import (
     DocumentSummary,
     DocumentSummaryRequest,
 )
+from services.agent.wiring import llm_keys_configured
 from services.api.deps import AppState, User, get_app_state, require_user, spent_today_usd
 from services.api.envelope import wrap
 from services.api.errors import cost_cap_exceeded, not_found, upstream_unavailable
 from services.api.mapping import document_from_row, document_summary_from_row, map_doc_type
-from services.api.runtime import (
-    generate_document_summary,
-    llm_keys_configured,
-    load_document_chunks,
-)
+from services.api.runtime import generate_document_summary, load_document_chunks
 from services.api.util import as_date
 
 router = APIRouter(tags=["documents"])

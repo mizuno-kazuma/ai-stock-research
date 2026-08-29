@@ -42,6 +42,9 @@ KNOWN_JOBS = {
     "strategist",
     "critic",
     "evaluator",
+    "weekly_review",
+    "model_retrain",
+    "garch_refit",
     "backtest",
 }
 

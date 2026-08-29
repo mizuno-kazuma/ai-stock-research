@@ -96,6 +96,7 @@ const PURPOSE_JA: Record<string, string> = {
   thesis: "推奨の論拠生成",
   critic: "レビュー",
   evaluator: "教訓の抽出",
+  weekly_review: "週次の深掘り",
   embedding: "埋め込み",
 };
 

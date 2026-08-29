@@ -257,7 +257,7 @@ the dominant cost of the job, so it is shown rather than buried.
 | Element | label_en | label_ja | Example |
 | --- | --- | --- | --- |
 | Heading | Manual run | 手動実行 | 手動実行 |
-| Job select | Job | ジョブ | データ収集 / 分析 / 資料読解 / 推奨生成 / レビュー / 実績評価 |
+| Job select | Job | ジョブ | データ収集 / 分析 / 資料読解 / 推奨生成 / レビュー / 実績評価 / 週次の深掘り / ranker 再学習 / GARCH 再推定 |
 | Target date | Target date | 対象日 | 2026-08-22 |
 | Force re-run | Force re-run | 完了済みでも再実行 | |
 | Force note | | | 通常は冪等なため、同じ対象日で再実行しても結果は変わりません。強制再実行はLLMコストが再発生する場合があります。 |
@@ -430,8 +430,8 @@ GET /api/v1/agent/jobs → ECONNREFUSED
 エージェントプロセスが停止している可能性があります。
 
 確認手順:
-1. WSL2内で systemctl --user status ai-stock-agent を実行
-2. 停止している場合は systemctl --user start ai-stock-agent
+1. WSL2内で systemctl status ai-stock-api を実行（スケジューラは API に内蔵）
+2. 停止している場合は systemctl start ai-stock-api
 3. WSL2が停止している場合は Windows側で wsl -d Ubuntu
 
 [再試行]

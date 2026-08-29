@@ -12,8 +12,8 @@ Windows 11（22H2 以降）
  ├─ .wslconfig（networkingMode=mirrored, dnsTunneling=true）
  └─ WSL2 (Ubuntu 24.04)
      ├─ systemd
-     │   ├─ ai-stock-api.service    (FastAPI :8000)
-     │   ├─ ai-stock-agent.service  (APScheduler)
+     │   ├─ ai-stock-api.service    (FastAPI :8000。APScheduler を内蔵)
+     │   ├─ ai-stock-agent.service  (API 停止時のフォールバック。DuckDB 使用中は即終了)
      │   └─ ai-stock-web.service    (Next.js :3000)
      └─ リポジトリとデータ（~/ai-stock 配下。/mnt/c は使わない）
 ```
@@ -857,9 +857,10 @@ Environment=LANG=ja_JP.UTF-8
 Environment=TZ=Asia/Tokyo
 EnvironmentFile=/home/ubuntu/ai-stock/.env
 ExecStart=/home/ubuntu/.local/bin/uv run python -m services.agent.main
-Restart=always
+Restart=on-failure
 RestartSec=30
-# 起動時に中断ジョブの再開チェックを行うため、少し待つ
+# API がスケジューラを内蔵するため、DuckDB が使用中ならプロセスは 0 で終了する。
+# Restart=always だと API 稼働中に再起動ループになる。
 ExecStartPre=/bin/sleep 10
 StandardOutput=journal
 StandardError=journal
@@ -870,7 +871,8 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now ai-stock-api ai-stock-agent ai-stock-web
+sudo systemctl enable --now ai-stock-api ai-stock-web
+# ai-stock-agent は API 停止時のフォールバック（Restart=on-failure）。API と同時起動しても再起動ループにはしない。
 systemctl status ai-stock-agent
 journalctl -u ai-stock-agent -f
 ```
@@ -1121,7 +1123,8 @@ uv run python -m packages.core.storage.init_duckdb
 # (11) systemd unit の配置（§8.5）
 sudo cp infra/wsl/*.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now ai-stock-api ai-stock-agent ai-stock-web
+sudo systemctl enable --now ai-stock-api ai-stock-web
+# ai-stock-agent は API 停止時のフォールバック（Restart=on-failure）。API と同時起動しても再起動ループにはしない。
 
 # (12) 動作確認
 curl -s http://localhost:8000/api/v1/system/health | jq
