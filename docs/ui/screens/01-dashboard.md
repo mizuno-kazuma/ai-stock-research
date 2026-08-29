@@ -203,7 +203,8 @@ price-threshold alerts (see `SKILL.md` §10).
 Section title: label_en `This week's filings`, label_ja `今週の開示`.
 The window is the calendar week that contains `as_of`, Monday through `as_of` inclusive
 (ISO weekday, Monday = start). `new_filings_count` is the count for that window; the list
-shows watchlist / holdings filings first.
+shows watchlist / holdings filings first. The subtitle shows the count and the window
+(`5件 · 8/17–8/22`). An empty week is a real empty, not backfilled with older documents.
 
 ```
 15:04  6758  ソニーグループ    業績予想の修正   2027年3月期 通期業績予想の修正に関するお知らせ   PDF
@@ -282,7 +283,7 @@ Section-level empties:
 | --- | --- |
 | Recommendations | 本日の推奨はありません。条件を満たす銘柄が見つからなかったか、Criticが全件を却下しました。 |
 | Alerts | 新しいアラートはありません |
-| Filings | 今週の開示はありません |
+| Filings | 保有・ウォッチ銘柄の今週（8/24–8/29）の開示はありません |
 | Watchlist | ウォッチリストが空です。銘柄詳細から追加してください。 |
 
 ### Not-ready

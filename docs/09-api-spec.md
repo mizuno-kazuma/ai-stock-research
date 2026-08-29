@@ -127,7 +127,9 @@ GET /api/v1/dashboard?market=JP&as_of=2026-08-22
 ```
 
 `new_filings_count` と `watchlist_filings` の対象期間は `as_of` を含む暦週（月曜始まり、
-`as_of` 当日を含む）。画面ラベルは「今週の開示」。
+`as_of` 当日を含む）。画面ラベルは「今週の開示」。対象週に開示が無いときは件数 0・一覧は空。
+期間外の資料で埋めない。シード（`docs/ui/sample-data.json`）の `_meta.as_of` は 2026-08-22 なので、
+その週は 5 件、翌週（例: 2026-08-29）は 0 件になる。
 
 ### 2.2 推奨
 
