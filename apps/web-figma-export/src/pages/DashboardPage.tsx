@@ -104,7 +104,7 @@ export default function DashboardPage() {
           {/* Recommendation highlights */}
           <div className="card">
             <div className="section-header">
-              本日の注目
+              今週の注目
               <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => navigate("/recommendations")}>
                 すべての推奨を見る →
               </button>

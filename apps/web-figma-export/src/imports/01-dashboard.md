@@ -92,7 +92,7 @@ DashboardPage
 │       │   ├── MetricCard                    USD/JPY
 │       │   ├── MetricCard                    ポートフォリオ評価額
 │       │   └── MetricCard                    当日損益
-│       ├── SectionCard "本日の注目"
+│       ├── SectionCard "今週の注目"
 │       │   ├── SectionHeader + LinkToAll
 │       │   └── RecommendationCard[compact] x3
 │       ├── SectionCard "アラート"
@@ -160,7 +160,7 @@ execution prices.
 
 ### Recommendation highlights
 
-Section heading: label_en `Today's highlights`, label_ja `本日の注目`.
+Section heading: label_en `This week's highlights`, label_ja `今週の注目`.
 Link to all: label_en `View all recommendations`, label_ja `すべての推奨を見る`.
 
 Compact card example content:
