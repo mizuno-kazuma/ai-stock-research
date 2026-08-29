@@ -6,7 +6,8 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from services.agent.main import session_as_of
-from services.api.routers.dashboard import _filings_range
+from services.api.routers.dashboard import _filed_date, _filings_range
+from services.api.seed import load_sample
 
 JST = ZoneInfo("Asia/Tokyo")
 NY = ZoneInfo("America/New_York")
@@ -48,3 +49,14 @@ def test_filings_range_on_saturday_starts_monday() -> None:
     start, end = _filings_range(date(2026, 8, 22))
     assert start.isoformat() == "2026-08-17"
     assert end.isoformat() == "2026-08-22"
+
+
+def test_sample_filings_keep_only_calendar_week() -> None:
+    start, end = _filings_range(date(2026, 8, 22))
+    week = [
+        doc
+        for doc in load_sample()["filings"]
+        if (filed := _filed_date(doc.get("filed_at"))) is not None and start <= filed <= end
+    ]
+    assert {doc["ticker"] for doc in week} == {"6758", "7203", "9432", "AAPL", "NVDA"}
+    assert all(start <= _filed_date(doc["filed_at"]) <= end for doc in week)
