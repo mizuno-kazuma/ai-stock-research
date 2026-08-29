@@ -32,7 +32,19 @@ def test_us_session_before_close_uses_previous_business_day() -> None:
     assert session_as_of("US", now=now).isoformat() == "2026-08-26"
 
 
-def test_filings_range_includes_previous_business_day() -> None:
+def test_filings_range_is_calendar_week_monday_through_as_of() -> None:
     start, end = _filings_range(date(2026, 8, 28))
     assert end.isoformat() == "2026-08-28"
-    assert start.isoformat() == "2026-08-27"
+    assert start.isoformat() == "2026-08-24"
+
+
+def test_filings_range_on_monday_is_that_day_only() -> None:
+    start, end = _filings_range(date(2026, 8, 24))
+    assert start.isoformat() == "2026-08-24"
+    assert end.isoformat() == "2026-08-24"
+
+
+def test_filings_range_on_saturday_starts_monday() -> None:
+    start, end = _filings_range(date(2026, 8, 22))
+    assert start.isoformat() == "2026-08-17"
+    assert end.isoformat() == "2026-08-22"

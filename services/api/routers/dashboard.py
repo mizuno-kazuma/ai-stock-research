@@ -23,7 +23,6 @@ from packages.schemas.dashboard import (
     VolRegime,
     WatchlistFiling,
 )
-from packages.core.factors.calendar import TradingCalendar
 from packages.schemas.recommendations import RecommendationSummary
 from services.api.deps import AppState, User, get_app_state, require_user
 from services.api.envelope import wrap
@@ -31,6 +30,19 @@ from services.api.mapping import alert_from_row, recommendation_from_seed
 from services.api.util import as_date, as_utc, resolve_market, split_csv
 
 router = APIRouter(tags=["dashboard"])
+
+
+def _filings_range(as_of: dt.date) -> tuple[dt.date, dt.date]:
+    """「今週の開示」は as_of を含む暦週の月曜から as_of まで（両端含む）。"""
+    start = as_of - dt.timedelta(days=as_of.weekday())
+    return start, as_of
+
+
+def _filed_date(value: object) -> dt.date | None:
+    parsed = as_utc(value)
+    if parsed is not None:
+        return parsed.date()
+    return as_date(value)
 
 
 def _dashboard_from_seed(state: AppState, *, market: str, as_of: dt.date) -> Dashboard:
@@ -45,6 +57,12 @@ def _dashboard_from_seed(state: AppState, *, market: str, as_of: dt.date) -> Das
     filings = payload.get("filings") or []
     watch = payload.get("watchlist") or []
     watch_tickers = {(w.get("market"), w.get("ticker")) for w in watch}
+    start, end = _filings_range(as_of)
+    filings = [
+        doc
+        for doc in filings
+        if (filed := _filed_date(doc.get("filed_at"))) is not None and start <= filed <= end
+    ]
 
     summaries: list[RecommendationSummary] = []
     for row in recs:
@@ -192,12 +210,6 @@ def _dashboard_from_seed(state: AppState, *, market: str, as_of: dt.date) -> Das
     )
 
 
-def _filings_range(as_of: dt.date) -> tuple[dt.date, dt.date]:
-    """「本日の開示」は当日と前営業日を見る。深夜起動で当日が空でも前日分が出る。"""
-    start = TradingCalendar().prev_business_day(as_of)
-    return start, as_of
-
-
 def _dashboard_from_warehouse(state: AppState, *, market: str, as_of: dt.date) -> Dashboard:
     recs = state.duck.get_recommendations(market=market, as_of=as_of, limit=5)
     if not recs:
@@ -267,8 +279,6 @@ def _dashboard_from_warehouse(state: AppState, *, market: str, as_of: dt.date) -
     start, end = _filings_range(as_of)
     watch = {(w.market, w.ticker) for w in state.sqlite.get_watchlist()}
     docs = state.duck.get_documents(market=market, since=start, until=end, limit=80)
-    if not docs:
-        docs = state.duck.get_documents(market=market, limit=40)
     preferred = [
         row for row in docs if not watch or (row.get("market"), row.get("ticker")) in watch
     ]

@@ -36,7 +36,7 @@ Query parameters:
 | 3 | 1-3 / 4-6 / 7-9 / 10-12 | 4 `MetricCard`: market index, USDJPY, portfolio value, today's P/L |
 | 4 | 1-8 | `RecommendationHighlights` (3 `RecommendationCard` variant `compact`, stacked) |
 | 4 | 9-12 | `AlertFeed` (scrollable, max height 420px) |
-| 5 | 1-6 | `FilingsToday` (up to 6 `FilingListItem`) |
+| 5 | 1-6 | `FilingsThisWeek` (up to 6 `FilingListItem`) |
 | 5 | 7-12 | `WatchlistTable` (`DataTable` dense, up to 8 rows) |
 | 6 | 1-6 | `FxSnapshotCard` (`SparklineChart` + `ForecastValue`) |
 | 6 | 7-12 | `ModelHealthPanel` (compact variant) |
@@ -47,7 +47,7 @@ Query parameters:
 
 - Row 3 metric cards become 2 x 2 (columns 1-4 / 5-8).
 - Row 4 becomes full width stacked: `RecommendationHighlights` then `AlertFeed`.
-- Rows 5 and 6 become single column, full width, in the order: `FilingsToday`,
+- Rows 5 and 6 become single column, full width, in the order: `FilingsThisWeek`,
   `WatchlistTable`, `FxSnapshotCard`, `ModelHealthPanel`.
 
 ### Mobile (< 768px)
@@ -63,7 +63,7 @@ information density:
 4. Metric cards as a 2 x 2 grid, `--space-3` gap
 5. `RecommendationHighlights`, 2 cards, "すべての推奨を見る" link
 6. `AlertFeed`, 3 items, "すべて見る" link
-7. `FilingsToday`, 3 items, "すべて見る" link
+7. `FilingsThisWeek`, 3 items, "すべて見る" link
 8. `WatchlistTable` converted to `WatchlistCardList` (see `components.md` §5, mobile table rule)
 9. `FxSnapshotCard`
 10. `ModelHealthPanel` collapsed into a single-line summary that expands on tap
@@ -102,7 +102,7 @@ DashboardPage
 │       │       ├── AlertTitle
 │       │       ├── AlertTimestamp
 │       │       └── AlertLink
-│       ├── SectionCard "本日の開示"
+│       ├── SectionCard "今週の開示"
 │       │   ├── SectionHeader + LinkToAll
 │       │   └── FilingListItem[]
 │       ├── SectionCard "ウォッチリスト"
@@ -198,9 +198,12 @@ danger   TDnetの取得が3日連続で失敗しています                    
 Alert categories are limited to system health, filing events, and cost. There are no
 price-threshold alerts (see `SKILL.md` §10).
 
-### Filings today
+### Filings this week
 
-Section title: label_en `Today's filings`, label_ja `本日の開示`.
+Section title: label_en `This week's filings`, label_ja `今週の開示`.
+The window is the calendar week that contains `as_of`, Monday through `as_of` inclusive
+(ISO weekday, Monday = start). `new_filings_count` is the count for that window; the list
+shows watchlist / holdings filings first.
 
 ```
 15:04  6758  ソニーグループ    業績予想の修正   2027年3月期 通期業績予想の修正に関するお知らせ   PDF
@@ -279,7 +282,7 @@ Section-level empties:
 | --- | --- |
 | Recommendations | 本日の推奨はありません。条件を満たす銘柄が見つからなかったか、Criticが全件を却下しました。 |
 | Alerts | 新しいアラートはありません |
-| Filings | 本日の開示はありません |
+| Filings | 今週の開示はありません |
 | Watchlist | ウォッチリストが空です。銘柄詳細から追加してください。 |
 
 ### Not-ready
@@ -298,7 +301,7 @@ The most common non-nominal state and the one that must be handled well.
 | Failing part | Dashboard behavior |
 | --- | --- |
 | Researcher hit the LLM cost cap | Recommendation cards render with `qualScore` shown as `—` and a section note: `LLMの日次予算に達したため、定性評価は含まれていません。定量スコアのみで生成されています。` |
-| TDnet fetch failed | `FilingsToday` shows EDINET-sourced items and a footer note: `TDnetの取得に失敗しました。適時開示は反映されていません。` with a retry link |
+| TDnet fetch failed | `FilingsThisWeek` shows EDINET-sourced items and a footer note: `TDnetの取得に失敗しました。適時開示は反映されていません。` with a retry link |
 | yfinance failed | Reference prices render as `—` and the watchlist caption becomes an error: `参考価格を取得できませんでした。表示されている価格はありません。` Treated as an error, not a soft warning, because a stale "current" price is dangerous |
 | FRED failed | `FxSnapshotCard` renders the last known value with a `stale` marker and the forecast section shows `為替予測を更新できませんでした（最終更新 2026年8月20日）` |
 | Evaluator did not run | `ModelHealthPanel` shows the previous day's values with a caption `実績評価が未実行のため、前営業日の値を表示しています` |

@@ -183,10 +183,10 @@ export default function DashboardPage() {
 
         {/* Row: filings + watchlist */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {/* Filings today */}
+          {/* Filings this week */}
           <div className="card">
             <div className="section-header">
-              本日の開示
+              今週の開示
               <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => navigate("/filings")}>すべて見る →</button>
             </div>
             <div>

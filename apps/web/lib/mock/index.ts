@@ -134,7 +134,7 @@ function resolve(method: string, path: string, params?: QueryParams, body?: unkn
       };
     }
     if (empty) {
-      return { ...fx.DASHBOARD, top_recommendations: [], alerts: [], watchlist: [], new_filings_count: 0 };
+      return { ...fx.DASHBOARD, top_recommendations: [], alerts: [], watchlist: [], watchlist_filings: [], new_filings_count: 0 };
     }
     return fx.DASHBOARD;
   }
