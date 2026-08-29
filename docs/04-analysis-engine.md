@@ -209,7 +209,7 @@ forecast[t+h] = spot[t]
 ci_lo/hi = spot[t] ± z * sigma_garch * sqrt(h)
 ```
 
-これが `model_id = 'random_walk'` として `fx_forecasts` に常に記録される。他のモデルはこれとの比較で評価される。
+これが `model_id = 'random_walk'` として `fx_forecasts` に常に記録される。他のモデルはこれとの比較で評価される。保存時の列は `point_forecast` と `ci_lo_80` / `ci_hi_80` / `ci_lo_95` / `ci_hi_95` である。α=0.05 の区間から正規近似の z 比で 80% 区間も埋める。
 
 ### 2.3 ARIMAX（金利差を外生変数とする）
 

@@ -23,4 +23,7 @@ def test_fx_falls_back_to_rw_without_exog() -> None:
     assert bundle.arimax is None
     rows = bundle.as_rows()
     assert any(r["model_id"] == "random_walk" for r in rows)
-    assert all("ci_lo" in r and "ci_hi" in r for r in rows)
+    assert all("point_forecast" in r for r in rows)
+    assert all(r["ci_lo_80"] < r["ci_hi_80"] for r in rows)
+    assert all(r["ci_lo_95"] <= r["ci_lo_80"] for r in rows)
+    assert all(r["ci_hi_95"] >= r["ci_hi_80"] for r in rows)

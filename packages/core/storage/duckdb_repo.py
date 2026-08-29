@@ -133,6 +133,7 @@ class DuckDBRepo:
         self._con = duckdb.connect(database, **connect_kwargs)
         self._lock = threading.RLock()
         self._columns_cache: dict[str, list[str]] = {}
+        self._required_cache: dict[str, list[str]] = {}
 
     # -- ライフサイクル ------------------------------------------------------
 
@@ -217,6 +218,7 @@ class DuckDBRepo:
                     raise
                 newly.append(sql_file.name)
             self._columns_cache.clear()
+            self._required_cache.clear()
             return newly
 
     def schema_version(self) -> list[str]:
@@ -285,6 +287,8 @@ class DuckDBRepo:
         """汎用 upsert。テーブルに存在しないキーは黙って捨てる。
 
         `key_columns` を省略すると主キーで衝突解決する。
+        DEFAULT のない NOT NULL 列が欠けている／NULL なら、DuckDB の
+        ConstraintException の前に列名付きで拒否する。
         """
         materialized = _materialize_rows(rows)
         if not materialized:
@@ -303,6 +307,13 @@ class DuckDBRepo:
             if k not in used:
                 raise StorageError(f"{table}: 主キー列 {k} が入力にありません。")
 
+        required = self._not_null_required_columns(table)
+        omitted = [c for c in required if c not in used]
+        if omitted:
+            raise StorageError(
+                f"{table}: NOT NULL 列が入力にありません: {', '.join(omitted)}"
+            )
+
         col_sql = ", ".join(f'"{c}"' for c in used)
         placeholders = ", ".join("?" for _ in used)
         updatable = [c for c in used if c not in keys]
@@ -315,10 +326,35 @@ class DuckDBRepo:
             )
         sql = f"INSERT INTO {table} ({col_sql}) VALUES ({placeholders}) {conflict}"
 
-        payload = [[self._coerce(r.get(c)) for c in used] for r in materialized]
+        payload: list[list[Any]] = []
+        for r in materialized:
+            coerced = [self._coerce(r.get(c) if c in r else None) for c in used]
+            nulls = [c for c, value in zip(used, coerced, strict=True) if c in required and value is None]
+            if nulls:
+                raise StorageError(
+                    f"{table}: NOT NULL 列が NULL です: {', '.join(nulls)}"
+                )
+            payload.append(coerced)
         with self._lock:
             self._con.executemany(sql, payload)
         return len(payload)
+
+    def _not_null_required_columns(self, table: str) -> list[str]:
+        """DEFAULT のない NOT NULL 列。省略すると ConstraintException になる。"""
+        if table not in self._required_cache:
+            with self._lock:
+                rows = self._con.execute(
+                    "SELECT column_name, is_nullable, column_default "
+                    "FROM information_schema.columns "
+                    "WHERE table_name = ? ORDER BY ordinal_position",
+                    [table],
+                ).fetchall()
+            self._required_cache[table] = [
+                str(name)
+                for name, nullable, default in rows
+                if str(nullable).upper() == "NO" and default is None
+            ]
+        return self._required_cache[table]
 
     def _primary_key(self, table: str) -> list[str]:
         with self._lock:
@@ -1066,6 +1102,19 @@ class DuckDBRepo:
             raise InvariantViolation(
                 f"invalidation_ja が空です（rec_id={rec_id!r}）。"
             )
+        if not (r.get("thesis_ja") or "").strip():
+            raise InvariantViolation(f"thesis_ja が空です（rec_id={rec_id!r}）。")
+        score = r.get("conviction_score")
+        try:
+            numeric = float(score)
+        except (TypeError, ValueError):
+            numeric = float("nan")
+        if not math.isfinite(numeric) or numeric < 0.0 or numeric > 1.0:
+            raise InvariantViolation(
+                f"conviction_score は 0.0..1.0 の有限値が必要です"
+                f"（rec_id={rec_id!r}, value={score!r}）。"
+            )
+        r["conviction_score"] = numeric
         # 不変条件 5: 事前実績が薄い推奨は conviction を low に落とす
         n_prior = r.get("n_prior_samples")
         if r.get("hit_rate_prior") is None or (n_prior or 0) < MIN_PRIOR_SAMPLES_FOR_HIGH_CONVICTION:

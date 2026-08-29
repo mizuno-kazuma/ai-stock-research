@@ -380,6 +380,8 @@ class FakeWarehouse:
             raise InvariantViolationError("bear_case")
         if rec.get("expected_ret_lo") is None or rec.get("expected_ret_hi") is None:
             raise InvariantViolationError("confidence_interval")
+        if rec.get("conviction_score") is None:
+            raise InvariantViolationError("conviction_score")
         if not rec.get("citations"):
             raise InvariantViolationError("citations")
         n_prior = rec.get("n_prior_samples") or 0
