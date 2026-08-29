@@ -25,7 +25,12 @@ from packages.core.connectors.base import (
     now_utc,
     tag_table,
 )
-from packages.core.connectors.errors import ConfigurationError, NotFoundError, SchemaDriftError
+from packages.core.connectors.errors import (
+    ConfigurationError,
+    NotFoundError,
+    SchemaDriftError,
+    TransientError,
+)
 
 EP_DOCUMENTS = "documents"
 EP_DOCUMENT_FILE = "document_file"
@@ -95,9 +100,7 @@ class EdinetConnector(HttpConnector):
                 continue
             params = {"date": day.isoformat(), "type": "2"}
             try:
-                payload = self.http.get_json(
-                    self.documents_url(), params=params, endpoint=EP_DOCUMENTS
-                )
+                payload = self._list_documents(day, list_type="2")
             except NotFoundError:
                 self._checkpoint.mark_done(unit)
                 continue
@@ -110,6 +113,39 @@ class EdinetConnector(HttpConnector):
                 persist=persist,
             )
             self._checkpoint.mark_done(unit)
+
+    def _list_documents(self, day: date, *, list_type: str) -> dict[str, Any]:
+        """書類一覧。type=2 が空なら type=1（メタデータのみ）にフォールバックする。"""
+        payload = self._get_documents_json(day, list_type)
+        if _result_rows(payload):
+            return payload
+        if list_type != "1":
+            fallback = self._get_documents_json(day, "1")
+            if _result_rows(fallback):
+                return fallback
+        return payload
+
+    def _get_documents_json(self, day: date, list_type: str) -> dict[str, Any]:
+        payload = self.http.get_json(
+            self.documents_url(),
+            params={"date": day.isoformat(), "type": list_type},
+            endpoint=EP_DOCUMENTS,
+        )
+        if not isinstance(payload, dict):
+            raise SchemaDriftError(
+                f"edinet/documents: dict を期待しましたが {type(payload).__name__} でした",
+                source=self.source,
+                endpoint=EP_DOCUMENTS,
+            )
+        meta = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+        status = str(meta.get("status") or "200")
+        if status not in {"200", "201"}:
+            message = meta.get("message") or ""
+            raise TransientError(
+                f"edinet: date={day.isoformat()} type={list_type} "
+                f"metadata.status={status} {message}".strip()
+            )
+        return payload
 
     def fetch_document_blob(self, doc_id: str, *, kind: str = "pdf") -> tuple[bytes, str] | None:
         """PDF / XBRL を取得して Raw層の blobs に保存する。
@@ -132,7 +168,7 @@ class EdinetConnector(HttpConnector):
     def normalize(self, batch: RawBatch) -> pd.DataFrame:
         self.assert_payload_shape(batch)
         payload = batch.payload if isinstance(batch.payload, dict) else {}
-        results = payload.get("results")
+        results = _result_rows(payload)
         if not results:
             return tag_table(pd.DataFrame(), "documents")
 
@@ -145,6 +181,12 @@ class EdinetConnector(HttpConnector):
             )
 
         doc_type_code = raw.get("docTypeCode", pd.Series([None] * len(raw))).astype(str)
+        titles = raw["docDescription"] if "docDescription" in raw.columns else pd.Series([None] * len(raw))
+        period_end = (
+            pd.to_datetime(raw["periodEnd"], errors="coerce").dt.date
+            if "periodEnd" in raw.columns
+            else pd.Series([None] * len(raw))
+        )
         df = pd.DataFrame(
             {
                 "doc_id": "edinet:" + raw["docID"].astype(str),
@@ -154,25 +196,41 @@ class EdinetConnector(HttpConnector):
                 "form_code": doc_type_code,
                 "doc_type": doc_type_code.map(lambda c: DOC_TYPE_MAP.get(c, "other_disclosure")),
                 # 日本語タイトルは原文のまま保持する。ファイル名には使わない。
-                "title": raw.get("docDescription"),
+                "title": titles,
                 "edinet_code": raw.get("edinetCode"),
-                "period_end": pd.to_datetime(raw.get("periodEnd"), errors="coerce").dt.date,
-                "filed_at": pd.to_datetime(raw.get("submitDateTime"), errors="coerce"),
+                "period_end": period_end,
+                "filed_at": pd.to_datetime(raw.get("submitDateTime"), errors="coerce")
+                if "submitDateTime" in raw.columns
+                else pd.Series([pd.NaT] * len(raw)),
                 "language": "ja",
                 "is_amendment": doc_type_code.isin(AMENDMENT_CODES),
                 "ingested_at": now_utc(),
             }
         )
+        missing_filed = df["filed_at"].isna()
+        if missing_filed.any():
+            df.loc[missing_filed, "filed_at"] = pd.Timestamp(batch.as_of)
+        df["title"] = df["title"].fillna("").astype(str).str.strip()
+        df.loc[df["title"] == "", "title"] = df.loc[df["title"] == "", "doc_id"]
         df["source_url"] = raw["docID"].astype(str).map(self.viewer_url)
         df["pdf_url"] = raw["docID"].astype(str).map(lambda d: self.download_url(d, "pdf"))
         df["xbrl_url"] = raw["docID"].astype(str).map(lambda d: self.download_url(d, "xbrl"))
         df["should_download"] = doc_type_code.isin(FULL_DOWNLOAD_TYPES)
         df["disclosed_at"] = df["filed_at"]
-        df = df[df["filed_at"].notna()]
         return tag_table(df.reset_index(drop=True), "documents")
 
     def checkpoint(self) -> Checkpoint:
         return self._checkpoint
+
+
+def _result_rows(payload: Any) -> list[Any]:
+    if not isinstance(payload, dict):
+        return []
+    for key in ("results", "Results"):
+        rows = payload.get(key)
+        if isinstance(rows, list) and rows:
+            return rows
+    return []
 
 
 def _normalize_sec_code(series: Any) -> pd.Series:

@@ -17,7 +17,7 @@ from packages.core.llm.cost_guard import CostGuard
 from packages.core.llm.prompts import render_prompt
 from packages.core.llm.router import LLMRouter
 from packages.core.llm.schemas import DocSummaryOutput
-from packages.core.storage import StorageError, get_vector_store
+from packages.core.storage import DuckDBRepo, SQLiteRepo, StorageError, get_vector_store
 from packages.schemas.documents import DocumentChunk, DocumentChunkList, DocumentSummary
 from packages.schemas.model_lab import BacktestRequest, BacktestTrade, EquityCurvePoint
 from services.api.deps import AppState
@@ -54,10 +54,17 @@ def llm_keys_configured(settings: Any) -> bool:
     return False
 
 
-def _adapt(state: AppState) -> tuple[Any, Any]:
+def _adapt(state: AppState, warehouse: Any | None = None) -> tuple[Any, Any]:
     from services.agent.main import _adapt_state, _adapt_warehouse
 
-    return _adapt_state(state.sqlite), _adapt_warehouse(state.duck)
+    return _adapt_state(state.sqlite), _adapt_warehouse(warehouse or state.duck)
+
+
+def _write_warehouse(state: AppState):
+    """API が read_only のときだけ、短い書き込み接続を開く。"""
+    if not getattr(state.duck, "read_only", False):
+        return None
+    return DuckDBRepo.open(state.settings, read_only=False)
 
 
 def _maybe_router(state: AppState, adapted_state: Any, adapted_wh: Any) -> LLMRouter | None:
@@ -90,30 +97,38 @@ def _job_market(job_name: str, market: str | None) -> str:
     return market or "JP"
 
 
-def kick_agent_job(state: AppState, *, job_name: str, run_id: int, market: str | None) -> None:
+def kick_agent_job(
+    state: AppState,
+    *,
+    job_name: str,
+    run_id: int,
+    market: str | None,
+    as_of: dt.date | None = None,
+) -> None:
     """プロセス内で既存ジョブ実装をキックする。失敗しても例外は外に出さない。"""
-    from datetime import date
-
     from services.agent.jobs.analyst import analyst
     from services.agent.jobs.collector import collector
     from services.agent.jobs.critic import critic
     from services.agent.jobs.evaluator import evaluator
     from services.agent.jobs.researcher import researcher
     from services.agent.jobs.strategist import strategist
+    from services.agent.main import session_as_of
 
-    as_of = date.today()
     mkt = _job_market(job_name, market)
-    st, wh = _adapt(state)
-    fns = {
-        "collector": collector,
-        "analyst": analyst,
-        "researcher": researcher,
-        "strategist": strategist,
-        "critic": critic,
-        "evaluator": evaluator,
-    }
-    inner_name = JOB_FN_NAMES.get(job_name)
+    day = as_of or session_as_of(mkt)
+    write_duck = None
     try:
+        write_duck = _write_warehouse(state)
+        st, wh = _adapt(state, write_duck)
+        fns = {
+            "collector": collector,
+            "analyst": analyst,
+            "researcher": researcher,
+            "strategist": strategist,
+            "critic": critic,
+            "evaluator": evaluator,
+        }
+        inner_name = JOB_FN_NAMES.get(job_name)
         if job_name == "backtest":
             state.sqlite.update_job_run(
                 run_id,
@@ -137,14 +152,17 @@ def kick_agent_job(state: AppState, *, job_name: str, run_id: int, market: str |
             kwargs["router"] = _maybe_router(state, st, wh)
         if inner_name in {"strategist", "evaluator"}:
             kwargs["memory"] = st
-        result = fn(mkt, as_of, **kwargs)
-        status = getattr(result, "status", "success") or "success"
-        metrics = dict(getattr(result, "metrics", None) or {})
-        inner_id = getattr(result, "run_id", None)
-        if inner_id is not None:
-            metrics["inner_run_id"] = inner_id
-        state.sqlite.update_job_run(run_id, status=status, finished=True, metrics=metrics)
-        _publish_finished(state, run_id, status)
+        result = fn(mkt, day, **kwargs)
+        status, metrics, error_type, error_message, failed_steps = _payload_from_result(result)
+        state.sqlite.update_job_run(
+            run_id,
+            status=status,
+            finished=True,
+            metrics=metrics,
+            error_type=error_type,
+            error_message=error_message,
+        )
+        _publish_finished(state, run_id, status, failed_steps=failed_steps)
     except Exception as exc:
         logger.exception("ジョブ %s の実行に失敗しました", job_name)
         state.sqlite.update_job_run(
@@ -154,19 +172,82 @@ def kick_agent_job(state: AppState, *, job_name: str, run_id: int, market: str |
             error_type=type(exc).__name__,
             error_message=str(exc),
         )
-        _publish_finished(state, run_id, "failed")
+        _publish_finished(state, run_id, "failed", failed_steps=[job_name])
+    finally:
+        if write_duck is not None:
+            write_duck.close()
 
 
-def _publish_finished(state: AppState, run_id: int, status: str) -> None:
+def _payload_from_result(result: Any) -> tuple[str, dict[str, Any], str | None, str | None, list[str]]:
+    """ジョブ結果から親 job_run へ書く payload を組み立てる。"""
+    status = getattr(result, "status", "success") or "success"
+    metrics = dict(getattr(result, "metrics", None) or {})
+    steps = getattr(result, "steps", None) or {}
+    failed_steps = [
+        name
+        for name, step in steps.items()
+        if getattr(step, "status", None) == "failed"
+    ]
+    if not failed_steps:
+        failed_steps = list(metrics.get("failed_steps") or [])
+    if failed_steps:
+        metrics["failed_steps"] = failed_steps
+        step_errors = {
+            name: getattr(step, "error", None)
+            for name, step in steps.items()
+            if getattr(step, "error", None)
+        }
+        if step_errors:
+            metrics["step_errors"] = step_errors
+    error_message = getattr(result, "error", None)
+    if not error_message and failed_steps:
+        parts = []
+        for name in failed_steps:
+            step = steps.get(name) if isinstance(steps, dict) else None
+            err = getattr(step, "error", None) if step is not None else None
+            if err is None and isinstance(metrics.get("step_errors"), dict):
+                err = metrics["step_errors"].get(name)
+            parts.append(f"{name}: {err}" if err else name)
+        error_message = " / ".join(parts)
+    if not error_message and status == "failed":
+        reason = metrics.get("reason")
+        error_message = str(reason) if reason else "ジョブが失敗しました"
+    error_type = None
+    if error_message:
+        error_type = "JobFailed" if status == "failed" else "JobPartial"
+    inner_id = getattr(result, "run_id", None)
+    if inner_id is not None:
+        metrics["inner_run_id"] = inner_id
+    metrics["as_of"] = getattr(result, "as_of", None)
+    if hasattr(metrics["as_of"], "isoformat"):
+        metrics["as_of"] = metrics["as_of"].isoformat()
+    return status, metrics, error_type, error_message, failed_steps
+
+
+def _publish_finished(
+    state: AppState,
+    run_id: int,
+    status: str,
+    *,
+    failed_steps: list[str] | None = None,
+) -> None:
     row = state.sqlite.get_job_run(run_id)
     duration = getattr(row, "duration_sec", None) if row is not None else None
+    steps = list(failed_steps or [])
+    if not steps and row is not None:
+        from packages.core.storage import to_dict
+
+        data = to_dict(row, json_fields=("metrics", "checkpoint"))
+        metrics = data.get("metrics") or {}
+        if isinstance(metrics, dict):
+            steps = list(metrics.get("failed_steps") or [])
     state.bus.publish_nowait(
         "job_finished",
         {
             "job_run_id": run_id,
             "status": status,
             "duration_sec": duration,
-            "failed_steps": [],
+            "failed_steps": steps,
         },
     )
 

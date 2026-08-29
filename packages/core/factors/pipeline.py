@@ -209,7 +209,7 @@ def compute_features(context: PitContext, *, benchmark_ticker: str | None = None
     )
     out["feature_version"] = FEATURE_VERSION
     out["n_missing"] = out[list(FEATURE_COLUMNS)].isna().sum(axis=1).astype(int)
-    out["computed_at"] = datetime.now(UTC)
+    out["computed_at"] = datetime.now(UTC).replace(tzinfo=None)
     return out.reset_index()
 
 

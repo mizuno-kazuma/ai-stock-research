@@ -203,6 +203,12 @@ def score_cross_section(
     if "as_of" in work.columns:
         out.insert(1, "as_of", work["as_of"])
     out["weight_set_id"] = weight_set_id
+    if "feature_version" in work.columns:
+        out["feature_version"] = work["feature_version"]
+    else:
+        from packages.core.factors.pipeline import FEATURE_VERSION
+
+        out["feature_version"] = FEATURE_VERSION
 
     if ml_predictions is not None and not ml_predictions.empty:
         for col in ml_predictions.columns:

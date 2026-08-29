@@ -48,6 +48,32 @@ def begin_run(
     )
 
 
+def attach_step_failures(metrics: dict | None, steps: dict) -> dict:
+    """失敗したステップ名とメッセージを metrics に載せる（UI が表示する）。"""
+    out = dict(metrics or {})
+    failed = [name for name, step in steps.items() if getattr(step, "status", None) == "failed"]
+    errors = {
+        name: step.error
+        for name, step in steps.items()
+        if getattr(step, "error", None)
+    }
+    if failed:
+        out["failed_steps"] = failed
+    if errors:
+        out["step_errors"] = errors
+    return out
+
+
+def first_step_error(steps: dict) -> str | None:
+    parts = []
+    for name, step in steps.items():
+        if getattr(step, "status", None) != "failed":
+            continue
+        err = getattr(step, "error", None)
+        parts.append(f"{name}: {err}" if err else name)
+    return " / ".join(parts) if parts else None
+
+
 def finish_run(
     state: JobRunRepo,
     run_id: int,

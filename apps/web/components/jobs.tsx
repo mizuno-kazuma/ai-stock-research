@@ -35,8 +35,18 @@ export function JobPill({ job }: { job: AgentJob }) {
       <p className="text-caption text-fg-tertiary mt-1 num">
         {formatTimeJst(job.started_at)} · {formatDuration(job.duration_sec)}
       </p>
-      {job.output_summary_ja ? (
+      {job.output_summary_ja && job.output_summary_ja !== job.error_message ? (
         <p className="text-caption text-fg-secondary mt-0.5 truncate">{job.output_summary_ja}</p>
+      ) : null}
+      {job.error_message ? (
+        <p
+          className={cx(
+            "text-caption mt-0.5",
+            job.status === "failed" ? "text-status-danger" : "text-status-warning",
+          )}
+        >
+          {job.error_message}
+        </p>
       ) : null}
       {job.failed_steps.length > 0 ? (
         <p className="text-caption text-status-warning mt-0.5">

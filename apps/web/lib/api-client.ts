@@ -12,8 +12,13 @@
 
 import type { ApiWarning, Envelope, Meta, ProblemDetails } from "./api-types";
 
+/**
+ * 既定は同一オリジンの `/api/v1`。Next.js が FastAPI へ中継する（next.config.ts）。
+ * スマホ（Tailscale）から開いたとき、ブラウザが 127.0.0.1 を叩かないようにする。
+ * 直接 FastAPI に向けたいときだけ `NEXT_PUBLIC_API_BASE_URL` を上書きする。
+ */
 export const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1"
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1"
 ).replace(/\/$/, "");
 
 /** モックモード。バックエンド未起動でも全画面を確認できるようにする */

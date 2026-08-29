@@ -575,8 +575,11 @@ export const useAgentMemory = () =>
 
 export function useRunJob() {
   const qc = useQueryClient();
-  return useApiMutation<{ job_run_id: number }, string>(
-    (jobName) => apiPost<{ job_run_id: number }>(`/agent/jobs/${jobName}/run`),
+  return useApiMutation<{ job_run_id: number }, { jobName: string; asOf?: string }>(
+    (vars) =>
+      apiPost<{ job_run_id: number }>(`/agent/jobs/${vars.jobName}/run`, undefined, {
+        params: vars.asOf ? { as_of: vars.asOf } : undefined,
+      }),
     () => {
       void qc.invalidateQueries({ queryKey: queryKeys.agentJobs() });
     },

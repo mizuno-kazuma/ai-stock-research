@@ -23,6 +23,7 @@ from packages.schemas.dashboard import (
     VolRegime,
     WatchlistFiling,
 )
+from packages.core.factors.calendar import TradingCalendar
 from packages.schemas.recommendations import RecommendationSummary
 from services.api.deps import AppState, User, get_app_state, require_user
 from services.api.envelope import wrap
@@ -191,6 +192,12 @@ def _dashboard_from_seed(state: AppState, *, market: str, as_of: dt.date) -> Das
     )
 
 
+def _filings_range(as_of: dt.date) -> tuple[dt.date, dt.date]:
+    """「本日の開示」は当日と前営業日を見る。深夜起動で当日が空でも前日分が出る。"""
+    start = TradingCalendar().prev_business_day(as_of)
+    return start, as_of
+
+
 def _dashboard_from_warehouse(state: AppState, *, market: str, as_of: dt.date) -> Dashboard:
     recs = state.duck.get_recommendations(market=market, as_of=as_of, limit=5)
     if not recs:
@@ -257,8 +264,11 @@ def _dashboard_from_warehouse(state: AppState, *, market: str, as_of: dt.date) -
             as_of=as_date(latest.get("observation_date")),
         )
 
+    start, end = _filings_range(as_of)
     watch = {(w.market, w.ticker) for w in state.sqlite.get_watchlist()}
-    docs = state.duck.get_documents(market=market, limit=40)
+    docs = state.duck.get_documents(market=market, since=start, until=end, limit=80)
+    if not docs:
+        docs = state.duck.get_documents(market=market, limit=40)
     preferred = [
         row for row in docs if not watch or (row.get("market"), row.get("ticker")) in watch
     ]
@@ -320,7 +330,8 @@ def _dashboard_from_warehouse(state: AppState, *, market: str, as_of: dt.date) -
         fx=fx,
         top_recommendations=summaries,
         portfolio_snapshot=portfolio,
-        new_filings_count=state.duck.count_documents(market=market),
+        new_filings_count=state.duck.count_documents(market=market, since=start, until=end)
+        or len(watch_filings),
         watchlist_filings=watch_filings,
         alerts=alerts,
         job_status=job_status,

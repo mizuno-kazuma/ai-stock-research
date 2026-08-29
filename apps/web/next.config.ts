@@ -1,12 +1,27 @@
 import type { NextConfig } from "next";
 
+/** Next.js から見た FastAPI。ブラウザには出さない。 */
+const API_INTERNAL_ORIGIN = (
+  process.env.API_INTERNAL_ORIGIN ?? "http://127.0.0.1:8000"
+).replace(/\/$/, "");
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Phase A では WSL2 上の standalone サーバとして起動する（docs/01-architecture.md §3）
   output: "standalone",
   transpilePackages: ["@ai-stock/ui"],
+  // Tailscale Serve / MagicDNS から dev の /_next を読めるようにする
+  allowedDevOrigins: ["*.ts.net", "desktop-5vdan61", "100.72.249.69"],
   eslint: {
     dirs: ["app", "components", "lib"],
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/api/v1/:path*",
+        destination: `${API_INTERNAL_ORIGIN}/api/v1/:path*`,
+      },
+    ];
   },
   async headers() {
     return [

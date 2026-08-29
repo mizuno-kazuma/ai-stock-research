@@ -225,8 +225,24 @@ export function mapAgentJob(raw: unknown): AgentJob {
     started_at: str(d.started_at),
     duration_sec: num(d.duration_sec),
     label_ja: d.label_ja == null ? str(d.job_name) : str(d.label_ja),
-    output_ja: d.output_ja != null ? str(d.output_ja) : d.output_summary_ja != null ? str(d.output_summary_ja) : null,
-    output_summary_ja: d.output_summary_ja != null ? str(d.output_summary_ja) : d.output_ja != null ? str(d.output_ja) : null,
+    output_ja:
+      d.output_ja != null
+        ? str(d.output_ja)
+        : d.output_summary_ja != null
+          ? str(d.output_summary_ja)
+          : d.error_message != null
+            ? str(d.error_message)
+            : null,
+    output_summary_ja:
+      d.output_summary_ja != null
+        ? str(d.output_summary_ja)
+        : d.output_ja != null
+          ? str(d.output_ja)
+          : d.error_message != null
+            ? str(d.error_message)
+            : null,
+    error_message: d.error_message != null ? str(d.error_message) : null,
+    error_type: d.error_type != null ? str(d.error_type) : null,
     progress,
   };
 }

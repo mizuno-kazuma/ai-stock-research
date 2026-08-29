@@ -89,6 +89,7 @@ def run_job(
     job_name: str,
     background: BackgroundTasks,
     market: str | None = Query(default=None),
+    as_of: dt.date | None = Query(default=None),
     _user: User = Depends(require_user),
     state: AppState = Depends(get_app_state),
 ) -> Envelope[JobRunSchema]:
@@ -107,7 +108,14 @@ def run_job(
         },
     )
 
-    background.add_task(kick_agent_job, state, job_name=job_name, run_id=run_id, market=market)
+    background.add_task(
+        kick_agent_job,
+        state,
+        job_name=job_name,
+        run_id=run_id,
+        market=market,
+        as_of=as_of,
+    )
     row = state.sqlite.get_job_run(run_id)
     assert row is not None
     return wrap(state, job_from_row(row))

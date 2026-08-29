@@ -2942,7 +2942,7 @@ export interface components {
              * Trigger
              * @enum {string}
              */
-            trigger: "schedule" | "manual" | "retry" | "resume" | "auto_resume";
+            trigger: "schedule" | "manual" | "retry" | "resume" | "auto_resume" | "startup";
         };
         /** JobRunList */
         JobRunList: {

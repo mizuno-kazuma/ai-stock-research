@@ -70,6 +70,10 @@ const JOB_OPTIONS: Array<{ value: JobName; label: string }> = (
   Object.keys(JOB_NAME_LABEL_JA) as JobName[]
 ).map((value) => ({ value, label: JOB_NAME_LABEL_JA[value] }));
 
+function todayJst(): string {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+}
+
 const callColumns: Array<Column<LlmCall>> = [
   {
     key: "time",
@@ -129,7 +133,7 @@ function JobsTab({ selectedId, onSelect }: { selectedId: string | null; onSelect
   const cancelJob = useCancelJob();
   const clearHistory = useClearJobHistory();
   const [jobName, setJobName] = useState<JobName>("collector");
-  const [targetDate, setTargetDate] = useState("2026-08-22");
+  const [targetDate, setTargetDate] = useState(todayJst);
   const [force, setForce] = useState(false);
   const [confirmRun, setConfirmRun] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -201,6 +205,9 @@ function JobsTab({ selectedId, onSelect }: { selectedId: string | null; onSelect
                             {formatDateTimeJst(job.started_at)} · {formatDuration(job.duration_sec)}
                           </span>
                           {job.output_ja ? <span className="block text-caption text-fg-secondary mt-0.5">{job.output_ja}</span> : null}
+                          {job.status === "failed" && job.error_message && job.error_message !== job.output_ja ? (
+                            <span className="block text-caption text-status-danger mt-0.5">{job.error_message}</span>
+                          ) : null}
                           {job.failed_steps.length > 0 ? (
                             <span className="block text-caption text-status-warning mt-0.5">
                               部分 · {job.failed_steps.join(" / ")}
@@ -254,7 +261,7 @@ function JobsTab({ selectedId, onSelect }: { selectedId: string | null; onSelect
         title="ジョブを実行しますか"
         confirmLabel="実行"
         onConfirm={() => {
-          runJob.mutate(jobName);
+          runJob.mutate({ jobName, asOf: targetDate });
           setConfirmRun(false);
         }}
       >
@@ -302,7 +309,14 @@ function JobDetail({ job, online, onCancel }: { job: AgentJob; online: boolean; 
           <dd>{formatDuration(job.duration_sec)}</dd>
         </div>
       </dl>
-      {job.output_ja ? <p className="text-body-sm text-fg-secondary">{job.output_ja}</p> : null}
+      {job.output_ja && job.output_ja !== job.error_message ? (
+        <p className="text-body-sm text-fg-secondary">{job.output_ja}</p>
+      ) : null}
+      {job.error_message ? (
+        <Notice tone={job.status === "failed" ? "danger" : "warning"}>
+          失敗の原因: {job.error_message}
+        </Notice>
+      ) : null}
       {job.failed_steps.length > 0 ? (
         <Notice tone="warning">
           失敗したステップ: {job.failed_steps.join(" / ")}。再実行はチェックポイントから再開します。

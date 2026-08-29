@@ -27,6 +27,19 @@ DOC_SOURCE_MAP = {
     "sec_edgar": "edgar",
 }
 
+JOB_LABEL_JA = {
+    "collector": "データ収集",
+    "collector_jp": "データ収集（日本）",
+    "collector_us": "データ収集（米国）",
+    "analyst": "分析",
+    "researcher": "資料読解",
+    "strategist": "推奨生成",
+    "critic": "レビュー",
+    "evaluator": "実績評価",
+    "pipeline": "パイプライン",
+    "backtest": "バックテスト",
+}
+
 
 def map_doc_type(value: str | None) -> str:
     if not value:
@@ -292,10 +305,31 @@ def job_from_row(row: Any, *, seed: dict[str, Any] | None = None) -> JobRun:
             )
         )
     run_id = data.get("id") or data.get("job_run_id")
+    metrics = data.get("metrics") if isinstance(data.get("metrics"), dict) else extra.get("metrics")
+    failed_steps = list(extra.get("failed_steps") or [])
+    if not failed_steps and isinstance(metrics, dict):
+        failed_steps = [str(s) for s in (metrics.get("failed_steps") or [])]
+    error_message = data.get("error_message")
+    if not error_message and isinstance(metrics, dict):
+        reason = metrics.get("reason")
+        if reason == "no_scores":
+            error_message = "スコアがありません。先に分析ジョブを成功させてください。"
+        elif isinstance(metrics.get("step_errors"), dict) and metrics["step_errors"]:
+            error_message = " / ".join(
+                f"{name}: {msg}" for name, msg in metrics["step_errors"].items()
+            )
+        elif reason:
+            error_message = str(reason)
+    output_summary = extra.get("output_summary_ja")
+    if not output_summary and error_message:
+        output_summary = error_message
+    elif not output_summary and isinstance(metrics, dict):
+        output_summary = metrics.get("output_summary_ja")
+    job_name = str(data.get("job_name"))
     return JobRun(
         job_run_id=int(run_id),
-        job_name=str(data.get("job_name")),
-        label_ja=extra.get("label_ja"),
+        job_name=job_name,
+        label_ja=extra.get("label_ja") or JOB_LABEL_JA.get(job_name),
         market=data.get("market"),
         trigger=data.get("trigger") or "schedule",
         status=data.get("status") or "success",
@@ -303,13 +337,13 @@ def job_from_row(row: Any, *, seed: dict[str, Any] | None = None) -> JobRun:
         started_at=as_utc(data.get("started_at")) or dt.datetime.now(dt.UTC),
         finished_at=as_utc(data.get("finished_at")),
         duration_sec=data.get("duration_sec") or extra.get("duration_sec"),
-        output_summary_ja=extra.get("output_summary_ja"),
-        failed_steps=list(extra.get("failed_steps") or []),
+        output_summary_ja=output_summary,
+        failed_steps=failed_steps,
         phases=phases,
         checkpoint=checkpoint,
-        metrics=data.get("metrics") if isinstance(data.get("metrics"), dict) else extra.get("metrics"),
+        metrics=metrics if isinstance(metrics, dict) else extra.get("metrics"),
         error_type=data.get("error_type"),
-        error_message=data.get("error_message"),
+        error_message=error_message,
         retry_count=int(data.get("retry_count") or 0),
         parent_run_id=data.get("parent_run_id"),
         git_commit=data.get("git_commit"),
