@@ -146,9 +146,52 @@ def train_ranker(
     return ranker
 
 
-def evaluate_rank_ic(pred: pd.Series, realized: pd.Series) -> dict[str, float]:
-    """日次 Rank IC（Spearman）の平均と t 統計量。"""
-    frame = pd.DataFrame({"pred": pred, "y": realized}).dropna()
+def summarize_rank_ics(ics: list[float]) -> dict[str, float]:
+    """日次（または fold）IC 系列から平均・t 統計・勝率を出す（docs/04 §3.6）。"""
+    arr = np.asarray([x for x in ics if x == x], dtype=float)
+    if arr.size == 0:
+        return {"rank_ic": float("nan"), "t_stat": float("nan"), "hit_rate": float("nan")}
+    mean = float(arr.mean())
+    hit = float((arr > 0).mean())
+    if arr.size < 2:
+        return {"rank_ic": mean, "t_stat": float("nan"), "hit_rate": hit}
+    std = float(arr.std(ddof=1))
+    t_stat = float("nan") if std == 0 or std != std else float(mean / std * np.sqrt(arr.size))
+    return {"rank_ic": mean, "t_stat": t_stat, "hit_rate": hit}
+
+
+def evaluate_rank_ic(
+    pred: pd.Series,
+    realized: pd.Series,
+    *,
+    groups: pd.Series | None = None,
+) -> dict[str, float]:
+    """日次 Rank IC（Spearman）の平均と t 統計量。
+
+    行を日付で束ねて日次 IC を作り、`mean(IC) / std(IC) * sqrt(n_days)` を返す。
+    グループが1日しかないと t 統計は定義できないので NaN のままにする。
+    """
+    pred_s = pred.reset_index(drop=True) if hasattr(pred, "reset_index") else pd.Series(pred)
+    y_s = realized.reset_index(drop=True) if hasattr(realized, "reset_index") else pd.Series(realized)
+    frame = pd.DataFrame({"pred": pred_s, "y": y_s})
+    group_s = groups
+    if group_s is None and hasattr(pred, "index"):
+        if isinstance(pred.index, pd.MultiIndex):
+            group_s = pd.Series(pred.index.get_level_values(0))
+        elif getattr(pred.index, "inferred_type", "") in {"datetime64", "date", "datetime"}:
+            group_s = pd.Series(pred.index)
+    if group_s is not None:
+        frame["_g"] = pd.Series(group_s).reset_index(drop=True)
+        frame = frame.dropna(subset=["pred", "y", "_g"])
+        daily: list[float] = []
+        for _, part in frame.groupby("_g", sort=True):
+            if len(part) < 3:
+                continue
+            ic = part["pred"].corr(part["y"], method="spearman")
+            if ic == ic:
+                daily.append(float(ic))
+        return summarize_rank_ics(daily)
+    frame = frame.dropna()
     if frame.empty:
         return {"rank_ic": float("nan"), "t_stat": float("nan"), "hit_rate": float("nan")}
     ic = frame["pred"].corr(frame["y"], method="spearman")
