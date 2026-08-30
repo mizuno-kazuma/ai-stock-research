@@ -125,7 +125,7 @@ def get_scores(
                     as_of=as_date((state.payload.get("screener") or {}).get("as_of")) or state.as_of,
                     name_local=row.get("name_local"),
                     sector_name=row.get("sector_name"),
-                    quant_score=row.get("total_score"),
+                    quant_score=row.get("quant_score") if row.get("quant_score") is not None else row.get("total_score"),
                     total_score=row.get("total_score"),
                 )
             )

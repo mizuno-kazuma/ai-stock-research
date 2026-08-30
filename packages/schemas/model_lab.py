@@ -1,6 +1,6 @@
 """モデルラボ（docs/09-api-spec.md §2.7, docs/03-data-model.md §2.13-2.14）。
 
-`POST /backtests` は fee_bps / slippage_bps / max_turnover_pct を必須にする。
+`POST /backtests` は fee_bps / slippage_bps / max_turnover_pct / n_trials を必須にする。
 **API レベルでもデフォルト値を持たせない。** ゼロコストのバックテストを
 うっかり実行できないようにするための構造的制約である。
 """
@@ -145,7 +145,7 @@ class BacktestRequest(SchemaModel):
     max_turnover_pct: float = Field(gt=0.0)
     signal_source: SignalSource | None = None
     universe_filter: UniverseFilterSpec | None = None
-    n_trials: int | None = None
+    n_trials: int = Field(ge=1)
 
 
 class BacktestRun(SchemaModel):
