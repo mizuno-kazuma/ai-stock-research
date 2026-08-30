@@ -76,11 +76,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     sqlite.init_db()
     sqlite.mark_interrupted_jobs(hours=0)
     payload = _load_payload(sqlite)
+    bus = EventBus()
+    from services.agent.progress import set_shared_bus
+
+    set_shared_bus(bus)
     app.state.api = AppState(
         settings=settings,
         duck=duck,
         sqlite=sqlite,
-        bus=EventBus(),
+        bus=bus,
         started_at=utc_now(),
         payload=payload,
         duck_owned=True,
@@ -174,11 +178,15 @@ def create_app(
         )
 
     if duck is not None and sqlite is not None:
+        bus = EventBus()
+        from services.agent.progress import set_shared_bus
+
+        set_shared_bus(bus)
         app.state.api = AppState(
             settings=cfg,
             duck=duck,
             sqlite=sqlite,
-            bus=EventBus(),
+            bus=bus,
             started_at=utc_now(),
             payload=payload if payload is not None else _load_payload(sqlite),
             duck_owned=False,

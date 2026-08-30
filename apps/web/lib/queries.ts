@@ -9,6 +9,7 @@
 
 "use client";
 
+import { useEffect } from "react";
 import {
   keepPreviousData,
   useMutation,
@@ -18,6 +19,7 @@ import {
 } from "@tanstack/react-query";
 
 import {
+  API_BASE_URL,
   ApiError,
   USE_MOCK,
   apiDelete,
@@ -566,6 +568,27 @@ export const useAgentJobs = () =>
   useApiQuery<AgentJob[]>(queryKeys.agentJobs(), "/agent/jobs", { limit: 50 }, {
     map: (raw) => unwrapItems(raw).map(mapAgentJob),
   });
+
+/** ジョブ進捗 SSE。投資数字の自動更新ではなく、実行状態だけを更新する。 */
+export function useAgentJobEvents() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (USE_MOCK || typeof EventSource === "undefined") return;
+    const source = new EventSource(`${API_BASE_URL}/agent/events`);
+    const refresh = () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.agentJobs() });
+    };
+    source.addEventListener("job_progress", refresh);
+    source.addEventListener("job_finished", refresh);
+    source.addEventListener("alert", refresh);
+    return () => {
+      source.removeEventListener("job_progress", refresh);
+      source.removeEventListener("job_finished", refresh);
+      source.removeEventListener("alert", refresh);
+      source.close();
+    };
+  }, [qc]);
+}
 export const useAgentCost = () =>
   useApiQuery<AgentCost>(queryKeys.agentCost(), "/agent/cost", { period: "daily", days: 30 }, { map: mapAgentCost });
 export const useCriticStats = () =>
