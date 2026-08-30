@@ -200,6 +200,65 @@ def collector(
     )
 
 
+def _edgar_user_agent(settings: Any) -> str:
+    ua = getattr(settings, "edgar_user_agent", None) or ""
+    return str(ua).strip()
+
+
+def _edgar_skip_reason(settings: Any) -> str | None:
+    """UA が無い／不正なら理由を返す。パイプライン全体は落とさない。"""
+    ua = _edgar_user_agent(settings)
+    if not ua:
+        return "edgar_user_agent_missing"
+    try:
+        from packages.core.connectors.edgar import validate_user_agent
+
+        validate_user_agent(ua)
+    except Exception as exc:
+        return f"edgar_user_agent_invalid: {exc}"
+    return None
+
+
+def _us_ciks(warehouse: Any, state: JobRunRepo | None) -> list[str]:
+    """倉庫の証券マスタから US の CIK を集める。"""
+    ciks: list[str] = []
+    rows: list[Any] = []
+    getter = getattr(warehouse, "get_securities", None) if warehouse is not None else None
+    if callable(getter):
+        try:
+            rows = list(getter(market="US") or [])
+        except TypeError:
+            rows = list(getter() or [])
+    elif warehouse is not None:
+        reader = getattr(warehouse, "read_securities", None)
+        if callable(reader):
+            frame = reader(market="US")
+            if frame is not None and getattr(frame, "empty", True) is False:
+                rows = frame.to_dict("records")
+    wanted: set[str] | None = None
+    if state is not None:
+        symbols = _watchlist_symbols(state, "US")
+        if symbols:
+            wanted = {s.replace(".US", "").upper() for s in symbols}
+    for row in rows:
+        if isinstance(row, dict):
+            ticker = str(row.get("ticker") or "").upper()
+            cik = row.get("cik")
+            market = row.get("market")
+        else:
+            ticker = str(getattr(row, "ticker", "") or "").upper()
+            cik = getattr(row, "cik", None)
+            market = getattr(row, "market", None)
+        if market and str(market) != "US":
+            continue
+        if wanted is not None and ticker and ticker not in wanted:
+            continue
+        text = str(cik or "").strip()
+        if text:
+            ciks.append(text)
+    return list(dict.fromkeys(ciks))
+
+
 def _watchlist_symbols(state: JobRunRepo | None, market: str) -> list[str]:
     """ウォッチリストから yfinance 用シンボルを作る。"""
     if state is None:
@@ -296,6 +355,33 @@ def builtin_connector_steps(
                 close()
         return {"batches": batches, "rows": rows, "window_start": start.isoformat(), "window_end": end.isoformat()}
 
+    def _run_edgar(
+        market: str,
+        as_of: date,
+        *,
+        endpoint: str,
+        lookback_days: int,
+        coverage_table: str,
+    ) -> dict[str, Any]:
+        from packages.core.config import get_settings
+
+        settings = get_settings()
+        skip = _edgar_skip_reason(settings)
+        if skip:
+            return {"skipped": True, "reason": skip}
+        ciks = _us_ciks(warehouse, state)
+        if not ciks:
+            return {"skipped": True, "reason": "cik_missing"}
+        return _run(
+            "edgar",
+            market,
+            as_of,
+            fetch_kwargs={"endpoint": endpoint, "ciks": ciks},
+            lookback_days=lookback_days,
+            apply_delay=False,
+            coverage_table=coverage_table,
+        )
+
     def _fn_for(step: str) -> StepFn:
         def _fn(market: str, as_of: date) -> dict[str, Any]:
             if step == "securities_master":
@@ -344,13 +430,19 @@ def builtin_connector_steps(
                     apply_delay=False,
                 )
             if step == "financials":
-                if market != "JP":
-                    return {"skipped": True}
-                return _run(
-                    "jquants",
+                if market == "JP":
+                    return _run(
+                        "jquants",
+                        market,
+                        as_of,
+                        fetch_kwargs={"endpoint": "fins_summary"},
+                        lookback_days=120,
+                        coverage_table="financials",
+                    )
+                return _run_edgar(
                     market,
                     as_of,
-                    fetch_kwargs={"endpoint": "fins_summary"},
+                    endpoint="companyfacts",
                     lookback_days=120,
                     coverage_table="financials",
                 )
@@ -365,7 +457,13 @@ def builtin_connector_steps(
                         apply_delay=False,
                         coverage_table="documents",
                     )
-                return {"skipped": True}
+                return _run_edgar(
+                    market,
+                    as_of,
+                    endpoint="submissions",
+                    lookback_days=14,
+                    coverage_table="documents",
+                )
             if step == "macro":
                 return _run(
                     "fred",
