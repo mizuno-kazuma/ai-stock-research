@@ -53,6 +53,9 @@ class FxForecastBundle:
     garch_vol_ann: float | None = None
     directional_accuracy_60d: float | None = None
     notes: str = ""
+    n_validation: int | None = None
+    rmse_oos_60d: float | None = None
+    baseline_rmse_oos_60d: float | None = None
 
     def as_rows(self) -> list[dict[str, Any]]:
         rows = []
@@ -88,6 +91,13 @@ class FxForecastBundle:
                     "dm_statistic": None if self.dm is None else self.dm.stat,
                     "dm_pvalue": None if self.dm is None else self.dm.pvalue,
                     "directional_accuracy_60d": self.directional_accuracy_60d,
+                    "n_validation": self.n_validation,
+                    "rmse_oos_60d": (
+                        self.baseline_rmse_oos_60d
+                        if model_id == "random_walk"
+                        else self.rmse_oos_60d
+                    ),
+                    "baseline_rmse_oos_60d": self.baseline_rmse_oos_60d,
                 }
             )
         return rows
@@ -272,6 +282,49 @@ def fit_vecm(
     return Forecast(point=point, lo=lo, hi=hi, alpha=alpha, notes=f"vecm rank={rank}")
 
 
+def rolling_fx_oos_errors(
+    spot: pd.Series,
+    exog: pd.DataFrame,
+    *,
+    horizon: int,
+    window: int = DM_WINDOW,
+    min_train: int = 60,
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """直近 `window` 営業日の h 期先アウトオブサンプル誤差（モデル, RW）。
+
+    評価窓の長さは仕様で固定する（期間を選んで良い結果を出さない）。
+    再推定は ARX-OLS（`fit_arimax` のフォールバックと同じ式）で行い、
+    日次ジョブが数十回の SARIMAX にならないようにする。
+    """
+    spot_clean = pd.to_numeric(spot, errors="coerce").dropna().sort_index()
+    spot_clean = spot_clean[~spot_clean.index.duplicated(keep="last")]
+    n = int(spot_clean.size)
+    last_origin = n - horizon - 1
+    first_origin = max(min_train - 1, last_origin - window + 1)
+    if last_origin < first_origin:
+        return None
+    model_err: list[float] = []
+    rw_err: list[float] = []
+    for origin in range(first_origin, last_origin + 1):
+        train = spot_clean.iloc[: origin + 1]
+        actual = float(spot_clean.iloc[origin + horizon])
+        rw_pred = float(train.iloc[-1])
+        rw_err.append(actual - rw_pred)
+        try:
+            train_exog = exog.reindex(train.index).ffill()
+            log_train = np.log(train)
+            fc = _fit_arx_ols(log_train, train_exog, horizon=horizon, alpha=0.05)
+            pred = float(np.exp(fc.point))
+            if not np.isfinite(pred):
+                raise ValueError("non-finite oos forecast")
+            model_err.append(actual - pred)
+        except Exception:
+            model_err.append(actual - rw_pred)
+    if len(model_err) < 8:
+        return None
+    return np.asarray(model_err, dtype=float), np.asarray(rw_err, dtype=float)
+
+
 def forecast_fx(
     *,
     as_of: date,
@@ -284,7 +337,8 @@ def forecast_fx(
     rw_errors: np.ndarray | None = None,
 ) -> FxForecastBundle:
     """RW は常に出し、ARIMAX / VECM はデータが揃えば出す。外生欠損時は RW のみ。"""
-    spot_clean = pd.to_numeric(spot, errors="coerce").dropna()
+    spot_clean = pd.to_numeric(spot, errors="coerce").dropna().sort_index()
+    spot_clean = spot_clean[~spot_clean.index.duplicated(keep="last")]
     if spot_clean.empty:
         raise InsufficientHistoryError("為替スポットが空です")
     last = float(spot_clean.iloc[-1])
@@ -322,9 +376,23 @@ def forecast_fx(
             vecm_data["rate_diff_10y"] = exog["rate_diff_10y"].reindex(spot_clean.index)
             vecm_fc = fit_vecm(vecm_data, horizon=horizon)
 
+    if model_errors is None and rw_errors is None and arimax_fc is not None and exog is not None:
+        oos = rolling_fx_oos_errors(spot_clean, exog, horizon=horizon)
+        if oos is not None:
+            model_errors, rw_errors = oos
+
     dm = None
+    n_validation: int | None = None
+    model_rmse: float | None = None
+    rw_rmse: float | None = None
     if model_errors is not None and rw_errors is not None:
         dm = diebold_mariano(model_errors, rw_errors, h=horizon)
+        n_validation = int(np.isfinite(model_errors).sum())
+        if n_validation:
+            model_rmse = float(np.sqrt(np.nanmean(np.square(model_errors))))
+            rw_rmse = float(np.sqrt(np.nanmean(np.square(rw_errors))))
+        if dm is not None and not dm.beats_baseline:
+            notes.append("ランダムウォークに対する優位性は確認できていません")
 
     da = _directional_accuracy(spot_clean, horizon=horizon, window=DM_WINDOW)
     return FxForecastBundle(
@@ -338,6 +406,9 @@ def forecast_fx(
         garch_vol_ann=float(sigma / last * np.sqrt(252)) if last else None,
         directional_accuracy_60d=da,
         notes="; ".join(notes),
+        n_validation=n_validation,
+        rmse_oos_60d=model_rmse,
+        baseline_rmse_oos_60d=rw_rmse,
     )
 
 
