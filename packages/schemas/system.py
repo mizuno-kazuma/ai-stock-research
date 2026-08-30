@@ -109,6 +109,17 @@ class FreshnessResponse(SchemaModel):
     sources: list[DataFreshness] = Field(default_factory=list)
 
 
+class BackupResponse(SchemaModel):
+    """`POST /api/v1/system/backup`（docs/09-api-spec.md §2.10）。"""
+
+    ok: bool = True
+    job_name: str = "backup"
+    job_run_id: int | None = None
+    status: str = "running"
+    backup_dir: str | None = None
+    message_ja: str | None = None
+
+
 class LivenessResponse(SchemaModel):
     """`GET /health`。Envelope で包まない軽量な生存確認。"""
 
@@ -120,6 +131,7 @@ class LivenessResponse(SchemaModel):
 __all__ = [
     "AlertItem",
     "AlertItemList",
+    "BackupResponse",
     "DiskUsage",
     "FreshnessResponse",
     "HealthComponent",

@@ -511,7 +511,45 @@ POST   /api/v1/alerts/{alert_id}/read
 POST   /api/v1/alerts/read-all
 GET    /api/v1/system/health
 GET    /api/v1/system/freshness
+POST   /api/v1/system/backup
 ```
+
+`POST /api/v1/system/backup` がバックアップ起動の正である。画面仕様
+（[ui/screens/10-settings.md](ui/screens/10-settings.md)）も同じパスを参照する。
+食い違う場合は本節のパスとフィールド名を優先する。実装は
+`services/agent/jobs/backup.py`（[11-security-ops.md](11-security-ops.md) §4）。
+
+- メソッド: `POST`
+- パス: `/api/v1/system/backup`
+- クエリ / ボディ: なし
+- レスポンス: Envelope。`data` はジョブ開始時点の確認（実ファイルはバックグラウンドで書く）
+
+```json
+// POST /api/v1/system/backup
+{
+  "data": {
+    "ok": true,
+    "job_name": "backup",
+    "job_run_id": 42,
+    "status": "running",
+    "backup_dir": "/home/user/ai-stock/backups",
+    "message_ja": "バックアップを開始しました。"
+  },
+  "warnings": [],
+  "meta": {
+    "as_of": "2026-08-30",
+    "computed_at": "2026-08-29T18:00:00Z",
+    "data_freshness": []
+  }
+}
+```
+
+バックアップ先は設定キー `backup_dir`（環境変数 `BACKUP_DIR`、既定は
+`data_dir` の親配下 `backups/`）。生成物は `{BACKUP_DIR}/{YYYYMMDD}_{HHMMSS}/`
+で、`state.sqlite`（sqlite3 backup API）、`warehouse/`（DuckDB `EXPORT DATABASE`）、
+`raw/`、`config/` を含む。保持は日次7・週次（日曜）4・月次6。
+スケジュールは毎日 JST 03:00（[08-agent-loop.md](08-agent-loop.md) §2）。
+
 
 ```json
 // PATCH /api/v1/settings
@@ -586,6 +624,7 @@ class Envelope[T](BaseModel):
 | `/documents/{}/summary` | サーバ側 DB キャッシュ | 永続 |
 | `/fx/{}` | サーバ側メモリ | 5分 |
 | `/system/health` | なし | - |
+| `/system/backup` | なし | - |
 
 TanStack Query 側の設定:
 
@@ -625,5 +664,7 @@ async def get_current_user(request: Request) -> User:
 ## 6. 参照
 
 - データモデル: [03-data-model.md](03-data-model.md)
+- エージェントループとスケジュール: [08-agent-loop.md](08-agent-loop.md) §2
 - PWA とモバイル配信: [10-mobile-pwa.md](10-mobile-pwa.md)
-- 画面仕様: [ui/](ui/)
+- バックアップ方式と保持世代: [11-security-ops.md](11-security-ops.md) §4
+- 画面仕様: [ui/](ui/)（設定画面の Data source は本節の `POST /api/v1/system/backup` を正とする）

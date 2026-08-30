@@ -96,6 +96,14 @@ def create_scheduler(
         replace_existing=True,
     )
     scheduler.add_job(
+        run_daily_backup,
+        "cron",
+        hour=3,
+        minute=0,
+        id="daily_backup",
+        replace_existing=True,
+    )
+    scheduler.add_job(
         resume_interrupted_jobs,
         "interval",
         minutes=15,
@@ -276,6 +284,25 @@ def run_model_retrain() -> None:
                 data_dir=data_dir,
                 trigger="schedule",
             )
+    finally:
+        if owned:
+            warehouse.close()
+            sqlite.close()
+
+
+def run_daily_backup() -> None:
+    """JST 03:00。SQLite backup API + DuckDB EXPORT + raw/config コピー。"""
+    from services.agent.jobs.backup import daily_backup
+
+    warehouse, sqlite, owned = _storage_pair()
+    try:
+        daily_backup(
+            "JP",
+            session_as_of("JP"),
+            state=_adapt_state(sqlite),
+            warehouse=_adapt_warehouse(warehouse),
+            trigger="schedule",
+        )
     finally:
         if owned:
             warehouse.close()
