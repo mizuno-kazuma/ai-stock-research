@@ -29,6 +29,7 @@ class FakeStateRepo:
         self._memory: dict[str, MemoryRecord] = {}
         self._settings: dict[str, Any] = {}
         self._weights: list[dict[str, Any]] = []
+        self._backfill: dict[str, dict[str, Any]] = {}
 
     def create_job_run(
         self,
@@ -177,10 +178,31 @@ class FakeStateRepo:
         return str(len(self._weights))
 
     def get_backfill_progress(self, step_name: str) -> dict[str, Any] | None:
-        return None
+        return self._backfill.get(step_name)
 
     def set_backfill_progress(self, step_name: str, fields: dict[str, Any]) -> None:
-        return None
+        current = dict(self._backfill.get(step_name) or {})
+        current.update(fields)
+        self._backfill[step_name] = current
+
+    def save_backfill_progress(
+        self,
+        step_name: str,
+        *,
+        status: str,
+        cursor_value: str | None = None,
+        total_units: int | None = None,
+        done_units: int | None = None,
+    ) -> None:
+        self.set_backfill_progress(
+            step_name,
+            {
+                "status": status,
+                "cursor_value": cursor_value,
+                "total_units": total_units,
+                "done_units": done_units,
+            },
+        )
 
     def load_rate_limit_state(self, source: str) -> Any:
         return None

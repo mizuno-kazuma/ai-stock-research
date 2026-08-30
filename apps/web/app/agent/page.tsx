@@ -43,6 +43,7 @@ import {
 } from "../../lib/labels";
 import {
   useAgentCost,
+  useAgentJobEvents,
   useAgentJobs,
   useAgentMemory,
   useCancelJob,
@@ -321,6 +322,12 @@ function JobDetail({ job, online, onCancel }: { job: AgentJob; online: boolean; 
         <Notice tone="warning">
           失敗したステップ: {job.failed_steps.join(" / ")}。再実行はチェックポイントから再開します。
         </Notice>
+      ) : null}
+      {job.status === "running" && job.progress && job.progress.total > 0 ? (
+        <ProgressBar
+          ratio={job.progress.completed / job.progress.total}
+          label={`${job.progress.completed} / ${job.progress.total}`}
+        />
       ) : null}
       {job.status === "running" ? (
         <Button variant="danger" disabled={!online} onClick={onCancel}>
@@ -670,6 +677,7 @@ function MemoryItem({
 
 function AgentInner() {
   const qc = useQueryClient();
+  useAgentJobEvents();
   const [tab, setTab] = useQueryParamState<Tab>("tab", TABS, "jobs");
   const [jobId, setJobId] = useOptionalQueryParam("job_run_id");
   const healthQ = useSystemHealth();

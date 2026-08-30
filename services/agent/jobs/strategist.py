@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Callable
 from datetime import date
 from typing import Any
 
@@ -22,7 +23,7 @@ from packages.core.factors.screening import (
     conviction_from_score,
     determine_action,
 )
-from packages.core.interfaces.storage import JobRunRepo, MemoryRepo, SearchHit, WarehouseRepo
+from packages.core.interfaces.storage import JobRunRepo, MemoryRepo, SearchHit, VectorStore, WarehouseRepo
 from packages.core.llm.errors import (
     CostCapExceeded,
     InvariantViolationError,
@@ -74,6 +75,34 @@ def _interval_from_row(row: pd.Series) -> tuple[float | None, float, float]:
         half = float(vol) * (20.0 / 252.0) ** 0.5
         return pred, center - half, center + half
     return pred, center - FALLBACK_CI_HALF_WIDTH, center + FALLBACK_CI_HALF_WIDTH
+
+
+def _high_vol_regime(warehouse: WarehouseRepo, *, market: str, as_of: date) -> bool:
+    """ベンチマーク水準から高ボラレジームかを判定する。失敗しても推奨は出す。"""
+    from packages.core.models.regime import vol_regime_from_levels
+
+    series_id = "NIKKEI225" if market == "JP" else "SP500"
+    getter = getattr(warehouse, "get_macro_as_of", None)
+    if not callable(getter):
+        return False
+    try:
+        rows = getter(series_id, as_of=as_of, limit=1300) or []
+    except Exception:
+        return False
+    if not rows:
+        return False
+    frame = pd.DataFrame(rows)
+    date_col = next(
+        (c for c in ("observation_date", "date", "trade_date") if c in frame.columns),
+        None,
+    )
+    if date_col is None or "value" not in frame.columns:
+        return False
+    levels = pd.Series(
+        pd.to_numeric(frame["value"], errors="coerce").to_numpy(),
+        index=pd.to_datetime(frame[date_col], errors="coerce"),
+    ).dropna().sort_index()
+    return vol_regime_from_levels(levels).high_vol
 
 
 def _force_conviction(raw: str, n_prior: int) -> str:
@@ -137,8 +166,10 @@ def _retrieve_chunks(
     as_of: date,
     reasons: list[str],
     docs: pd.DataFrame,
+    vector_store: VectorStore | None = None,
+    embed: Callable[[str], list[float]] | None = None,
 ) -> list[SearchHit]:
-    """RAG。キーワード検索が空なら直近開示の本文抜粋に落とす。"""
+    """ハイブリッド RAG。両方空なら直近開示の本文抜粋に落とす。"""
     from packages.core.llm.rag import retrieve
 
     query = " ".join(str(c) for c in reasons) + " リスク 懸念 不確実性"
@@ -152,6 +183,8 @@ def _retrieve_chunks(
             k=8,
             as_of=as_of,
             keyword_search=keyword,
+            vector_store=vector_store,
+            embed=embed,
         )
     except Exception:
         hits = []
@@ -191,6 +224,7 @@ def build_recommendation(
     memory_ids: list[str],
     source_doc_ids: list[str],
     data_freshness: list[dict[str, Any]],
+    high_vol_regime: bool = False,
 ) -> dict[str, Any]:
     action = determine_action(row, is_held=False) or "watch"
     conv_score = _conviction_score(row)
@@ -227,6 +261,7 @@ def build_recommendation(
             if "realized_vol_60d" in row and pd.notna(row.get("realized_vol_60d"))
             else None
         ),
+        high_vol_regime=high_vol_regime,
     )
     if thesis is not None:
         # LLM の conviction と規則側の厳しい方を取る。
@@ -287,6 +322,8 @@ def strategist(
     trigger: str = "schedule",
     parent_run_id: int | None = None,
     researcher_qual: list[dict[str, Any]] | None = None,
+    vector_store: VectorStore | None = None,
+    embed: Callable[[str], list[float]] | None = None,
 ) -> JobResult:
     run_id = begin_run(
         state, job_name="strategist", market=market, trigger=trigger, parent_run_id=parent_run_id
@@ -305,6 +342,8 @@ def strategist(
             universe_filter=universe_filter,
             max_per_day=max_per_day,
             researcher_qual=researcher_qual,
+            vector_store=vector_store,
+            embed=embed,
         )
     except Exception as exc:
         finish_run(state, run_id, status="failed", error=exc)
@@ -325,6 +364,8 @@ def _strategist_body(
     universe_filter: UniverseFilter | None,
     max_per_day: int,
     researcher_qual: list[dict[str, Any]] | None,
+    vector_store: VectorStore | None = None,
+    embed: Callable[[str], list[float]] | None = None,
 ) -> JobResult:
     if scores is None:
         scores = warehouse.read_scores_daily(as_of=as_of, market=market)
@@ -384,6 +425,7 @@ def _strategist_body(
     recs: list[dict[str, Any]] = []
     llm_capped = False
     discarded = 0
+    high_vol_regime = _high_vol_regime(warehouse, market=market, as_of=as_of)
 
     def process(ticker: str) -> None:
         nonlocal llm_capped, discarded
@@ -443,6 +485,8 @@ def _strategist_body(
                         as_of=as_of,
                         reasons=reasons,
                         docs=docs,
+                        vector_store=vector_store,
+                        embed=embed if embed is not None else getattr(router, "embed", None),
                     ),
                     hit_rate_prior=prior.hit_rate,
                     n_prior_samples=prior.n_samples,
@@ -476,6 +520,7 @@ def _strategist_body(
                 memory_ids=mem_ids,
                 source_doc_ids=source_ids,
                 data_freshness=freshness,
+                high_vol_regime=high_vol_regime,
             )
             warehouse.insert_recommendation(rec)
             recs.append(rec)

@@ -290,11 +290,17 @@ def job_from_row(row: Any, *, seed: dict[str, Any] | None = None) -> JobRun:
     checkpoint_raw = data.get("checkpoint") or extra.get("checkpoint")
     checkpoint = None
     if isinstance(checkpoint_raw, dict):
+        units = checkpoint_raw.get("completed_units")
+        completed = checkpoint_raw.get("completed")
+        total = checkpoint_raw.get("total")
+        if completed is None and isinstance(units, list):
+            completed = len(units)
+        cursor = checkpoint_raw.get("cursor") or checkpoint_raw.get("next_unit")
         checkpoint = JobCheckpoint(
             phase=checkpoint_raw.get("phase"),
-            cursor=str(checkpoint_raw.get("cursor")) if checkpoint_raw.get("cursor") is not None else None,
-            completed=checkpoint_raw.get("completed"),
-            total=checkpoint_raw.get("total"),
+            cursor=str(cursor) if cursor is not None else None,
+            completed=completed,
+            total=total,
         )
     phases = []
     for item in extra.get("phases") or []:

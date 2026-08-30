@@ -39,6 +39,7 @@ JOB_FN_NAMES = {
     "model_retrain": "model_retrain",
     "garch_refit": "garch_refit",
     "backup": "backup",
+    "backfill": "backfill",
 }
 
 
@@ -80,6 +81,7 @@ def kick_agent_job(
     from services.agent.jobs.collector import collector
     from services.agent.jobs.critic import critic
     from services.agent.jobs.evaluator import evaluator
+    from services.agent.jobs.backfill import backfill
     from services.agent.jobs.backup import daily_backup
     from services.agent.jobs.maintenance import garch_refit, model_retrain, weekly_review
     from services.agent.jobs.researcher import researcher
@@ -103,6 +105,7 @@ def kick_agent_job(
             "model_retrain": model_retrain,
             "garch_refit": garch_refit,
             "backup": daily_backup,
+            "backfill": backfill,
         }
         inner_name = JOB_FN_NAMES.get(job_name)
         if job_name == "backtest":
@@ -126,6 +129,14 @@ def kick_agent_job(
         }
         if inner_name in {"researcher", "strategist", "critic", "evaluator", "weekly_review"}:
             kwargs["router"] = _maybe_router(state, st, wh)
+        if inner_name in {"researcher", "strategist"}:
+            try:
+                kwargs["vector_store"] = get_vector_store(state.settings)
+            except Exception:
+                logger.info("ベクトルストアを初期化できないためキーワード検索のみ使います")
+            router = kwargs.get("router")
+            if router is not None:
+                kwargs["embed"] = getattr(router, "embed", None)
         if inner_name == "analyst":
             kwargs["ranker"] = try_load_ranker(state.settings, market=mkt)
         if inner_name in {"strategist", "evaluator", "weekly_review"}:
@@ -240,11 +251,7 @@ def _publish_finished(
 
 
 def resolve_n_trials(state: AppState, body: BacktestRequest) -> int:
-    if body.n_trials is not None:
-        return int(body.n_trials)
-    counter = getattr(state.duck, "count_backtest_runs", None)
-    n = int(counter(strategy_name=body.strategy_name) or 0) if callable(counter) else 0
-    return max(n, 0) + 1
+    return int(body.n_trials)
 
 
 def _signals_from_warehouse(state: AppState, body: BacktestRequest) -> pd.DataFrame:

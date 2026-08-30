@@ -497,6 +497,20 @@ def no_real_llm_calls(monkeypatch):
 
 同様に、外部HTTPアクセス全般を `responses` / `respx` でブロックする。**テストが実際に J-Quants や EDGAR を叩くと、レート制限を消費し、CI が不安定になる。**
 
+### T-LLM-09: ハイブリッド RAG
+
+埋め込み失敗時はキーワード検索だけに落とす。`as_of` より後の資料は検索結果に出ない。
+
+```python
+def test_retrieve_falls_back_when_embed_fails():
+    """ベクトル側が落ちてもキーワード検索の結果を返すこと。"""
+
+def test_retrieve_pit_excludes_future_filings():
+    """当時知り得なかった資料を検索しないこと。"""
+```
+
+回帰は `tests/unit/llm/test_rag.py`。
+
 ## 7. セキュリティテスト
 
 ### T-SEC-01: LLM プロンプトへの機密情報の混入
@@ -744,6 +758,10 @@ def test_job_resumes_from_checkpoint():
     # 完了済みの3単位分は再取得しない
     assert count_api_calls() - api_calls_before < total_units
 ```
+
+### T-INT-02b: パイプライン進捗の SSE
+
+`run_pipeline` と `with_checkpoint` は `job_progress` / `job_finished` を EventBus に出す。回帰は `tests/unit/agent/test_progress.py` と `tests/api/test_agent_events.py`。
 
 ### T-MEM-01: 教訓の効果測定
 
