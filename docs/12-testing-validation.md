@@ -745,6 +745,10 @@ def test_job_resumes_from_checkpoint():
     assert count_api_calls() - api_calls_before < total_units
 ```
 
+### T-INT-02b: パイプライン進捗の SSE
+
+`run_pipeline` と `with_checkpoint` は `job_progress` / `job_finished` を EventBus に出す。回帰は `tests/unit/agent/test_progress.py` と `tests/api/test_agent_events.py`。
+
 ### T-INT-03: 冪等性
 
 ```python
