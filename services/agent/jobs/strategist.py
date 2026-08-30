@@ -76,6 +76,34 @@ def _interval_from_row(row: pd.Series) -> tuple[float | None, float, float]:
     return pred, center - FALLBACK_CI_HALF_WIDTH, center + FALLBACK_CI_HALF_WIDTH
 
 
+def _high_vol_regime(warehouse: WarehouseRepo, *, market: str, as_of: date) -> bool:
+    """ベンチマーク水準から高ボラレジームかを判定する。失敗しても推奨は出す。"""
+    from packages.core.models.regime import vol_regime_from_levels
+
+    series_id = "NIKKEI225" if market == "JP" else "SP500"
+    getter = getattr(warehouse, "get_macro_as_of", None)
+    if not callable(getter):
+        return False
+    try:
+        rows = getter(series_id, as_of=as_of, limit=1300) or []
+    except Exception:
+        return False
+    if not rows:
+        return False
+    frame = pd.DataFrame(rows)
+    date_col = next(
+        (c for c in ("observation_date", "date", "trade_date") if c in frame.columns),
+        None,
+    )
+    if date_col is None or "value" not in frame.columns:
+        return False
+    levels = pd.Series(
+        pd.to_numeric(frame["value"], errors="coerce").to_numpy(),
+        index=pd.to_datetime(frame[date_col], errors="coerce"),
+    ).dropna().sort_index()
+    return vol_regime_from_levels(levels).high_vol
+
+
 def _force_conviction(raw: str, n_prior: int) -> str:
     if n_prior < MIN_PRIOR_SAMPLES:
         return "low"
@@ -191,6 +219,7 @@ def build_recommendation(
     memory_ids: list[str],
     source_doc_ids: list[str],
     data_freshness: list[dict[str, Any]],
+    high_vol_regime: bool = False,
 ) -> dict[str, Any]:
     action = determine_action(row, is_held=False) or "watch"
     conv_score = _conviction_score(row)
@@ -227,6 +256,7 @@ def build_recommendation(
             if "realized_vol_60d" in row and pd.notna(row.get("realized_vol_60d"))
             else None
         ),
+        high_vol_regime=high_vol_regime,
     )
     if thesis is not None:
         # LLM の conviction と規則側の厳しい方を取る。
@@ -384,6 +414,7 @@ def _strategist_body(
     recs: list[dict[str, Any]] = []
     llm_capped = False
     discarded = 0
+    high_vol_regime = _high_vol_regime(warehouse, market=market, as_of=as_of)
 
     def process(ticker: str) -> None:
         nonlocal llm_capped, discarded
@@ -476,6 +507,7 @@ def _strategist_body(
                 memory_ids=mem_ids,
                 source_doc_ids=source_ids,
                 data_freshness=freshness,
+                high_vol_regime=high_vol_regime,
             )
             warehouse.insert_recommendation(rec)
             recs.append(rec)

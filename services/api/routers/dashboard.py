@@ -23,6 +23,11 @@ from packages.schemas.dashboard import (
     VolRegime,
     WatchlistFiling,
 )
+from packages.core.models.regime import (
+    correlation_regime,
+    model_degradation,
+    vol_regime_from_levels,
+)
 from packages.schemas.recommendations import RecommendationSummary
 from services.api.deps import AppState, User, get_app_state, require_user
 from services.api.envelope import wrap
@@ -43,6 +48,91 @@ def _filed_date(value: object) -> dt.date | None:
     if parsed is not None:
         return parsed.date()
     return as_date(value)
+
+
+def _macro_levels(state: AppState, series_id: str, as_of: dt.date, limit: int = 1300):
+    import pandas as pd
+
+    rows = state.duck.get_macro_as_of(series_id, as_of=as_of, limit=limit)
+    if not rows:
+        return None
+    frame = pd.DataFrame(rows)
+    date_col = "observation_date" if "observation_date" in frame.columns else "date"
+    if date_col not in frame.columns or "value" not in frame.columns:
+        return None
+    series = pd.Series(
+        pd.to_numeric(frame["value"], errors="coerce").to_numpy(),
+        index=pd.to_datetime(frame[date_col], errors="coerce"),
+    )
+    return series.dropna().sort_index()
+
+
+def _price_panel(state: AppState, market: str, as_of: dt.date):
+    start = as_of - dt.timedelta(days=120)
+    try:
+        frame = state.duck.read_prices_daily(market=market, start=start, end=as_of)
+    except Exception:
+        return None
+    if frame is None or getattr(frame, "empty", True):
+        return None
+    if len(frame) > 80_000:
+        tickers = list(frame["ticker"].dropna().unique()[:40])
+        frame = frame[frame["ticker"].isin(tickers)]
+    return frame
+
+
+def _daily_ics(state: AppState, market: str):
+    import pandas as pd
+
+    getter = getattr(state.duck, "get_model_runs", None)
+    if not callable(getter):
+        return None
+    try:
+        runs = getter(limit=1) or []
+    except Exception:
+        return None
+    if not runs:
+        return None
+    row = runs[0] if isinstance(runs[0], dict) else None
+    if row is None:
+        ics = getattr(runs[0], "fold_rank_ic", None)
+    else:
+        ics = row.get("fold_rank_ic")
+    if not ics:
+        return None
+    return pd.Series(pd.to_numeric(pd.Series(ics), errors="coerce").dropna())
+
+
+def _live_regimes(
+    state: AppState, *, market: str, as_of: dt.date
+) -> tuple[VolRegime | None, CorrelationRegime | None, ModelHealthBrief | None]:
+    series_id = "NIKKEI225" if market == "JP" else "SP500"
+    levels = _macro_levels(state, series_id, as_of)
+    vol = vol_regime_from_levels(levels) if levels is not None else None
+    corr = correlation_regime(_price_panel(state, market, as_of))
+    ics = _daily_ics(state, market)
+    model = model_degradation(ics) if ics is not None else None
+
+    vol_out = None
+    if vol is not None and vol.level != "unknown":
+        vol_out = VolRegime(
+            level=vol.level,
+            percentile=vol.percentile,
+            message_ja=vol.message_ja,
+        )
+    corr_out = CorrelationRegime(
+        avg_pairwise_corr_60d=corr.avg_pairwise_corr_60d,
+        level=corr.level,
+    )
+    health = None
+    if model is not None:
+        health = ModelHealthBrief(
+            rank_ic_20d=model.rank_ic_20d,
+            rank_ic_percentile_1y=model.rank_ic_percentile_1y,
+            status="degraded" if model.degraded else "ok",
+            coverage_note_ja=model.message_ja,
+        )
+    return vol_out, corr_out, health
 
 
 def _dashboard_from_seed(state: AppState, *, market: str, as_of: dt.date) -> Dashboard:
@@ -242,9 +332,12 @@ def _dashboard_from_warehouse(state: AppState, *, market: str, as_of: dt.date) -
 
     series_id = "NIKKEI225" if market == "JP" else "SP500"
     bench_rows = state.duck.get_macro_as_of(series_id, as_of=as_of, limit=2)
+    vol_regime, corr_regime, model_health = _live_regimes(
+        state, market=market, as_of=as_of
+    )
     market_summary = None
-    if bench_rows:
-        latest = bench_rows[0]
+    if bench_rows or vol_regime or corr_regime.avg_pairwise_corr_60d is not None:
+        latest = bench_rows[0] if bench_rows else {}
         prev = bench_rows[1] if len(bench_rows) > 1 else None
         close = latest.get("value")
         change = None
@@ -258,6 +351,10 @@ def _dashboard_from_warehouse(state: AppState, *, market: str, as_of: dt.date) -
                 change_pct=change,
                 as_of=as_date(latest.get("observation_date")),
             )
+            if bench_rows
+            else None,
+            vol_regime=vol_regime,
+            correlation_regime=corr_regime,
         )
 
     fx = None
@@ -343,6 +440,7 @@ def _dashboard_from_warehouse(state: AppState, *, market: str, as_of: dt.date) -
         new_filings_count=state.duck.count_documents(market=market, since=start, until=end)
         or len(watch_filings),
         watchlist_filings=watch_filings,
+        model_health=model_health,
         alerts=alerts,
         job_status=job_status,
     )
