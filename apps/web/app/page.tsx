@@ -207,10 +207,10 @@ export default function DashboardPage() {
               </div>
 
               <div className="grid gap-4 desktop:grid-cols-3">
-                {/* 3. 本日の注目 */}
+                {/* 3. 今週の注目 */}
                 <div className="desktop:col-span-2 space-y-4">
                   <SectionCard
-                    title="本日の注目"
+                    title="今週の注目"
                     subtitle="推奨は投資判断の材料です。売買の指示ではありません"
                     actions={
                       <Link href="/recommendations" className="btn btn-ghost">
