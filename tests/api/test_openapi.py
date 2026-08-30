@@ -70,6 +70,7 @@ REQUIRED_PATHS = {
     "/api/v1/alerts/read-all",
     "/api/v1/system/health",
     "/api/v1/system/freshness",
+    "/api/v1/system/backup",
 }
 
 

@@ -46,6 +46,8 @@ scheduler.add_job(run_model_retrain, "cron", day="1-7", day_of_week="sat",
 # GARCH 再推定（月曜 JST 07:00）
 scheduler.add_job(refit_garch, "cron", day_of_week="mon", hour=7, minute=0,
                   id="garch_refit")
+# 日次バックアップ（JST 03:00）。方式は 11-security-ops.md §4
+scheduler.add_job(run_daily_backup, "cron", hour=3, minute=0, id="daily_backup")
 # 中断ジョブの再開チェック（15分ごと）
 scheduler.add_job(resume_interrupted_jobs, "interval", minutes=15,
                   id="resume_check")
@@ -65,7 +67,7 @@ scheduler.add_job(resume_interrupted_jobs, "interval", minutes=15,
 
 DuckDB は単一ライタのため、**スケジュールは API プロセスに内蔵する**（`services/api/main.py` の `_start_agent_scheduler`）。`ai-stock-agent.service` は API が止まっているときのフォールバックで、DuckDB が使用中なら終了コード 0 で抜ける（`Restart=on-failure`）。
 
-週次深掘り（`weekly_review`）は `deep` 層で直近の推奨と実績をレビューし、教訓候補を `agent_memory` に足す。キーが無ければ集計だけ残して `partial`。月次 `model_retrain` は `train_ranker` で `data/models/ranker_{market}_h20.pkl` を書き、サンプル不足なら成果物を残さない。月曜の `garch_refit` は対象銘柄の GARCH を再推定し、`features_daily.garch_vol_*` を更新する。
+週次深掘り（`weekly_review`）は `deep` 層で直近の推奨と実績をレビューし、教訓候補を `agent_memory` に足す。キーが無ければ集計だけ残して `partial`。月次 `model_retrain` は `train_ranker` で `data/models/ranker_{market}_h20.pkl` を書き、サンプル不足なら成果物を残さない。月曜の `garch_refit` は対象銘柄の GARCH を再推定し、`features_daily.garch_vol_*` を更新する。日次 `daily_backup`（JST 03:00）は SQLite backup API と DuckDB `EXPORT DATABASE` で世代を残す。手動起動は `POST /api/v1/system/backup`（[09-api-spec.md](09-api-spec.md) §2.10、[11-security-ops.md](11-security-ops.md) §4）。
 
 ## 3. Collector
 
@@ -624,4 +626,6 @@ def resume_interrupted_jobs() -> None:
 - スコアリング: [05-scoring-screening.md](05-scoring-screening.md)
 - プロンプト: [07-llm-rag.md](07-llm-rag.md)
 - 再起動対応: [15-windows-runtime.md](15-windows-runtime.md) §7
+- バックアップ: [11-security-ops.md](11-security-ops.md) §4
+- 手動バックアップ API: [09-api-spec.md](09-api-spec.md) §2.10
 - 評価ループの実行手順: `.cursor/skills/agent-eval-loop/SKILL.md`

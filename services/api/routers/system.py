@@ -8,12 +8,13 @@ import sys
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 
 from packages.core.storage import DEFAULT_SETTINGS, SETTING_TYPES
 from packages.schemas.common import Envelope, OkResponse
 from packages.schemas.system import (
     AlertItemList,
+    BackupResponse,
     DiskUsage,
     FreshnessResponse,
     HealthComponent,
@@ -28,6 +29,7 @@ from services.api.deps import AppState, User, get_app_state, require_user, spent
 from services.api.envelope import wrap
 from services.api.errors import not_found, validation_error
 from services.api.mapping import alert_from_row, watchlist_from_row
+from services.api.runtime import kick_agent_job
 from services.api.util import utc_now
 
 router = APIRouter(tags=["system"])
@@ -218,3 +220,43 @@ def system_freshness(
     state: AppState = Depends(get_app_state),
 ) -> Envelope[FreshnessResponse]:
     return wrap(state, FreshnessResponse(sources=state.freshness()))
+
+
+@router.post("/system/backup", response_model=Envelope[BackupResponse])
+def run_backup(
+    background: BackgroundTasks,
+    _user: User = Depends(require_user),
+    state: AppState = Depends(get_app_state),
+) -> Envelope[BackupResponse]:
+    """手動バックアップ。実装は `services/agent/jobs/backup.py`。画面仕様の Data source と一致させる。"""
+    run_id = state.sqlite.start_job_run("backup", trigger="manual", market="JP")
+    state.bus.publish_nowait(
+        "job_progress",
+        {
+            "job_run_id": run_id,
+            "job_name": "backup",
+            "phase": "queued",
+            "completed": 0,
+            "total": 1,
+            "eta_sec": 1,
+        },
+    )
+    background.add_task(
+        kick_agent_job,
+        state,
+        job_name="backup",
+        run_id=run_id,
+        market="JP",
+    )
+    dest = getattr(state.settings, "backup_dir", None)
+    return wrap(
+        state,
+        BackupResponse(
+            ok=True,
+            job_name="backup",
+            job_run_id=run_id,
+            status="running",
+            backup_dir=str(dest) if dest is not None else None,
+            message_ja="バックアップを開始しました。",
+        ),
+    )

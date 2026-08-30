@@ -45,6 +45,7 @@ KNOWN_JOBS = {
     "weekly_review",
     "model_retrain",
     "garch_refit",
+    "backup",
     "backtest",
 }
 

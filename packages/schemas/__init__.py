@@ -142,6 +142,7 @@ from packages.schemas.stocks import (
 from packages.schemas.system import (
     AlertItem,
     AlertItemList,
+    BackupResponse,
     FreshnessResponse,
     LivenessResponse,
     SettingsPatch,
@@ -165,6 +166,7 @@ __all__ = [
     "AlertEvent",
     "AlertItem",
     "AlertItemList",
+    "BackupResponse",
     "BacktestList",
     "BacktestRequest",
     "BacktestRun",
