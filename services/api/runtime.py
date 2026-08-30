@@ -240,11 +240,7 @@ def _publish_finished(
 
 
 def resolve_n_trials(state: AppState, body: BacktestRequest) -> int:
-    if body.n_trials is not None:
-        return int(body.n_trials)
-    counter = getattr(state.duck, "count_backtest_runs", None)
-    n = int(counter(strategy_name=body.strategy_name) or 0) if callable(counter) else 0
-    return max(n, 0) + 1
+    return int(body.n_trials)
 
 
 def _signals_from_warehouse(state: AppState, body: BacktestRequest) -> pd.DataFrame:
