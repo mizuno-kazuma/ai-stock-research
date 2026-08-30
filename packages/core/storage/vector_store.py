@@ -15,6 +15,7 @@ import logging
 import math
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -248,11 +249,15 @@ def get_vector_store(
     （検索機能は劣化するが API は起動できる）。
     """
     s = settings or get_settings()
-    if s.vector_store_backend == "memory":
+    backend = str(getattr(s, "vector_store_backend", "lancedb") or "lancedb")
+    if backend == "memory":
         return InMemoryVectorStore()
+    path = getattr(s, "lancedb_path", None) or getattr(s, "vector_dir", None)
+    if path is None:
+        path = Path(getattr(s, "data_dir", Path("data"))) / "vectors"
     try:
-        return LanceDBVectorStore(s.lancedb_path)
-    except RuntimeError:
+        return LanceDBVectorStore(path)
+    except Exception:
         if not allow_fallback:
             raise
         logger.warning(
@@ -266,13 +271,57 @@ def _matches(chunk: DocChunk, filters: dict[str, Any] | None) -> bool:
     if not filters:
         return True
     for key, expected in filters.items():
+        if expected is None:
+            continue
         actual = getattr(chunk, key, None)
+        if isinstance(expected, dict):
+            if "$lte" in expected and not _cmp_lte(actual, expected["$lte"]):
+                return False
+            if "$gte" in expected and not _cmp_gte(actual, expected["$gte"]):
+                return False
+            if "$in" in expected and actual not in expected["$in"]:
+                return False
+            continue
         if isinstance(expected, (list, tuple, set)):
             if actual not in expected:
                 return False
         elif actual != expected:
             return False
     return True
+
+
+def _as_date(value: Any) -> date | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value)
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        return None
+
+
+def _cmp_lte(actual: Any, limit: Any) -> bool:
+    if actual is None:
+        return False
+    a = _as_date(actual)
+    b = _as_date(limit)
+    if a is not None and b is not None:
+        return a <= b
+    return actual <= limit
+
+
+def _cmp_gte(actual: Any, limit: Any) -> bool:
+    if actual is None:
+        return False
+    a = _as_date(actual)
+    b = _as_date(limit)
+    if a is not None and b is not None:
+        return a >= b
+    return actual >= limit
 
 
 def _cosine(a: Sequence[float], b: Sequence[float]) -> float:
@@ -305,15 +354,30 @@ def _lance_where(filters: dict[str, Any] | None) -> str | None:
         return None
     clauses: list[str] = []
     for key, value in filters.items():
+        if value is None:
+            continue
+        if isinstance(value, dict):
+            if "$lte" in value:
+                clauses.append(f"{key} <= {_lance_literal(value['$lte'])}")
+            if "$gte" in value:
+                clauses.append(f"{key} >= {_lance_literal(value['$gte'])}")
+            if "$in" in value:
+                quoted = ", ".join(_lance_literal(v) for v in value["$in"])
+                clauses.append(f"{key} IN ({quoted})")
+            continue
         if isinstance(value, (list, tuple, set)):
             quoted = ", ".join(_lance_literal(v) for v in value)
             clauses.append(f"{key} IN ({quoted})")
         else:
             clauses.append(f"{key} = {_lance_literal(value)}")
-    return " AND ".join(clauses)
+    return " AND ".join(clauses) if clauses else None
 
 
 def _lance_literal(value: Any) -> str:
+    if isinstance(value, datetime):
+        return f"'{value.isoformat()}'"
+    if isinstance(value, date):
+        return f"'{value.isoformat()}'"
     if isinstance(value, str):
         escaped = value.replace("'", "''")
         return f"'{escaped}'"

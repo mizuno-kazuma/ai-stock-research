@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Callable
 from datetime import date
 from typing import Any
 
@@ -22,7 +23,7 @@ from packages.core.factors.screening import (
     conviction_from_score,
     determine_action,
 )
-from packages.core.interfaces.storage import JobRunRepo, MemoryRepo, SearchHit, WarehouseRepo
+from packages.core.interfaces.storage import JobRunRepo, MemoryRepo, SearchHit, VectorStore, WarehouseRepo
 from packages.core.llm.errors import (
     CostCapExceeded,
     InvariantViolationError,
@@ -165,8 +166,10 @@ def _retrieve_chunks(
     as_of: date,
     reasons: list[str],
     docs: pd.DataFrame,
+    vector_store: VectorStore | None = None,
+    embed: Callable[[str], list[float]] | None = None,
 ) -> list[SearchHit]:
-    """RAG。キーワード検索が空なら直近開示の本文抜粋に落とす。"""
+    """ハイブリッド RAG。両方空なら直近開示の本文抜粋に落とす。"""
     from packages.core.llm.rag import retrieve
 
     query = " ".join(str(c) for c in reasons) + " リスク 懸念 不確実性"
@@ -180,6 +183,8 @@ def _retrieve_chunks(
             k=8,
             as_of=as_of,
             keyword_search=keyword,
+            vector_store=vector_store,
+            embed=embed,
         )
     except Exception:
         hits = []
@@ -317,6 +322,8 @@ def strategist(
     trigger: str = "schedule",
     parent_run_id: int | None = None,
     researcher_qual: list[dict[str, Any]] | None = None,
+    vector_store: VectorStore | None = None,
+    embed: Callable[[str], list[float]] | None = None,
 ) -> JobResult:
     run_id = begin_run(
         state, job_name="strategist", market=market, trigger=trigger, parent_run_id=parent_run_id
@@ -335,6 +342,8 @@ def strategist(
             universe_filter=universe_filter,
             max_per_day=max_per_day,
             researcher_qual=researcher_qual,
+            vector_store=vector_store,
+            embed=embed,
         )
     except Exception as exc:
         finish_run(state, run_id, status="failed", error=exc)
@@ -355,6 +364,8 @@ def _strategist_body(
     universe_filter: UniverseFilter | None,
     max_per_day: int,
     researcher_qual: list[dict[str, Any]] | None,
+    vector_store: VectorStore | None = None,
+    embed: Callable[[str], list[float]] | None = None,
 ) -> JobResult:
     if scores is None:
         scores = warehouse.read_scores_daily(as_of=as_of, market=market)
@@ -474,6 +485,8 @@ def _strategist_body(
                         as_of=as_of,
                         reasons=reasons,
                         docs=docs,
+                        vector_store=vector_store,
+                        embed=embed if embed is not None else getattr(router, "embed", None),
                     ),
                     hit_rate_prior=prior.hit_rate,
                     n_prior_samples=prior.n_samples,

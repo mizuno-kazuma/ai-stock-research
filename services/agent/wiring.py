@@ -91,9 +91,19 @@ def pipeline_dependencies(
     from packages.core.config import get_settings
 
     cfg = settings or get_settings()
+    from packages.core.storage import get_vector_store
+
+    router = build_llm_router(state, warehouse, cfg)
+    try:
+        vector_store = get_vector_store(cfg if hasattr(cfg, "vector_dir") else None)
+    except Exception:
+        logger.warning("ベクトルストアを初期化できませんでした", exc_info=True)
+        vector_store = None
     return {
-        "router": build_llm_router(state, warehouse, cfg),
+        "router": router,
         "ranker": try_load_ranker(cfg, market=market),
         "memory": state,
         "jquants_plan": str(getattr(cfg, "jquants_plan", "free") or "free"),
+        "vector_store": vector_store,
+        "embed": getattr(router, "embed", None) if router is not None else None,
     }

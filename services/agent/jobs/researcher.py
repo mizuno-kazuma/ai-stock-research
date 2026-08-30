@@ -5,16 +5,18 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from collections.abc import Callable
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
-from packages.core.interfaces.storage import JobRunRepo, WarehouseRepo
+from packages.core.interfaces.storage import JobRunRepo, VectorStore, WarehouseRepo
 from packages.core.llm.cache import input_hash, prompt_hash
 from packages.core.llm.errors import CostCapExceeded, KillSwitchActive
 from packages.core.llm.prompts import render_prompt
+from packages.core.llm.rag import index_document
 from packages.core.llm.router import LLMRouter
 from packages.core.llm.schemas import DocSummaryOutput
 from services.agent.checkpoint import with_checkpoint
@@ -135,13 +137,24 @@ def researcher(
     tickers: list[str] | None = None,
     trigger: str = "schedule",
     parent_run_id: int | None = None,
+    vector_store: VectorStore | None = None,
+    embed: Callable[[str], list[float]] | None = None,
 ) -> JobResult:
     run_id = begin_run(
         state, job_name="researcher", market=market, trigger=trigger, parent_run_id=parent_run_id
     )
     require_not_failed(state, job_name="analyst", market=market, on_date=as_of, required=False)
     overall = "success"
-    metrics: dict[str, Any] = {"llm_capped": False, "n_summaries": 0}
+    metrics: dict[str, Any] = {"llm_capped": False, "n_summaries": 0, "n_chunks": 0}
+    embed_fn = embed
+    if embed_fn is None and router is not None and callable(getattr(router, "embed", None)):
+        embed_fn = router.embed
+    embedding_model = "unknown"
+    if router is not None:
+        try:
+            embedding_model = router.config.embeddings.models[router.config.embeddings.primary].litellm_model
+        except Exception:
+            embedding_model = "unknown"
     qual_rows: list[dict[str, Any]] = []
 
     docs = warehouse.read_documents(
@@ -233,6 +246,17 @@ def researcher(
             except Exception:
                 overall = "partial"
                 continue
+        if vector_store is not None and embed_fn is not None:
+            for _, row in subset.iterrows():
+                indexed = _index_row(
+                    warehouse,
+                    row,
+                    market=market,
+                    vector_store=vector_store,
+                    embed=embed_fn,
+                    embedding_model=embedding_model,
+                )
+                metrics["n_chunks"] += indexed
         agg = aggregate_qual_score(summaries, as_of)
         qual_rows.append({"ticker": ticker, **agg})
 
@@ -262,3 +286,47 @@ def researcher(
         metrics=metrics,
         recs=qual_rows,
     )
+
+
+def _index_row(
+    warehouse: WarehouseRepo,
+    row: pd.Series,
+    *,
+    market: str,
+    vector_store: VectorStore,
+    embed: Callable[[str], list[float]],
+    embedding_model: str,
+) -> int:
+    doc_id = str(row.get("doc_id") or "")
+    if not doc_id:
+        return 0
+    getter = getattr(warehouse, "get_document_text", None)
+    text = ""
+    if callable(getter):
+        try:
+            text = str(getter(doc_id) or "")
+        except Exception:
+            text = ""
+    if len(text.strip()) < 20:
+        return 0
+    filed = row.get("filed_at")
+    filed_at = filed if isinstance(filed, datetime) else None
+    if filed_at is None and hasattr(filed, "date"):
+        try:
+            filed_at = datetime.combine(filed.date(), datetime.min.time())
+        except Exception:
+            filed_at = None
+    try:
+        return index_document(
+            doc_id=doc_id,
+            text=text,
+            market=str(row.get("market") or market),
+            ticker=str(row.get("ticker") or "") or None,
+            doc_type=str(row.get("doc_type") or "") or None,
+            filed_at=filed_at,
+            embed=embed,
+            vector_store=vector_store,
+            embedding_model=embedding_model,
+        )
+    except Exception:
+        return 0
