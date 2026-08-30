@@ -126,6 +126,14 @@ def kick_agent_job(
         }
         if inner_name in {"researcher", "strategist", "critic", "evaluator", "weekly_review"}:
             kwargs["router"] = _maybe_router(state, st, wh)
+        if inner_name in {"researcher", "strategist"}:
+            try:
+                kwargs["vector_store"] = get_vector_store(state.settings)
+            except Exception:
+                logger.info("ベクトルストアを初期化できないためキーワード検索のみ使います")
+            router = kwargs.get("router")
+            if router is not None:
+                kwargs["embed"] = getattr(router, "embed", None)
         if inner_name == "analyst":
             kwargs["ranker"] = try_load_ranker(state.settings, market=mkt)
         if inner_name in {"strategist", "evaluator", "weekly_review"}:

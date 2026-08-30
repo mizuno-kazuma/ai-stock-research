@@ -114,6 +114,11 @@ def _run_pipeline_jobs(
     )
     jobs["analyst"] = ana
 
+    vector_store = kwargs.get("vector_store")
+    embed = kwargs.get("embed")
+    if embed is None and router is not None:
+        embed = getattr(router, "embed", None)
+
     res = researcher(
         market,
         as_of,
@@ -123,6 +128,8 @@ def _run_pipeline_jobs(
         tickers=kwargs.get("tickers"),
         trigger=trigger,
         parent_run_id=pipeline_id,
+        vector_store=vector_store,
+        embed=embed,
     )
     jobs["researcher"] = res
 
@@ -138,6 +145,8 @@ def _run_pipeline_jobs(
         researcher_qual=res.recs,
         trigger=trigger,
         parent_run_id=pipeline_id,
+        vector_store=vector_store,
+        embed=embed,
     )
     jobs["strategist"] = strat
 
