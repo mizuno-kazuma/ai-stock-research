@@ -32,6 +32,7 @@ from packages.core.connectors.paths import (
 )
 from packages.core.connectors.quality import (
     QualityResult,
+    persist_price_quality,
     validate_price_frame,
     validate_price_row,
 )
@@ -69,6 +70,7 @@ __all__ = [
     "jquants_plan_params",
     "load_sources_config",
     "mask_url",
+    "persist_price_quality",
     "raw_path",
     "safe_component",
     "tag_table",

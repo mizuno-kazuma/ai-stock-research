@@ -7,11 +7,17 @@ docs/02-data-ingestion.md §3.3。yfinance は静かに壊れるため必須で�
 
 from __future__ import annotations
 
+import datetime as dt
+import logging
 import math
 from dataclasses import dataclass, field
 from typing import Any
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+GAP_REASON_QUALITY_REJECT = "quality_reject"
 
 EXTREME_MOVE_THRESHOLD = 0.40
 # 日本株の価格が3桁小さい等の通貨混在を検出する下限（円建てで 10 円未満は異常）。
@@ -143,3 +149,113 @@ def validate_price_frame(
     accepted = work.loc[~mask].drop(columns=["reject_reason"])
     rejected = work.loc[mask]
     return accepted.reset_index(drop=True), rejected.reset_index(drop=True)
+
+
+def _as_date(value: Any) -> dt.date | None:
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, dt.datetime):
+        return value.date()
+    if isinstance(value, dt.date):
+        return value
+    text = str(value)
+    if len(text) < 10:
+        return None
+    try:
+        return dt.date.fromisoformat(text[:10])
+    except ValueError:
+        return None
+
+
+def _flag_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    try:
+        if pd.isna(value):
+            return []
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, str):
+        return [value] if value else []
+    return [str(item) for item in list(value) if item]
+
+
+def persist_price_quality(
+    warehouse: Any,
+    *,
+    source: str,
+    table_name: str = "prices_daily",
+    accepted: pd.DataFrame | None = None,
+    rejected: pd.DataFrame | None = None,
+) -> dict[str, int]:
+    """棄却行を data_gaps、フラグを data_quality_flags に書く（docs/02 §3.3）。"""
+    counts = {"gaps": 0, "flags": 0}
+    if warehouse is None:
+        return counts
+    record_gap = getattr(warehouse, "record_data_gap", None)
+    record_flag = getattr(warehouse, "record_data_quality_flag", None)
+    if not callable(record_gap) or not callable(record_flag):
+        return counts
+
+    rejected_df = rejected
+    if rejected_df is None and accepted is not None:
+        rejected_df = accepted.attrs.get("rejected")
+    if rejected_df is None:
+        rejected_df = pd.DataFrame()
+    if not isinstance(rejected_df, pd.DataFrame):
+        rejected_df = pd.DataFrame()
+
+    for record in rejected_df.to_dict("records"):
+        ticker = str(record.get("ticker") or "")
+        day = _as_date(record.get("trade_date"))
+        if not ticker or day is None:
+            continue
+        flags = _flag_list(record.get("quality_flags"))
+        code = flags[0] if flags else "QUALITY_REJECT"
+        detail = str(record.get("reject_reason") or code)
+        try:
+            record_gap(
+                source=source,
+                entity=ticker,
+                gap_start=day,
+                gap_end=day,
+                reason=GAP_REASON_QUALITY_REJECT,
+            )
+            counts["gaps"] += 1
+            record_flag(
+                table_name=table_name,
+                entity=ticker,
+                as_of=day,
+                flag_code=code,
+                detail=detail,
+            )
+            counts["flags"] += 1
+        except Exception:
+            logger.exception("品質棄却の記録に失敗しました ticker=%s date=%s", ticker, day)
+
+    if accepted is None or accepted.empty:
+        return counts
+    for record in accepted.to_dict("records"):
+        ticker = str(record.get("ticker") or "")
+        day = _as_date(record.get("trade_date"))
+        flags = _flag_list(record.get("quality_flags"))
+        if not ticker or day is None or not flags:
+            continue
+        for code in flags:
+            try:
+                record_flag(
+                    table_name=table_name,
+                    entity=ticker,
+                    as_of=day,
+                    flag_code=code,
+                    detail=code,
+                )
+                counts["flags"] += 1
+            except Exception:
+                logger.exception("品質フラグの記録に失敗しました ticker=%s date=%s", ticker, day)
+    return counts

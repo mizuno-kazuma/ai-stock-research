@@ -272,6 +272,17 @@ class HttpConnector(Connector):
     # ------------------------------------------------------------------
     def upsert(self, df: pd.DataFrame) -> int:
         """既定実装。`target_table` に応じた warehouse のメソッドへ委譲する。"""
+        table = str(df.attrs.get("table", ""))
+        if table in {"prices_daily", "prices_live"}:
+            from packages.core.connectors.quality import persist_price_quality
+
+            persist_price_quality(
+                self.warehouse,
+                source=getattr(self, "source", "") or "",
+                table_name=table or "prices_daily",
+                accepted=df,
+                rejected=df.attrs.get("rejected"),
+            )
         if df.empty:
             return 0
         table = str(df.attrs.get("table", ""))
