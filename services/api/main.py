@@ -18,7 +18,7 @@ from pydantic import ValidationError
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from packages.core.config import Settings, get_settings
-from packages.core.storage import DuckDBRepo, SQLiteRepo
+from packages.core.storage import DuckDBRepo, SQLiteRepo, should_load_seed_payload
 from packages.schemas.common import Envelope
 from packages.schemas.system import LivenessResponse
 from services.api.deps import AppState, User, get_app_state, require_user
@@ -52,7 +52,7 @@ def _open_duck(settings: Settings) -> DuckDBRepo:
 
 
 def _load_payload(sqlite: SQLiteRepo) -> dict:
-    if not sqlite.get_setting("seed.is_seed_data", False):
+    if not should_load_seed_payload(sqlite):
         return {}
     try:
         from services.api.seed import load_sample

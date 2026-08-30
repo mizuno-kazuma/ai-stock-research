@@ -188,6 +188,15 @@ def collector(
         "n_success": sum(1 for v in results.values() if v.status == "success"),
         "n_failed": sum(1 for v in results.values() if v.status == "failed"),
     }
+    prices_step = results.get("prices")
+    if prices_step is not None and prices_step.status == "success":
+        price_metrics = prices_step.metrics or {}
+        n_rows = int(price_metrics.get("rows") or 0)
+        if n_rows > 0 and not price_metrics.get("skipped"):
+            from packages.core.storage import mark_live_ingest
+
+            if mark_live_ingest(state, rows=n_rows):
+                metrics["cleared_seed_data"] = True
     finish_run(state, run_id, status=overall, metrics=metrics)
     return JobResult(
         job_name="collector",
