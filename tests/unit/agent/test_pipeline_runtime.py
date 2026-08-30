@@ -7,9 +7,10 @@ from datetime import UTC, date, datetime, timedelta
 from unittest.mock import patch
 
 from packages.core.storage import SQLiteRepo
-from services.agent.jobs.collector import coverage_lookback_days
+from services.agent.checkpoint import with_checkpoint
+from services.agent.jobs.collector import collector, coverage_lookback_days
 from services.agent.main import _is_process_alive, _resume_interrupted_jobs
-from tests.fakes import FakeStateRepo
+from tests.fakes import FakeStateRepo, FakeWarehouse
 
 
 def test_coverage_lookback_shrinks_when_warehouse_is_current() -> None:
@@ -93,6 +94,88 @@ def test_select_memory_filters_by_scope() -> None:
     ids = {m.memory_id for m in picked}
     assert "M1" in ids
     assert "M2" not in ids
+
+
+def test_job_resumes_from_inherited_checkpoint() -> None:
+    """T-INT-02: interrupted の completed_units を次の実行が引き継ぐ。"""
+    state = FakeStateRepo()
+    first = state.create_job_run(job_name="researcher", market="JP")
+    state.save_checkpoint(
+        first,
+        {
+            "job_name": "researcher",
+            "phase": "researcher",
+            "completed_units": ["7203", "6758"],
+            "next_unit": "9984",
+            "metrics": {},
+        },
+    )
+    state.record_job_run(first, status="interrupted", error_type="interrupted")
+
+    seen: list[str] = []
+    second = state.create_job_run(job_name="researcher", market="JP")
+    with_checkpoint(
+        state,
+        second,
+        job_name="researcher",
+        phase="researcher",
+        units=["7203", "6758", "9984"],
+        fn=seen.append,
+    )
+    assert seen == ["9984"]
+    cp = state.load_checkpoint(second)
+    assert cp is not None
+    assert cp["completed_units"] == ["7203", "6758", "9984"]
+
+
+def test_collector_skips_completed_steps_after_interrupt() -> None:
+    state = FakeStateRepo()
+    first = state.create_job_run(job_name="collector", market="JP")
+    state.save_checkpoint(
+        first,
+        {
+            "job_name": "collector",
+            "phase": "collector.prices",
+            "completed_units": ["securities_master", "prices"],
+            "next_unit": "prices_live",
+            "metrics": {},
+        },
+    )
+    state.record_job_run(first, status="interrupted", error_type="interrupted")
+
+    called: list[str] = []
+
+    def make(name: str):
+        def step(_market: str, _as_of: date) -> dict:
+            called.append(name)
+            return {"rows": 1}
+
+        return step
+
+    def forbidden(_market: str, _as_of: date) -> dict:
+        raise AssertionError("完了済みステップを再取得した")
+
+    result = collector(
+        "JP",
+        date(2026, 8, 22),
+        state=state,
+        warehouse=FakeWarehouse(),
+        steps={
+            "securities_master": forbidden,
+            "prices": forbidden,
+            "prices_live": make("prices_live"),
+            "financials": make("financials"),
+            "documents": make("documents"),
+            "macro": make("macro"),
+            "earnings_calendar": make("earnings_calendar"),
+        },
+    )
+    assert result.status in {"success", "partial"}
+    assert "securities_master" not in called
+    assert "prices" not in called
+    assert result.steps["securities_master"].metrics.get("resumed") is True
+    assert result.steps["prices"].metrics.get("resumed") is True
+    assert "financials" in called
 
 
 def test_latest_coverage_date_reads_max_trade_date() -> None:

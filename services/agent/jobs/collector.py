@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from packages.core.interfaces.storage import JobRunRepo, WarehouseRepo
+from services.agent.checkpoint import load_or_init
 from services.agent.deps import begin_run, finish_run
 from services.agent.types import JobResult, StepResult
 
@@ -161,6 +162,10 @@ def collector(
                 overall = "partial"
 
     done: list[str] = []
+    cp = load_or_init(
+        state, run_id, job_name="collector", phase="collector", market=market
+    )
+    already = {str(u) for u in (cp.get("completed_units") or [])}
 
     def _one(name: str) -> None:
         run_step(name)
@@ -177,6 +182,22 @@ def collector(
         )
 
     for name, required in COLLECTOR_STEPS:
+        if name in already:
+            results[name] = StepResult(
+                status="success", metrics={"resumed": True}, required=required
+            )
+            done.append(name)
+            state.save_checkpoint(
+                run_id,
+                {
+                    "job_name": "collector",
+                    "phase": f"collector.{name}",
+                    "completed_units": list(done),
+                    "next_unit": None,
+                    "metrics": {"overall": overall, "resumed": True},
+                },
+            )
+            continue
         _one(name)
         if required and results[name].status == "failed":
             overall = "failed"

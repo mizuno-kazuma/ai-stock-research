@@ -588,6 +588,8 @@ def resume_interrupted_jobs() -> None:
 
 起動時キャッチアップは当日の推奨が無ければ pipeline を走らせる。同じ `parent_run_id` の連鎖で空の running を増やさない。
 
+次に同じ `job_name` + `market` で始まる実行は、最新の `interrupted` ランの `completed_units` を引き継ぐ。Collector のソース単位、Researcher / Strategist / Critic の ticker・doc 単位は再実行しない。
+
 ## 10. ガードレールの一覧
 
 | ガードレール | 実装箇所 | 動作 |
