@@ -216,6 +216,14 @@ class FakeWarehouse:
     def read_securities(self, *, market: str | None = None, as_of: date | None = None) -> pd.DataFrame:
         return self.securities.copy()
 
+    def get_securities(self, *, market: str | None = None, **kwargs: Any) -> list[dict[str, Any]]:
+        frame = self.securities.copy()
+        if market and not frame.empty and "market" in frame.columns:
+            frame = frame.loc[frame["market"].astype(str) == market]
+        if frame.empty:
+            return []
+        return frame.to_dict("records")
+
     def upsert_prices_daily(self, df: pd.DataFrame) -> int:
         self.prices = df
         return len(df)
