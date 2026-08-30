@@ -19,7 +19,15 @@ from packages.core.llm.router import LLMRouter
 from packages.core.llm.schemas import WeeklyReviewOutput
 from packages.core.models.errors import InsufficientHistoryError
 from packages.core.models.garch import compute_vol_features
-from packages.core.models.ranker import ranker_artifact_path, save_fitted_ranker, train_ranker
+from packages.core.models.cv import PurgedWalkForwardCV
+from packages.core.models.ranker import (
+    evaluate_rank_ic,
+    ranker_artifact_path,
+    save_fitted_ranker,
+    summarize_rank_ics,
+    train_ranker,
+    walk_forward_ics,
+)
 from services.agent.deps import begin_run, finish_run
 from services.agent.jobs.evaluator import update_memory
 from services.agent.types import JobResult, StepResult
@@ -151,7 +159,7 @@ def model_retrain(
             work,
             labels,
             n_trials=n_trials,
-            warehouse=warehouse,
+            warehouse=None,
             model_kind="ranker_h20",
         )
         if data_dir is not None:
@@ -159,6 +167,71 @@ def model_retrain(
             metrics["artifact"] = str(path)
         metrics["backend"] = ranker.backend
         metrics["n_rows"] = ranker.metrics.get("n_rows")
+        groups = pd.to_datetime(work["as_of"], errors="coerce").dt.date
+        ics: list[float] = []
+        cv = PurgedWalkForwardCV(
+            n_splits=4,
+            purge_days=20,
+            embargo_days=5,
+            test_window_days=10,
+            min_train_days=20,
+        )
+        try:
+            ics = walk_forward_ics(
+                work,
+                labels,
+                groups,
+                n_trials=n_trials,
+                cv=cv,
+            )
+        except Exception as exc:
+            logger.info("walk-forward IC を計算できないため日次 IC に落とします: %s", exc)
+        if not ics:
+            pred = ranker.predict(work)
+            daily = evaluate_rank_ic(pred["ml_pred"], labels, groups=groups)
+            metrics["rank_ic"] = daily.get("rank_ic")
+            metrics["rank_ic_tstat"] = daily.get("t_stat")
+            # 分割が取れないときは日次 IC を fold 列に載せる（空配列は残さない）
+            pred_frame = pd.DataFrame(
+                {"pred": pred["ml_pred"].to_numpy(), "y": labels.to_numpy(), "g": groups.to_numpy()}
+            ).dropna()
+            for _, part in pred_frame.groupby("g"):
+                if len(part) < 3:
+                    continue
+                ic = part["pred"].corr(part["y"], method="spearman")
+                if ic == ic:
+                    ics.append(float(ic))
+        summary = summarize_rank_ics(ics)
+        metrics["fold_rank_ic"] = ics
+        metrics["fold_ic_std"] = float(np.std(ics, ddof=1)) if len(ics) > 1 else None
+        metrics["n_folds"] = len(ics)
+        metrics["rank_ic"] = summary.get("rank_ic")
+        metrics["rank_ic_tstat"] = summary.get("t_stat")
+        warehouse.insert_model_run(
+            {
+                "model_kind": "ranker_h20",
+                "model_version": "v1",
+                "market": market,
+                "horizon": "H20",
+                "cv_scheme": "purged_walk_forward",
+                "purge_days": 20,
+                "embargo_days": 5,
+                "n_folds": len(ics),
+                "feature_version": FEATURE_VERSION,
+                "feature_list": list(ranker.feature_names),
+                "n_trials": n_trials,
+                "fold_rank_ic": ics,
+                "fold_ic_std": metrics["fold_ic_std"],
+                "status": "fitted",
+                "metrics": {
+                    "backend": ranker.backend,
+                    "n_rows": ranker.metrics.get("n_rows"),
+                    "rank_ic": summary.get("rank_ic"),
+                    "rank_ic_tstat": summary.get("t_stat"),
+                    "hit_rate": summary.get("hit_rate"),
+                },
+            }
+        )
     except InsufficientHistoryError as exc:
         status = "partial"
         metrics["error"] = str(exc)

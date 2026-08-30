@@ -35,6 +35,7 @@ from packages.core.models.ranker import (
     FittedRanker,
     RankerPrediction,
     evaluate_rank_ic,
+    summarize_rank_ics,
     train_ranker,
     walk_forward_ics,
 )
@@ -63,6 +64,7 @@ __all__ = [
     "forecast_with_params",
     "naive_dm_pvalue",
     "random_walk_forecast",
+    "summarize_rank_ics",
     "train_ranker",
     "walk_forward_ics",
 ]
