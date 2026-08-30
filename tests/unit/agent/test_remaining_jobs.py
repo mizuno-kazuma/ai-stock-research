@@ -9,11 +9,18 @@ import numpy as np
 import pandas as pd
 
 from packages.core.factors.calendar import TradingCalendar
+from packages.core.interfaces.storage import MemoryRecord
 from packages.core.llm.router import LLMResponse
 from packages.core.llm.schemas import Citation, CriticOutput, DocSummaryOutput
 from packages.core.storage import DuckDBRepo
 from services.agent.jobs.critic import critic
-from services.agent.jobs.evaluator import evaluate_outcomes, evaluator, propose_factor_weights
+from services.agent.jobs.evaluator import (
+    evaluate_outcomes,
+    evaluator,
+    measure_memory_effectiveness,
+    propose_factor_weights,
+    update_memory,
+)
 from services.agent.jobs.maintenance import garch_refit, model_retrain, weekly_review
 from services.agent.jobs.researcher import researcher
 from services.agent.jobs.strategist import _retrieve_chunks
@@ -147,6 +154,45 @@ def test_evaluator_proposes_weights_when_sample_ge_100() -> None:
     result = evaluator("JP", as_of, state=state, warehouse=warehouse, memory=state)
     # 実績対象日がずれるため n_outcomes は 0 でも、提案経路の関数は上で担保する
     assert result.status == "success"
+
+
+def test_measure_memory_effectiveness_compares_used_vs_unused() -> None:
+    state = FakeStateRepo()
+    warehouse = FakeWarehouse()
+    state.insert_memory(
+        MemoryRecord(
+            memory_id="M001",
+            scope="market",
+            category="pattern",
+            lesson_ja="上方修正だけでは確信度を上げない。",
+            evidence_ja="検証",
+            n_observations=40,
+            confidence=0.7,
+            use_count=20,
+        )
+    )
+    warehouse.recs = [
+        {**_approved_rec(rec_id="u1", as_of=date(2026, 7, 1)), "memory_ids_used": ["M001"], "horizon": "H20"},
+        {**_approved_rec(rec_id="u2", as_of=date(2026, 7, 2)), "memory_ids_used": ["M001"], "horizon": "H20"},
+        {**_approved_rec(rec_id="n1", as_of=date(2026, 7, 3)), "memory_ids_used": [], "horizon": "H20"},
+        {**_approved_rec(rec_id="n2", as_of=date(2026, 7, 4)), "memory_ids_used": [], "horizon": "H20"},
+    ]
+    warehouse.outcomes = [
+        {"rec_id": "u1", "horizon": "H20", "market": "JP", "is_hit": False},
+        {"rec_id": "u2", "horizon": "H20", "market": "JP", "is_hit": False},
+        {"rec_id": "n1", "horizon": "H20", "market": "JP", "is_hit": True},
+        {"rec_id": "n2", "horizon": "H20", "market": "JP", "is_hit": True},
+    ]
+    stats = measure_memory_effectiveness(warehouse=warehouse, memory=state, market="JP")
+    assert stats["M001"]["n_used"] == 2
+    assert stats["M001"]["n_unused"] == 2
+    assert stats["M001"]["hit_rate_after"] == 0.0
+    assert stats["M001"]["hit_rate_before"] == 1.0
+    stored = state._memory["M001"]
+    assert stored.hit_rate_after == 0.0
+    assert stored.hit_rate_before == 1.0
+    upd = update_memory([], state.list_memory(include_inactive=True))
+    assert "M001" in upd["deactivated"]
 
 
 def test_retrieve_chunks_falls_back_to_document_text() -> None:

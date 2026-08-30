@@ -105,6 +105,66 @@ def evaluate_outcomes(
     return outcomes
 
 
+def measure_memory_effectiveness(
+    *,
+    warehouse: WarehouseRepo,
+    memory: MemoryRepo,
+    market: str,
+    horizon: str = "H20",
+) -> dict[str, dict[str, Any]]:
+    """教訓を使った推奨と使わなかった推奨の的中率を書き戻す（docs/08-agent-loop.md §8.5）。"""
+    recs = warehouse.get_recommendations(market=market)
+    reader = getattr(warehouse, "read_recommendation_outcomes", None)
+    if not recs or not callable(reader):
+        return {}
+    try:
+        outcomes = reader(market=market, horizon=horizon)
+    except TypeError:
+        outcomes = reader()
+    if outcomes is None or getattr(outcomes, "empty", True):
+        return {}
+    by_rec: dict[str, bool] = {}
+    for row in outcomes.to_dict(orient="records"):
+        rec_id = str(row.get("rec_id") or "")
+        if not rec_id:
+            continue
+        by_rec[rec_id] = bool(row.get("is_hit"))
+    if not by_rec:
+        return {}
+    existing = memory.list_memory(include_inactive=True)
+    measured: dict[str, dict[str, Any]] = {}
+    for record in existing:
+        mid = str(record.memory_id)
+        used: list[bool] = []
+        unused: list[bool] = []
+        for rec in recs:
+            rec_id = str(rec.get("rec_id") or "")
+            if rec_id not in by_rec:
+                continue
+            rec_horizon = rec.get("horizon")
+            if rec_horizon not in {None, horizon}:
+                continue
+            ids = {str(x) for x in (rec.get("memory_ids_used") or [])}
+            bucket = used if mid in ids else unused
+            bucket.append(by_rec[rec_id])
+        used_rate = float(np.mean(used)) if used else None
+        unused_rate = float(np.mean(unused)) if unused else None
+        fields: dict[str, Any] = {}
+        if unused_rate is not None:
+            fields["hit_rate_before"] = unused_rate
+        if used_rate is not None:
+            fields["hit_rate_after"] = used_rate
+        if fields:
+            memory.update_memory(record.memory_id, fields)
+        measured[mid] = {
+            "hit_rate_before": unused_rate,
+            "hit_rate_after": used_rate,
+            "n_used": len(used),
+            "n_unused": len(unused),
+        }
+    return measured
+
+
 def update_memory(
     new_lessons: list[Lesson], existing: list[MemoryRecord]
 ) -> dict[str, list[Any]]:
@@ -210,6 +270,12 @@ def evaluator(
         as_of, market, outcomes, warehouse=warehouse, state=state, memory=memory, metrics=metrics
     )
 
+    if memory is not None:
+        measured = measure_memory_effectiveness(
+            warehouse=warehouse, memory=memory, market=market
+        )
+        metrics["memory_measured"] = len(measured)
+
     lessons: list[Lesson] = []
     if router is not None and len(outcomes) >= 10:
         try:
@@ -241,7 +307,7 @@ def evaluator(
         except Exception as exc:
             metrics["eval_llm_error"] = type(exc).__name__
 
-    if memory is not None and lessons:
+    if memory is not None:
         existing = memory.list_memory(include_inactive=True)
         upd = update_memory(lessons, existing)
         for lesson in upd["added"]:

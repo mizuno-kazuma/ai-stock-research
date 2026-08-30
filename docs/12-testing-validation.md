@@ -745,6 +745,10 @@ def test_job_resumes_from_checkpoint():
     assert count_api_calls() - api_calls_before < total_units
 ```
 
+### T-MEM-01: 教訓の効果測定
+
+`recommendations.memory_ids_used` と実績を突き合わせ、使った推奨と使わなかった推奨の的中率を `hit_rate_after` / `hit_rate_before` に書く。適用後が 5pt 以上悪化し `use_count >= 20` なら無効化する。回帰は `tests/unit/agent/test_remaining_jobs.py`。
+
 ### T-INT-03: 冪等性
 
 ```python

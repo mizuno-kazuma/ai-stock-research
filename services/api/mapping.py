@@ -353,6 +353,15 @@ def job_from_row(row: Any, *, seed: dict[str, Any] | None = None) -> JobRun:
     )
 
 
+def _harmful_memory(before: Any, after: Any, use_count: Any) -> bool:
+    try:
+        if before is None or after is None:
+            return False
+        return float(after) < float(before) - 0.05 and int(use_count or 0) >= 20
+    except (TypeError, ValueError):
+        return False
+
+
 def memory_from_row(row: Any, *, seed: dict[str, Any] | None = None) -> AgentMemory:
     data = to_dict(row, json_fields=("derived_from",)) if not isinstance(row, dict) else dict(row)
     extra = seed or {}
@@ -369,13 +378,16 @@ def memory_from_row(row: Any, *, seed: dict[str, Any] | None = None) -> AgentMem
         confidence=float(data.get("confidence") or 0.7),
         hit_rate_before=data.get("hit_rate_before"),
         hit_rate_after=data.get("hit_rate_after"),
-        times_injected_30d=extra.get("times_injected_30d"),
-        effect_hit_rate_used=extra.get("effect_hit_rate_used"),
+        times_injected_30d=extra.get("times_injected_30d") or data.get("use_count"),
+        effect_hit_rate_used=extra.get("effect_hit_rate_used", data.get("hit_rate_after")),
         effect_n_used=extra.get("effect_n_used"),
-        effect_hit_rate_unused=extra.get("effect_hit_rate_unused"),
+        effect_hit_rate_unused=extra.get("effect_hit_rate_unused", data.get("hit_rate_before")),
         effect_n_unused=extra.get("effect_n_unused"),
         is_active=bool(data.get("is_active", True)),
-        harmful_flag=bool(extra.get("harmful_flag")),
+        harmful_flag=bool(
+            extra.get("harmful_flag")
+            or _harmful_memory(data.get("hit_rate_before"), data.get("hit_rate_after"), data.get("use_count"))
+        ),
         harmful_note_ja=extra.get("harmful_note_ja"),
         superseded_by=data.get("superseded_by"),
         created_at=as_utc(data.get("created_at")) or as_date(data.get("created_at")),
