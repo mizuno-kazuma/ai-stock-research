@@ -107,9 +107,10 @@ def get_recommendation(
     if row:
         card = _db_card(state, row)
         return wrap(state, card, as_of=card.as_of)
-    for card in _seed_cards(state):
-        if card.rec_id == rec_id:
-            return wrap(state, card, as_of=card.as_of)
+    if state.is_seed_data:
+        for card in _seed_cards(state):
+            if card.rec_id == rec_id:
+                return wrap(state, card, as_of=card.as_of)
     raise not_found(f"推奨 {rec_id} は存在しません。")
 
 

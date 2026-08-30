@@ -15,7 +15,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from packages.core.config import Settings, get_settings
-from packages.core.storage import DuckDBRepo, SQLiteRepo
+from packages.core.storage import DuckDBRepo, SQLiteRepo, is_serving_seed
 from packages.schemas.common import DataFreshness, Warning_
 from packages.schemas.enums import ProblemType
 from services.api.errors import ApiError
@@ -44,10 +44,8 @@ class AppState:
 
     @property
     def is_seed_data(self) -> bool:
-        flag = self.sqlite.get_setting("seed.is_seed_data", False)
-        if flag:
-            return True
-        return bool(self.payload.get("_meta"))
+        """sample JSON を出しているときだけ True。live 投入後は payload があっても False。"""
+        return is_serving_seed(self.sqlite)
 
     @property
     def as_of(self) -> dt.date:
@@ -127,7 +125,11 @@ _bearer = HTTPBearer(auto_error=False)
 
 
 def get_app_state(request: Request) -> AppState:
-    return request.app.state.api  # type: ignore[no-any-return]
+    state: AppState = request.app.state.api
+    # live 投入後はメモリ上の sample JSON を捨て、ルーターの payload フォールバックを止める
+    if state.payload and not is_serving_seed(state.sqlite):
+        state.payload = {}
+    return state
 
 
 async def get_current_user(
