@@ -31,6 +31,7 @@ Tier = Literal["bulk", "default", "deep"]
 TOKEN_CAPS = {"bulk": 500_000, "default": 200_000, "deep": 800_000}
 
 CompletionFn = Callable[..., Any]
+EmbeddingFn = Callable[..., Any]
 
 
 @dataclass
@@ -57,12 +58,14 @@ class LLMRouter:
         call_log: LlmCallLog | None = None,
         cache: LLMCache | None = None,
         completion_fn: CompletionFn | None = None,
+        embedding_fn: EmbeddingFn | None = None,
     ) -> None:
         self.config = config or get_models_config()
         self.cost_guard = cost_guard
         self.call_log = call_log
         self.cache = cache or LLMCache()
         self._completion = completion_fn
+        self._embedding = embedding_fn
 
     def complete(
         self,
@@ -209,6 +212,40 @@ class LLMRouter:
                 continue
         raise RuntimeError(f"全モデルが失敗しました: {last_error}")
 
+    def embed(
+        self,
+        text: str,
+        *,
+        entity: str | None = None,
+        job_run_id: int | None = None,
+    ) -> list[float]:
+        """`models.yaml` の embeddings.primary でベクトルを返す。呼び出し側はモデル名を知らない。"""
+        spec = self.config.embeddings.models[self.config.embeddings.primary]
+        tokens = max(1, len(text) // 4)
+        estimated = (tokens / 1_000_000) * spec.usd_per_mtok
+        if self.cost_guard is not None:
+            self.cost_guard.raise_if_blocked(estimated)
+        fn = self._embedding or _default_embedding()
+        result = fn(model=spec.litellm_model, input=text)
+        vec = _extract_embedding(result)
+        if self.call_log is not None:
+            self.call_log.insert_llm_call(
+                LlmCall(
+                    call_id=str(uuid.uuid4()),
+                    tier="bulk",
+                    model_id=spec.litellm_model,
+                    purpose="embedding",
+                    input_tokens=tokens,
+                    output_tokens=0,
+                    cost_usd=estimated,
+                    status="ok",
+                    called_at=datetime.now(timezone.utc),
+                    job_run_id=job_run_id,
+                    entity=entity,
+                )
+            )
+        return vec
+
     def estimate_cost(
         self,
         tier: Tier,
@@ -344,6 +381,56 @@ def _extract_content(result: Any) -> str:
     if isinstance(result, dict):
         return str(result.get("content") or result.get("text") or "")
     return str(result)
+
+
+def _extract_embedding(result: Any) -> list[float]:
+    if isinstance(result, list) and result and isinstance(result[0], (int, float)):
+        return [float(x) for x in result]
+    if isinstance(result, dict):
+        data = result.get("data")
+        if isinstance(data, list) and data:
+            first = data[0]
+            if isinstance(first, dict):
+                emb = first.get("embedding") or first.get("values")
+                if isinstance(emb, list):
+                    return [float(x) for x in emb]
+        embedding = result.get("embedding")
+        if isinstance(embedding, list):
+            return [float(x) for x in embedding]
+        if isinstance(embedding, dict):
+            values = embedding.get("values") or embedding.get("embedding")
+            if isinstance(values, list):
+                return [float(x) for x in values]
+    data = getattr(result, "data", None)
+    if data:
+        first = data[0]
+        emb = getattr(first, "embedding", None)
+        if isinstance(emb, dict):
+            values = emb.get("values") or emb.get("embedding")
+            if isinstance(values, list):
+                return [float(x) for x in values]
+        if isinstance(emb, list):
+            return [float(x) for x in emb]
+        if isinstance(first, dict):
+            inner = first.get("embedding")
+            if isinstance(inner, list):
+                return [float(x) for x in inner]
+    raise RuntimeError("埋め込みベクトルを抽出できませんでした")
+
+
+def _default_embedding() -> EmbeddingFn:
+    try:
+        import litellm
+
+        return litellm.embedding
+    except ImportError as exc:  # pragma: no cover
+        def _missing(**kwargs: Any) -> Any:
+            raise RuntimeError(
+                "litellm がインストールされていません。"
+                "テストでは embedding_fn を注入してください。"
+            ) from exc
+
+        return _missing
 
 
 def _default_completion() -> CompletionFn:

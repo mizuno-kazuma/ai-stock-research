@@ -120,6 +120,7 @@ def train_ranker(
     if not cols:
         raise InsufficientHistoryError("学習に使える特徴量列がありません")
     work = features.loc[:, cols].apply(pd.to_numeric, errors="coerce")
+    # ゼロ埋めしない（docs/04 §1.10）。OLS は完全ケース、LightGBM は NaN を欠測として扱う。
     mask = y.notna() & work.notna().any(axis=1)
     X = work.loc[mask]
     y = y.loc[mask]
@@ -129,7 +130,8 @@ def train_ranker(
     lgb_params = {**DEFAULT_LGB_PARAMS, **(params or {})}
     ranker = _try_lightgbm(X, y, cols, lgb_params, num_boost_round, n_trials)
     if ranker is None:
-        ranker = _fit_ols_quantiles(X, y, cols, n_trials)
+        complete = X.notna().all(axis=1) & y.notna()
+        ranker = _fit_ols_quantiles(X.loc[complete], y.loc[complete], cols, n_trials)
 
     ranker.metrics["n_rows"] = len(y)
     ranker.metrics["n_features"] = len(cols)
@@ -281,8 +283,12 @@ def _try_lightgbm(
 def _fit_ols_quantiles(
     X: pd.DataFrame, y: pd.Series, cols: list[str], n_trials: int
 ) -> FittedRanker:
-    mat = X.fillna(0.0).to_numpy(dtype=float)
+    if X.empty or y.empty:
+        raise InsufficientHistoryError("OLS に使える完全ケースがありません")
+    mat = X.to_numpy(dtype=float)
     target = y.to_numpy(dtype=float)
+    if not np.isfinite(mat).all() or not np.isfinite(target).all():
+        raise InsufficientHistoryError("OLS 学習データに欠損または非有限値が残っています")
     coef, intercept = _ols(mat, target)
     fitted = mat @ coef + intercept
     resid = target - fitted
@@ -343,9 +349,7 @@ def _design_matrix(features: pd.DataFrame, cols: list[str]) -> np.ndarray:
     missing = [c for c in cols if c not in features.columns]
     if missing:
         raise ModelUnavailableError(f"推論に必要な列がありません: {missing}")
-    return features.loc[:, cols].apply(pd.to_numeric, errors="coerce").fillna(0.0).to_numpy(
-        dtype=float
-    )
+    return features.loc[:, cols].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
 
 
 def ranker_artifact_path(data_dir: Path, market: str, horizon: str = "h20") -> Path:

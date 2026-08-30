@@ -102,6 +102,11 @@ def sector_neutral_zscore(
     scale = grouped.transform(_mad_std_transform)
     with np.errstate(divide="ignore", invalid="ignore"):
         z_sector = ((values - center) / scale.replace(0.0, np.nan)).clip(-clip, clip)
+    # MAD が退化する（同値が過半）とき、中央値上の点は 0、外れ値はクリップする。
+    degenerate = scale.eq(0.0) & values.notna()
+    z_sector = z_sector.where(~(degenerate & values.eq(center)), 0.0)
+    signed = np.sign(values - center) * clip
+    z_sector = z_sector.where(~(degenerate & ~values.eq(center)), signed)
     return z_sector.where(sizes >= min_sector_size, z_market)
 
 

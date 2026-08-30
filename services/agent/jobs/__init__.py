@@ -1,4 +1,5 @@
 from services.agent.jobs.analyst import analyst
+from services.agent.jobs.backfill import backfill
 from services.agent.jobs.collector import collector
 from services.agent.jobs.critic import critic
 from services.agent.jobs.evaluator import evaluator
@@ -8,6 +9,7 @@ from services.agent.jobs.strategist import strategist
 
 __all__ = [
     "analyst",
+    "backfill",
     "collector",
     "critic",
     "evaluator",

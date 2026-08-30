@@ -33,6 +33,7 @@ class CostGuard:
     alerts: AlertSink | None = None
     kill_switch: bool = False
     _forced_cap: bool = False
+    _warned_80: bool = False
 
     def force_cap_exceeded(self) -> None:
         """テスト用。本番では使わない。"""
@@ -96,6 +97,30 @@ class CostGuard:
             self.budget.add_spend(period="month", period_key=month_key, amount_usd=spent)
         else:
             daily_spent = self.spent_today()
+        if (
+            self.daily_cap > 0
+            and daily_spent >= 0.8 * self.daily_cap
+            and not self._warned_80
+        ):
+            self._warned_80 = True
+            if self.alerts is not None:
+                self.alerts.create_alert(
+                    severity="warning",
+                    category="cost",
+                    title_ja="LLMの日次予算の80%に達しました",
+                    body_ja=f"本日の使用額 ${daily_spent:.4f} / 上限 ${self.daily_cap:.2f}",
+                )
+            try:
+                from packages.core.notify import notify_event
+
+                notify_event(
+                    title_ja="LLMの日次予算の80%に達しました",
+                    body_ja=f"本日の使用額 ${daily_spent:.4f} / 上限 ${self.daily_cap:.2f}",
+                    severity="warning",
+                    state=self.budget,
+                )
+            except Exception:
+                pass
         if daily_spent > self.daily_cap or self.spent_today() > self.daily_cap:
             self.kill_switch = True
             if self.budget is not None:

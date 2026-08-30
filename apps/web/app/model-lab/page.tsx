@@ -506,12 +506,16 @@ function NewBacktestForm({
   const [fee, setFee] = useState("");
   const [slip, setSlip] = useState("");
   const [turn, setTurn] = useState("");
+  const [trials, setTrials] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const ready = name.trim().length > 0 && fee !== "" && slip !== "" && turn !== "";
+  const ready =
+    name.trim().length > 0 && fee !== "" && slip !== "" && turn !== "" && trials !== "";
 
   const submit = () => {
     if (!ready) {
-      setError("手数料・スリッページ・回転率上限は必須です。これらを省略したバックテストは実運用の成績を大きく過大評価します。");
+      setError(
+        "手数料・スリッページ・回転率上限・試行回数は必須です。これらを省略したバックテストは実運用の成績を大きく過大評価します。",
+      );
       return;
     }
     const req: BacktestRequest = {
@@ -524,6 +528,7 @@ function NewBacktestForm({
       fee_bps: Number(fee),
       slippage_bps: Number(slip),
       max_turnover_pct: Number(turn) / 100,
+      n_trials: Number(trials),
       signal_source: { type: "quant_score" },
     };
     create.mutate(req, {
@@ -560,6 +565,15 @@ function NewBacktestForm({
         </Field>
         <Field label="回転率上限 (%/期間)" hint="例: 30.0">
           <input className="input input-numeric" inputMode="decimal" value={turn} onChange={(e) => setTurn(e.target.value)} placeholder="例: 30.0" />
+        </Field>
+        <Field label="試行回数" hint="この戦略を含め、試した設定の総数。Deflated Sharpe に使います">
+          <input
+            className="input input-numeric"
+            inputMode="numeric"
+            value={trials}
+            onChange={(e) => setTrials(e.target.value)}
+            placeholder="例: 1"
+          />
         </Field>
         <p className="text-caption text-fg-secondary">
           この実行は探索試行回数に加算され、Deflated Sharpe Ratioの計算に反映されます。現在の累積試行回数: 120

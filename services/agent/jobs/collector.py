@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from packages.core.interfaces.storage import JobRunRepo, WarehouseRepo
+from services.agent.checkpoint import load_or_init
 from services.agent.deps import begin_run, finish_run
 from services.agent.types import JobResult, StepResult
 
@@ -161,6 +162,10 @@ def collector(
                 overall = "partial"
 
     done: list[str] = []
+    cp = load_or_init(
+        state, run_id, job_name="collector", phase="collector", market=market
+    )
+    already = {str(u) for u in (cp.get("completed_units") or [])}
 
     def _one(name: str) -> None:
         run_step(name)
@@ -177,6 +182,22 @@ def collector(
         )
 
     for name, required in COLLECTOR_STEPS:
+        if name in already:
+            results[name] = StepResult(
+                status="success", metrics={"resumed": True}, required=required
+            )
+            done.append(name)
+            state.save_checkpoint(
+                run_id,
+                {
+                    "job_name": "collector",
+                    "phase": f"collector.{name}",
+                    "completed_units": list(done),
+                    "next_unit": None,
+                    "metrics": {"overall": overall, "resumed": True},
+                },
+            )
+            continue
         _one(name)
         if required and results[name].status == "failed":
             overall = "failed"
@@ -300,7 +321,10 @@ def _watchlist_symbols(state: JobRunRepo | None, market: str) -> list[str]:
 
 
 def builtin_connector_steps(
-    *, warehouse: WarehouseRepo | None = None, state: JobRunRepo | None = None
+    *,
+    warehouse: WarehouseRepo | None = None,
+    state: JobRunRepo | None = None,
+    lookbacks: dict[str, int] | None = None,
 ) -> dict[str, StepFn]:
     """本番用。コネクタを遅延 import し、鍵が無ければそのステップだけ失敗させる。"""
 
@@ -391,6 +415,11 @@ def builtin_connector_steps(
             coverage_table=coverage_table,
         )
 
+    def _lookback(step: str, default: int) -> int:
+        if lookbacks and step in lookbacks:
+            return int(lookbacks[step])
+        return default
+
     def _fn_for(step: str) -> StepFn:
         def _fn(market: str, as_of: date) -> dict[str, Any]:
             if step == "securities_master":
@@ -411,7 +440,7 @@ def builtin_connector_steps(
                         market,
                         as_of,
                         fetch_kwargs={"endpoint": "equities_bars_daily"},
-                        lookback_days=90,
+                        lookback_days=_lookback("prices", 90),
                         coverage_table="prices_daily",
                     )
                 symbols = _watchlist_symbols(state, "US")
@@ -422,7 +451,7 @@ def builtin_connector_steps(
                     market,
                     as_of,
                     fetch_kwargs={"symbols": symbols, "endpoint": "download_daily"},
-                    lookback_days=30,
+                    lookback_days=_lookback("prices", 30),
                     apply_delay=False,
                     coverage_table="prices_daily",
                 )
@@ -435,7 +464,7 @@ def builtin_connector_steps(
                     market,
                     as_of,
                     fetch_kwargs={"symbols": symbols, "endpoint": "download_live"},
-                    lookback_days=7,
+                    lookback_days=_lookback("prices_live", 7),
                     apply_delay=False,
                 )
             if step == "financials":
@@ -445,14 +474,14 @@ def builtin_connector_steps(
                         market,
                         as_of,
                         fetch_kwargs={"endpoint": "fins_summary"},
-                        lookback_days=120,
+                        lookback_days=_lookback("financials", 120),
                         coverage_table="financials",
                     )
                 return _run_edgar(
                     market,
                     as_of,
                     endpoint="companyfacts",
-                    lookback_days=120,
+                    lookback_days=_lookback("financials", 120),
                     coverage_table="financials",
                 )
             if step == "documents":
@@ -462,7 +491,7 @@ def builtin_connector_steps(
                         "edinet",
                         market,
                         as_of,
-                        lookback_days=14,
+                        lookback_days=_lookback("documents", 14),
                         apply_delay=False,
                         coverage_table="documents",
                     )
@@ -470,7 +499,7 @@ def builtin_connector_steps(
                     market,
                     as_of,
                     endpoint="submissions",
-                    lookback_days=14,
+                    lookback_days=_lookback("documents", 14),
                     coverage_table="documents",
                 )
             if step == "macro":
@@ -478,7 +507,7 @@ def builtin_connector_steps(
                     "fred",
                     market,
                     as_of,
-                    lookback_days=400,
+                    lookback_days=_lookback("macro", 400),
                     apply_delay=False,
                     coverage_table="macro_series",
                 )

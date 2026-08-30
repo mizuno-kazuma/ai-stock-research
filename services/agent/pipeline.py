@@ -19,6 +19,32 @@ from services.agent.progress import publish_job_finished, publish_job_progress
 from services.agent.types import JobResult, PipelineResult
 
 
+def _notify_pipeline(
+    state: JobRunRepo,
+    *,
+    market: str,
+    as_of: date,
+    overall: str,
+    n_recs: int,
+) -> None:
+    from packages.core.notify import notify_event
+
+    if overall == "failed":
+        notify_event(
+            title_ja=f"{market} 日次バッチが失敗しました",
+            body_ja=f"as_of={as_of.isoformat()}",
+            severity="error",
+            state=state,
+        )
+        return
+    notify_event(
+        title_ja=f"{market} 日次バッチが完了しました",
+        body_ja=f"as_of={as_of.isoformat()} 推奨 {n_recs} 件（状態: {overall}）",
+        severity="warning" if overall == "partial" else "info",
+        state=state,
+    )
+
+
 def run_pipeline(
     market: str,
     as_of: date,
@@ -118,6 +144,7 @@ def _run_pipeline_jobs(
             status="failed",
             failed_steps=["collector"],
         )
+        _notify_pipeline(state, market=market, as_of=as_of, overall="failed", n_recs=0)
         return PipelineResult(
             status="failed", market=market, as_of=as_of, jobs=jobs
         )
@@ -138,6 +165,11 @@ def _run_pipeline_jobs(
     jobs["analyst"] = ana
     _mark(2, "analyst")
 
+    vector_store = kwargs.get("vector_store")
+    embed = kwargs.get("embed")
+    if embed is None and router is not None:
+        embed = getattr(router, "embed", None)
+
     res = researcher(
         market,
         as_of,
@@ -147,6 +179,8 @@ def _run_pipeline_jobs(
         tickers=kwargs.get("tickers"),
         trigger=trigger,
         parent_run_id=pipeline_id,
+        vector_store=vector_store,
+        embed=embed,
     )
     jobs["researcher"] = res
     _mark(3, "researcher")
@@ -163,6 +197,8 @@ def _run_pipeline_jobs(
         researcher_qual=res.recs,
         trigger=trigger,
         parent_run_id=pipeline_id,
+        vector_store=vector_store,
+        embed=embed,
     )
     jobs["strategist"] = strat
     _mark(4, "strategist")
@@ -210,6 +246,7 @@ def _run_pipeline_jobs(
     finish_run(state, pipeline_id, status=overall, metrics=metrics)
     _mark(6, "evaluator")
     publish_job_finished(job_run_id=pipeline_id, status=overall)
+    _notify_pipeline(state, market=market, as_of=as_of, overall=overall, n_recs=len(strat.recs))
     return PipelineResult(
         status=overall, market=market, as_of=as_of, jobs=jobs, metrics=metrics
     )
