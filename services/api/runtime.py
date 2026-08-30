@@ -39,6 +39,7 @@ JOB_FN_NAMES = {
     "model_retrain": "model_retrain",
     "garch_refit": "garch_refit",
     "backup": "backup",
+    "backfill": "backfill",
 }
 
 
@@ -80,6 +81,7 @@ def kick_agent_job(
     from services.agent.jobs.collector import collector
     from services.agent.jobs.critic import critic
     from services.agent.jobs.evaluator import evaluator
+    from services.agent.jobs.backfill import backfill
     from services.agent.jobs.backup import daily_backup
     from services.agent.jobs.maintenance import garch_refit, model_retrain, weekly_review
     from services.agent.jobs.researcher import researcher
@@ -103,6 +105,7 @@ def kick_agent_job(
             "model_retrain": model_retrain,
             "garch_refit": garch_refit,
             "backup": daily_backup,
+            "backfill": backfill,
         }
         inner_name = JOB_FN_NAMES.get(job_name)
         if job_name == "backtest":
