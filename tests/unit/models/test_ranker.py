@@ -29,6 +29,20 @@ def test_ranker_emits_confidence_interval() -> None:
     assert model.n_trials == 1
 
 
+def test_ols_does_not_zero_fill_missing_features() -> None:
+    """欠損を 0 埋めすると平均的な信号になる。推論では NaN を残す。"""
+    rng = np.random.default_rng(1)
+    n = 80
+    X = pd.DataFrame({"f1": rng.normal(size=n), "f2": rng.normal(size=n)})
+    y = 0.2 * X["f1"] - 0.1 * X["f2"]
+    model = train_ranker(X, y, n_trials=1, feature_cols=["f1", "f2"])
+    assert model.backend == "ols"
+    infer = pd.DataFrame({"f1": [1.0, np.nan], "f2": [0.5, 0.5]})
+    pred = model.predict(infer)
+    assert np.isfinite(pred.loc[0, "ml_pred"])
+    assert not np.isfinite(pred.loc[1, "ml_pred"])
+
+
 def test_ranker_rejects_too_many_trials() -> None:
     X = pd.DataFrame({"f1": [1.0] * 60, "f2": [0.0] * 60})
     y = pd.Series([0.0] * 60)
