@@ -162,6 +162,7 @@ execution prices.
 
 Section heading: label_en `This week's highlights`, label_ja `今週の注目`.
 Link to all: label_en `View all recommendations`, label_ja `すべての推奨を見る`.
+At most one compact card per issuer. The same ticker on two as_of dates or H5 and H20 must not appear twice here.
 
 Compact card example content:
 

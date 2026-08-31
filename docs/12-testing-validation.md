@@ -739,6 +739,20 @@ def test_dashboard_auto_market_resolves_to_jp_or_us(client):
     assert r.json()["data"]["market"] in ("JP", "US")
 ```
 
+### T-API-06: 検索と今週の注目は発行体あたり 1 件
+
+`securities` の SCD2 履歴と J-Quants の 5 桁コードが残っていても、
+`GET /api/v1/stocks/search` と `GET /api/v1/dashboard` の `top_recommendations`
+は同一発行体を二重に返さない。実装の回帰は `tests/api/test_issuer_dedup.py` と
+`tests/storage/test_roundtrip.py`。
+
+```python
+def test_search_same_five_digit_code_once(client_with_scd2_dupes):
+    r = client_with_scd2_dupes.get("/api/v1/stocks/search?q=15600")
+    tickers = [row["ticker"] for row in r.json()["data"]["items"]]
+    assert tickers == ["15600"]
+```
+
 ## 10. 結合テスト
 
 ### T-INT-01: パイプライン全体（モックデータ）

@@ -6,9 +6,13 @@ import datetime as dt
 
 from fastapi import APIRouter, Depends, Query, Response
 
+from packages.core.storage import unique_by_issuer
 from packages.schemas.common import Envelope
-from packages.schemas.documents import Document, DocumentList
-from packages.schemas.recommendations import RecommendationHistory, RecommendationHistoryRow, RecommendationList
+from packages.schemas.documents import DocumentList
+from packages.schemas.recommendations import (
+    RecommendationHistory,
+    RecommendationHistoryRow,
+)
 from packages.schemas.stocks import (
     FeatureRow,
     FeaturesResponse,
@@ -27,8 +31,11 @@ from packages.schemas.stocks import (
 from services.api.deps import AppState, User, get_app_state, require_user
 from services.api.envelope import wrap
 from services.api.errors import not_found
-from services.api.mapping import document_from_row, map_doc_type, recommendation_from_row, recommendation_from_seed, security_from_row
-from services.api.routers.recommendations import _seed_cards
+from services.api.mapping import (
+    document_from_row,
+    map_doc_type,
+    security_from_row,
+)
 from services.api.util import as_date, as_utc, parse_range_start, resolve_market
 
 router = APIRouter(tags=["stocks"])
@@ -67,7 +74,7 @@ def search_stocks(
             name_en=r.get("name_en"),
             sector_name=r.get("sector_name"),
         )
-        for r in rows
+        for r in unique_by_issuer(rows)
     ]
     if not items:
         q_lower = q.lower()
@@ -87,6 +94,10 @@ def search_stocks(
                 )
             if len(items) >= limit:
                 break
+        items = unique_by_issuer(
+            [hit.model_dump() for hit in items]
+        )
+        items = [SecuritySearchHit.model_validate(row) for row in items]
     return wrap(state, SecuritySearchResult(query=q, items=items[:limit], total=len(items)))
 
 

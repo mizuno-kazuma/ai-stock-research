@@ -32,6 +32,7 @@ import duckdb
 
 from packages.core.config import Settings, get_settings
 from packages.core.interfaces.storage import SearchHit
+from packages.core.storage.tickers import unique_by_issuer
 
 logger = logging.getLogger(__name__)
 
@@ -516,7 +517,9 @@ class DuckDBRepo:
             "(nullif(trim(coalesce(name_local, '')), '') IS NOT NULL "
             "AND trim(name_local) <> ticker)"
         )
-        return self.query(
+        # QUALIFY で畳んだあと、同じ 5 桁が残っても Python 側で落とす。
+        fetch = max(int(limit) * 5, 20)
+        rows = self.query(
             f"SELECT * FROM securities WHERE {' AND '.join(where)} "
             f"QUALIFY row_number() OVER ("
             f"PARTITION BY market, {canonical} "
@@ -524,8 +527,9 @@ class DuckDBRepo:
             f") = 1 "
             "ORDER BY (ticker = ?) DESC, (ticker = ?) DESC, (ticker = ?) DESC, ticker "
             "LIMIT ?",
-            [*params, q, padded, canonical_q, limit],
+            [*params, q, padded, canonical_q, fetch],
         )
+        return unique_by_issuer(rows)[:limit]
 
     # -- prices ---------------------------------------------------------------
 
@@ -1156,7 +1160,7 @@ class DuckDBRepo:
         action: str | None = None,
         horizon: str | None = None,
         conviction: str | None = None,
-        critic_verdict: str | None | object = _UNSET,
+        critic_verdict: str | object | None = _UNSET,
         include_rejected: bool = False,
         limit: int = 50,
         offset: int = 0,

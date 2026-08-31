@@ -6,6 +6,7 @@
  */
 
 import { unwrapField, unwrapItems } from "./api-client";
+import { uniqueByIssuer } from "./tickers";
 import type {
   AgentCost,
   AgentJob,
@@ -199,7 +200,7 @@ export function mapRecommendationCard(raw: unknown): RecommendationCard {
 }
 
 export function mapRecommendationList(raw: unknown): RecommendationListData {
-  const items = unwrapItems(raw).map(mapRecommendationCard);
+  const items = uniqueByIssuer(unwrapItems(raw).map(mapRecommendationCard), (row) => row.horizon);
   const d = rec(raw);
   return {
     items,
@@ -946,28 +947,7 @@ export function mapSearchHits(raw: unknown): StockSearchHit[] {
       name_local: str(d.name_local, str(d.ticker)),
     };
   });
-  const best = new Map<string, StockSearchHit>();
-  const named = (hit: StockSearchHit) => Boolean(hit.name_local && hit.name_local !== hit.ticker);
-  for (const hit of mapped) {
-    const canonical =
-      hit.market === "JP" && hit.ticker.length === 5 && hit.ticker.endsWith("0")
-        ? hit.ticker.slice(0, 4)
-        : hit.ticker;
-    const key = `${hit.market}:${canonical}`;
-    const prev = best.get(key);
-    if (!prev) {
-      best.set(key, hit);
-      continue;
-    }
-    if (named(hit) && !named(prev)) {
-      best.set(key, hit);
-      continue;
-    }
-    if (named(hit) === named(prev) && hit.ticker.length < prev.ticker.length) {
-      best.set(key, hit);
-    }
-  }
-  return [...best.values()];
+  return uniqueByIssuer(mapped);
 }
 
 function mapFxForecast(raw: unknown): FxForecast {
@@ -1203,8 +1183,8 @@ export function mapDashboard(raw: unknown): DashboardData {
     model_health: mapModelHealth(d.model_health ?? {}),
     alerts,
     watchlist_filings: filings,
-    top_recommendations: recs,
-    watchlist,
+    top_recommendations: uniqueByIssuer(recs),
+    watchlist: uniqueByIssuer(watchlist),
     jobs,
   };
 }

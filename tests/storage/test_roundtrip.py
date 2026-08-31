@@ -96,6 +96,65 @@ def test_search_securities_returns_one_row_per_issuer() -> None:
         assert named[0]["name_local"] == "トヨタ自動車"
 
 
+def test_search_securities_collapses_same_five_digit_history() -> None:
+    """画面で見えた 13010 / 15600 の二重表示。同じ 5 桁の現行行が複数あっても 1 件。"""
+    with DuckDBRepo.in_memory() as duck:
+        duck.upsert_securities(
+            [
+                {
+                    "ticker": "14500",
+                    "market": "JP",
+                    "name_local": "TANAKEN",
+                    "sector_name": "建設業",
+                    "currency": "JPY",
+                    "valid_from": dt.date(2026, 8, 1),
+                    "is_active": True,
+                },
+                {
+                    "ticker": "15600",
+                    "market": "JP",
+                    "name_local": "野村アセットマネジメント株式会社 NEXT FUNDS FTSEブルサ・マレーシアKLCI連動型上場投信",
+                    "sector_name": "その他",
+                    "currency": "JPY",
+                    "valid_from": dt.date(2026, 8, 18),
+                    "is_active": True,
+                },
+                {
+                    "ticker": "15600",
+                    "market": "JP",
+                    "name_local": "野村アセットマネジメント株式会社 NEXT FUNDS FTSEブルサ・マレーシアKLCI連動型上場投信",
+                    "sector_name": "その他",
+                    "currency": "JPY",
+                    "valid_from": dt.date(2026, 8, 25),
+                    "is_active": True,
+                },
+                {
+                    "ticker": "13010",
+                    "market": "JP",
+                    "name_local": "極洋",
+                    "sector_name": "水産・農林業",
+                    "currency": "JPY",
+                    "valid_from": dt.date(2026, 8, 18),
+                    "is_active": True,
+                },
+                {
+                    "ticker": "13010",
+                    "market": "JP",
+                    "name_local": "極洋",
+                    "sector_name": "水産・農林業",
+                    "currency": "JPY",
+                    "valid_from": dt.date(2026, 8, 25),
+                    "is_active": True,
+                },
+            ]
+        )
+        by_code = duck.search_securities("15600", limit=10)
+        assert [row["ticker"] for row in by_code] == ["15600"]
+        kyokuyo = duck.search_securities("極", limit=10)
+        assert [row["ticker"] for row in kyokuyo] == ["13010"]
+        assert kyokuyo[0]["name_local"] == "極洋"
+
+
 def test_sqlite_settings_and_trade_roundtrip() -> None:
     with SQLiteRepo.in_memory() as state:
         state.set_setting("ui.direction_colors", "jp")

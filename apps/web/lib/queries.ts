@@ -74,6 +74,7 @@ import {
   mapWatchlistRow,
 } from "./api-map";
 import { resolveMarket } from "./market";
+import { uniqueByIssuer } from "./tickers";
 import type {
   AgentCost,
   AgentJob,
@@ -220,18 +221,11 @@ async function fetchDashboard(market: Market): Promise<ApiResult<DashboardData>>
   const jobs = mapped.jobs.length ? mapped.jobs : unwrapItems(jobsRes?.data).map(mapAgentJob);
   const watchlist = mapped.watchlist.length ? mapped.watchlist : unwrapItems(watchRes?.data).map(mapWatchlistRow);
   const recItems = unwrapItems(recsRes?.data).map(mapRecommendationCard);
-  const uniqueRecs: RecommendationCard[] = [];
-  const seenTickers = new Set<string>();
-  for (const rec of recItems) {
-    const key = `${rec.market}:${rec.ticker}`;
-    if (seenTickers.has(key)) continue;
-    seenTickers.add(key);
-    uniqueRecs.push(rec);
-  }
-  const top =
-    mapped.top_recommendations.some((r) => r.bear_case_ja.length >= 20)
-      ? mapped.top_recommendations
-      : uniqueRecs.slice(0, 5);
+  const uniqueDash = uniqueByIssuer(mapped.top_recommendations);
+  const uniqueRecs = uniqueByIssuer(recItems);
+  const top = (
+    uniqueDash.some((r) => r.bear_case_ja.length >= 20) ? uniqueDash : uniqueRecs
+  ).slice(0, 5);
   return {
     ...dash,
     data: {
@@ -369,6 +363,7 @@ export const useStockSearch = (q: string) =>
   useApiQuery<StockSearchHit[]>(queryKeys.stockSearch(q), "/stocks/search", { q, limit: 10 }, {
     enabled: q.trim().length >= 1,
     staleTime: 30 * 1000,
+    placeholderData: undefined,
     map: mapSearchHits,
   });
 
