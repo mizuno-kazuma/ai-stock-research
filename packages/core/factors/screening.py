@@ -34,6 +34,7 @@ REASON_CODES: dict[str, str] = {
     "EVENT_EARNINGS_SOON": "決算発表が近い",
     "DATA_STALE": "データが古い",
     "MODEL_LOW_CONFIDENCE": "モデルの直近成績が悪い",
+    "RANK_FILL": "定量順位による件数補充",
 }
 
 CONVICTION_LEVELS = ("low", "medium", "high")
@@ -239,6 +240,30 @@ def conviction_from_score(
     return level, reasons
 
 
+def _take_with_sector_cap(
+    ordered: pd.DataFrame,
+    *,
+    limit: int,
+    max_per_sector: int,
+    sector_col: str,
+    per_sector: dict[str, int] | None = None,
+) -> tuple[pd.DataFrame, dict[str, int]]:
+    """順位済みの枠から、セクター上限を守りつつ `limit` 件まで取る。"""
+    counts = dict(per_sector or {})
+    if ordered.empty or limit <= 0:
+        return ordered.iloc[0:0].copy(), counts
+    selected: list[int] = []
+    for position, (_, row) in enumerate(ordered.iterrows()):
+        if len(selected) >= limit:
+            break
+        sector = str(row.get(sector_col, "__UNKNOWN__"))
+        if counts.get(sector, 0) >= max_per_sector:
+            continue
+        counts[sector] = counts.get(sector, 0) + 1
+        selected.append(position)
+    return ordered.iloc[selected].copy(), counts
+
+
 def apply_risk_constraints(
     candidates: pd.DataFrame,
     *,
@@ -251,17 +276,60 @@ def apply_risk_constraints(
     if candidates.empty:
         return candidates.copy()
     ordered = candidates.sort_values(rank_col, ascending=False, kind="mergesort")
-    selected: list[int] = []
-    per_sector: dict[str, int] = {}
-    for position, (_, row) in enumerate(ordered.iterrows()):
-        if len(selected) >= max_per_day:
-            break
-        sector = str(row.get(sector_col, "__UNKNOWN__"))
-        if per_sector.get(sector, 0) >= max_per_sector:
-            continue
-        per_sector[sector] = per_sector.get(sector, 0) + 1
-        selected.append(position)
-    return ordered.iloc[selected].reset_index(drop=True)
+    taken, _ = _take_with_sector_cap(
+        ordered,
+        limit=max_per_day,
+        max_per_sector=max_per_sector,
+        sector_col=sector_col,
+    )
+    return taken.reset_index(drop=True)
+
+
+def select_recommendation_candidates(
+    work: pd.DataFrame,
+    *,
+    max_per_day: int = 10,
+    max_per_sector: int = 3,
+    sector_col: str = "sector_code",
+    rank_col: str = "total_score",
+) -> pd.DataFrame:
+    """厳格ゲートを優先し、不足分を定量順位で埋めて上限件数に近づける。
+
+    旧実装は `is_candidate` 通過が0件のときだけ `total_score` 上位で埋めていた。
+    通過が1件の日は補充が走らず、0件の日より情報量が少なかった。
+    ゲート自体は緩めず、コア候補をセクター制約込みで先に取り、空き枠だけ埋める。
+    補充分には `candidate_tier='fill'` を付け、後段で `RANK_FILL` と low 確信度を強制する。
+    """
+    if work.empty or max_per_day <= 0:
+        out = work.iloc[0:0].copy()
+        out["candidate_tier"] = pd.Series(dtype=str)
+        return out
+
+    ranked = work.sort_values(rank_col, ascending=False, kind="mergesort")
+    from packages.core.factors.scoring import is_candidate
+
+    strict_mask = ranked.apply(is_candidate, axis=1)
+    core = ranked.loc[strict_mask].copy()
+    fill_pool = ranked.loc[~strict_mask].copy()
+    core["candidate_tier"] = "core"
+    fill_pool["candidate_tier"] = "fill"
+
+    taken_core, per_sector = _take_with_sector_cap(
+        core,
+        limit=max_per_day,
+        max_per_sector=max_per_sector,
+        sector_col=sector_col,
+    )
+    remaining = max_per_day - len(taken_core)
+    taken_fill, _ = _take_with_sector_cap(
+        fill_pool,
+        limit=remaining,
+        max_per_sector=max_per_sector,
+        sector_col=sector_col,
+        per_sector=per_sector,
+    )
+    combined = pd.concat([taken_core, taken_fill], ignore_index=True)
+    return combined
 
 
 @dataclass(frozen=True)

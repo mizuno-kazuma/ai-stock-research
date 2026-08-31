@@ -858,7 +858,7 @@ CREATE TABLE settings (
 | `data.jquants_plan` | string | `"free"` | `"free"` / `"light"` |
 | `data.tdnet_enabled` | boolean | `false` | 規約確認後に有効化 |
 | `agent.auto_activate_weights` | boolean | `false` | 重み更新の自動適用 |
-| `agent.max_recommendations_per_day` | number | `10` | 推奨カードの上限 |
+| `agent.max_recommendations_per_day` | number | `10` | 推奨カードの目標かつ上限。コア候補が足りなければ定量順位で補充する |
 | `risk.max_position_pct` | number | `10.0` | 1銘柄あたりの上限比率 |
 
 ```sql

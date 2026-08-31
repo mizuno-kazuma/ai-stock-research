@@ -13,15 +13,15 @@ from typing import Any
 
 import pandas as pd
 
-from packages.core.factors.scoring import is_candidate, total_score
+from packages.core.factors.scoring import total_score
 from packages.core.factors.screening import (
     MIN_PRIOR_SAMPLES,
     UniverseFilter,
-    apply_risk_constraints,
     assign_reason_codes,
     compute_hit_rate_prior,
     conviction_from_score,
     determine_action,
+    select_recommendation_candidates,
 )
 from packages.core.interfaces.storage import JobRunRepo, MemoryRepo, SearchHit, VectorStore, WarehouseRepo
 from packages.core.llm.errors import (
@@ -43,6 +43,11 @@ FALLBACK_BEAR = (
     "定量スコア上位だが、開示資料の定性分析が停止または不足しているため、"
     "バリュートラップと業績モメンタム剥落の両方を却下理由として残す。"
     "信頼区間が広く、母数不足なら確信度は低に固定する。"
+)
+FILL_BEAR = (
+    "定量スコアの順位補充であり、ML予測と定量スコアの一致は確認していない。"
+    "バリュートラップと業績モメンタム剥落の両方を却下理由として残す。"
+    "確信度は低に固定し、コア候補より優先して採用しない。"
 )
 # ML 未学習時に使う、情報のない広い区間（ホライズン20営業日）。
 FALLBACK_CI_HALF_WIDTH = 0.20
@@ -225,9 +230,11 @@ def build_recommendation(
     source_doc_ids: list[str],
     data_freshness: list[dict[str, Any]],
     high_vol_regime: bool = False,
+    candidate_tier: str = "core",
 ) -> dict[str, Any]:
     action = determine_action(row, is_held=False) or "watch"
     conv_score = _conviction_score(row)
+    is_fill = candidate_tier == "fill"
     if thesis is not None:
         raw_conv = thesis.conviction
         thesis_ja = thesis.thesis_ja
@@ -236,13 +243,23 @@ def build_recommendation(
         citations = [c.model_dump() for c in thesis.citations]
     else:
         raw_conv = "low"
-        thesis_ja = (
-            f"{row.get('ticker')} は定量スコア {row.get('quant_score')}、"
-            f"ML予測 {row.get('ml_pred_h20')} "
-            f"[{row.get('ml_pred_h20_lo')}, {row.get('ml_pred_h20_hi')}]。"
-            "定性分析は本日停止または未実施。"
-        )
-        bear = FALLBACK_BEAR
+        if is_fill:
+            thesis_ja = (
+                f"{row.get('ticker')} は定量スコア {row.get('quant_score')} で"
+                "1日の件数目標を埋める補充候補。"
+                f"ML予測 {row.get('ml_pred_h20')} "
+                f"[{row.get('ml_pred_h20_lo')}, {row.get('ml_pred_h20_hi')}]。"
+                "定量とMLの一致は確認していない。"
+            )
+            bear = FILL_BEAR
+        else:
+            thesis_ja = (
+                f"{row.get('ticker')} は定量スコア {row.get('quant_score')}、"
+                f"ML予測 {row.get('ml_pred_h20')} "
+                f"[{row.get('ml_pred_h20_lo')}, {row.get('ml_pred_h20_hi')}]。"
+                "定性分析は本日停止または未実施。"
+            )
+            bear = FALLBACK_BEAR
         inval = "次期の会社予想が下方修正されたら見立てを破棄する。"
         citations = [
             Citation(
@@ -268,9 +285,13 @@ def build_recommendation(
         order = {"low": 0, "medium": 1, "high": 2}
         level = raw_conv if order[raw_conv] <= order[level] else level
     level = _force_conviction(level, n_prior_samples)
+    if is_fill:
+        level = "low"
     expected_ret, expected_lo, expected_hi = _interval_from_row(row)
     ml_pred = _finite(row.get("ml_pred_h20"))
     reasons = [str(c) for c in (row.get("reason_codes") or []) if str(c).strip()]
+    if is_fill and "RANK_FILL" not in reasons:
+        reasons.append("RANK_FILL")
     if not reasons:
         reasons = ["MODEL_LOW_CONFIDENCE"]
     rec = {
@@ -407,12 +428,7 @@ def _strategist_body(
     filt = universe_filter or UniverseFilter(market=market)
     mask = filt.apply(work, as_of=as_of)
     work = work.loc[mask] if mask.any() else work
-    cand_mask = work.apply(is_candidate, axis=1) if not work.empty else pd.Series(dtype=bool)
-    candidates = work.loc[cand_mask] if cand_mask.any() else work.head(0)
-    # 候補ゼロのときは定量上位から埋める（機能縮退。空で黙らない）。
-    if candidates.empty and not work.empty:
-        candidates = work.sort_values("total_score", ascending=False).head(max_per_day)
-    candidates = apply_risk_constraints(candidates, max_per_day=max_per_day)
+    candidates = select_recommendation_candidates(work, max_per_day=max_per_day)
 
     freshness = []
     try:
@@ -431,6 +447,8 @@ def _strategist_body(
         nonlocal llm_capped, discarded
         row = candidates.loc[candidates["ticker"].astype(str) == ticker].iloc[0]
         reasons = assign_reason_codes(row)
+        if str(row.get("candidate_tier") or "core") == "fill" and "RANK_FILL" not in reasons:
+            reasons.append("RANK_FILL")
         row = row.copy()
         row["reason_codes"] = reasons
         prior = compute_hit_rate_prior(
@@ -521,6 +539,7 @@ def _strategist_body(
                 source_doc_ids=source_ids,
                 data_freshness=freshness,
                 high_vol_regime=high_vol_regime,
+                candidate_tier=str(row.get("candidate_tier") or "core"),
             )
             warehouse.insert_recommendation(rec)
             recs.append(rec)
@@ -554,6 +573,16 @@ def _strategist_body(
     metrics = attach_step_failures(
         {
             "n_candidates": len(candidates),
+            "n_core_candidates": int(
+                (candidates["candidate_tier"] == "core").sum()
+            )
+            if not candidates.empty and "candidate_tier" in candidates.columns
+            else 0,
+            "n_fill_candidates": int(
+                (candidates["candidate_tier"] == "fill").sum()
+            )
+            if not candidates.empty and "candidate_tier" in candidates.columns
+            else 0,
             "n_recs": len(recs),
             "n_discarded": discarded,
             "llm_capped": llm_capped,

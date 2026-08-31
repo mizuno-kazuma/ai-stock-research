@@ -100,6 +100,7 @@ class ReasonCode(StrEnum):
     EVENT_EARNINGS_SOON = "EVENT_EARNINGS_SOON"
     DATA_STALE = "DATA_STALE"
     MODEL_LOW_CONFIDENCE = "MODEL_LOW_CONFIDENCE"
+    RANK_FILL = "RANK_FILL"
 
 
 KNOWN_REASON_CODES: frozenset[str] = frozenset(c.value for c in ReasonCode)

@@ -368,3 +368,106 @@ def test_try_load_ranker_reads_artifact(tmp_path: Path) -> None:
         data_dir = tmp_path
 
     assert try_load_ranker(_Settings(), market="JP") is not None
+
+
+def test_fill_recommendation_forces_low_conviction_and_rank_fill_code() -> None:
+    row = pd.Series(
+        {
+            "ticker": "1301",
+            "quant_score": 88,
+            "total_score": 88,
+            "ml_pred_h20": -0.01,
+            "ml_pred_h20_lo": -0.12,
+            "ml_pred_h20_hi": 0.08,
+            "qual_score": None,
+            "reason_codes": ["VAL_CHEAP_VS_SECTOR"],
+        }
+    )
+    rec = build_recommendation(
+        row,
+        as_of=date(2026, 8, 21),
+        market="JP",
+        n_prior_samples=80,
+        hit_rate_prior=0.6,
+        thesis=None,
+        memory_ids=[],
+        source_doc_ids=["quant:scores_daily"],
+        data_freshness=[],
+        candidate_tier="fill",
+    )
+    assert rec["conviction"] == "low"
+    assert "RANK_FILL" in rec["reason_codes"]
+    assert "補充" in rec["thesis_ja"]
+
+
+def _quota_score_frame(as_of: date) -> pd.DataFrame:
+    rows = [
+        {
+            "ticker": "1301",
+            "market": "JP",
+            "as_of": as_of,
+            "quant_score": 70.0,
+            "quant_percentile": 0.91,
+            "total_score": 70.0,
+            "ml_pred_h20": 0.04,
+            "ml_pred_h20_lo": -0.01,
+            "ml_pred_h20_hi": 0.09,
+            "qual_score": None,
+            "qual_confidence": None,
+            "value_z": 1.2,
+            "momentum_z": 0.4,
+            "sector_code": "S99",
+            "n_missing": 0,
+            "adv_20d": 5e8,
+            "market_cap": 5e12,
+        }
+    ]
+    for i in range(12):
+        rows.append(
+            {
+                "ticker": f"7{i:03d}",
+                "market": "JP",
+                "as_of": as_of,
+                "quant_score": 80.0 - i,
+                "quant_percentile": 0.70,
+                "total_score": 80.0 - i,
+                "ml_pred_h20": -0.02,
+                "ml_pred_h20_lo": -0.12,
+                "ml_pred_h20_hi": 0.05,
+                "qual_score": None,
+                "qual_confidence": None,
+                "value_z": 0.2,
+                "momentum_z": 0.1,
+                "sector_code": f"S{i % 4:02d}",
+                "n_missing": 0,
+                "adv_20d": 5e8,
+                "market_cap": 5e12,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def test_strategist_fills_to_ten_when_only_one_core_candidate() -> None:
+    state = FakeStateRepo()
+    warehouse = FakeWarehouse()
+    as_of = date(2026, 8, 21)
+    scores = _quota_score_frame(as_of)
+    warehouse.scores = scores
+    warehouse.doc_text["quant:scores_daily"] = "定量スコアとML予測区間に基づく自動生成カードです。"
+    result = strategist(
+        "JP",
+        as_of,
+        state=state,
+        warehouse=warehouse,
+        scores=scores,
+        router=None,
+    )
+    assert result.metrics["n_candidates"] == 10
+    assert result.metrics["n_core_candidates"] == 1
+    assert result.metrics["n_fill_candidates"] == 9
+    assert result.metrics["n_recs"] == 10
+    tickers = [r["ticker"] for r in warehouse.recs]
+    assert "1301" in tickers
+    fill_recs = [r for r in warehouse.recs if r["ticker"] != "1301"]
+    assert all("RANK_FILL" in r["reason_codes"] for r in fill_recs)
+    assert all(r["conviction"] == "low" for r in fill_recs)

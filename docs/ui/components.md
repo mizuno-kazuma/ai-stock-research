@@ -280,6 +280,7 @@ Reason code labels (complete list, matching `../05-scoring-screening.md` §7.4):
 | `EVENT_EARNINGS_SOON` | 決算発表が近い | warning |
 | `DATA_STALE` | データが古い | warning |
 | `MODEL_LOW_CONFIDENCE` | モデルの直近成績が低下 | warning |
+| `RANK_FILL` | 定量順位による補充 | warning |
 
 Colors: positive uses `--status-info` on `--status-info-bg`; negative uses `--status-danger` on
 `--status-danger-bg`; warning uses `--status-warning` on `--status-warning-bg`.

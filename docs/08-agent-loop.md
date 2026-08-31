@@ -210,7 +210,7 @@ def aggregate_qual_score(summaries: list[Summary], as_of: date) -> QualResult:
 
 1. `total_score` を算出する（[05-scoring-screening.md](05-scoring-screening.md) §6.3）
 2. ユニバースフィルタとリスク制約を適用する
-3. 推奨候補を選抜する
+3. 推奨候補を選抜する（コア候補を優先し、不足分を定量順位で補充して件数目標に近づける。[05-scoring-screening.md](05-scoring-screening.md) §7.2）
 4. 各候補について LLM で thesis / bear case / invalidation / conviction を生成する
 5. reason codes を付与する
 6. `hit_rate_prior` を過去実績から算出する
@@ -602,7 +602,7 @@ def resume_interrupted_jobs() -> None:
 | bear case の必須化 | リポジトリ検証 | 20文字未満の bear case を持つ推奨を挿入しない |
 | 信頼区間の必須化 | リポジトリ検証 | 区間のない予測を保存しない |
 | 確信度の上限 | Strategist + Critic | `n_prior_samples < 20` なら `conviction = low` に強制 |
-| 推奨件数の上限 | Strategist | `agent.max_recommendations_per_day`（既定10） |
+| 推奨件数の目標かつ上限 | Strategist | `agent.max_recommendations_per_day`（既定10）。コア候補が足りなければ定量順位で補充する |
 | 同一セクター上限 | Strategist | 3件 |
 | 並行実行の禁止 | APScheduler `max_instances=1` | DuckDB の単一ライタ制約 |
 | 再開の誤発火防止 | `resume_interrupted_jobs` | pid 生存ならスキップ。空の resume 行は作らない |
