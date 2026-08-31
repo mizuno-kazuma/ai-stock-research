@@ -186,6 +186,8 @@ def is_candidate(row) -> bool:
             and row.ml_pred_h20_lo > -0.05)       # 下限が -5% より上（極端な下方リスクを除外）
 ```
 
+この3条件は**コア候補**の定義である。1日の推奨件数は `agent.max_recommendations_per_day`（既定10）を目標とし、コア候補が足りない日は §7.2 の補充で定量上位から埋める。ゲートを緩めて「全部コア」と偽ることはしない。
+
 ## 6. LLM 定性オーバーレイ
 
 ### 6.1 qual_score の定義
@@ -258,12 +260,20 @@ universe_filter:
 
 | 制約 | 値 | 理由 |
 | --- | --- | --- |
-| 1日の推奨件数上限 | 10件（設定 `agent.max_recommendations_per_day`） | 情報過多で判断できなくなるのを防ぐ |
+| 1日の推奨件数 | 目標かつ上限 10件（設定 `agent.max_recommendations_per_day`） | 情報過多を防ぎつつ、毎日の確認材料を欠かさない |
 | 同一セクターの推奨上限 | 3件 | セクター集中を避ける |
 | 既存保有と同一銘柄の重複推奨 | `action='accumulate'` としてのみ許可 | 追加購入の判断材料として提示 |
 | 高ボラ銘柄（`realized_vol_60d > 60%`） | `conviction` を1段下げる | |
 | 決算発表直前（5営業日以内） | 推奨に「決算前」の警告フラグを立てる | イベントリスクの明示 |
 | 市場が高ボラレジーム | 全推奨の `conviction` を1段下げる | [04-analysis-engine.md](04-analysis-engine.md) §5 |
+
+**件数目標への補充**: コア候補（§5 の `is_candidate`）をセクター上限込みで先に取る。空き枠はユニバース通過銘柄を `total_score` 降順で埋める。補充分には `candidate_tier='fill'` と reason code `RANK_FILL` を付け、`conviction` を `low` に固定する。コア候補を補充候補より高い `total_score` で追い出すことはしない。
+
+### 7.2.1 コア候補が1件だと補充が止まっていた
+
+**原因**: 初期実装は `is_candidate` 通過が **0件のときだけ** `total_score` 上位で埋めていた。通過が1件ある日は補充が走らず、推奨が1件で止まった。0件の日の方が10件出る、という逆転が起きる。ML予測区間の下限 `> -0.05` は共形予測の幅が広いとほとんど通らないため、コア通過は0〜1件になりやすい。
+
+**対策**: 通過件数にかかわらず空き枠を埋める（`select_recommendation_candidates`）。ゲートの閾値（上位15%・超過正・下限 -5%）は変更しない。
 
 ### 7.3 action の決定
 
@@ -302,8 +312,9 @@ universe_filter:
 | `EVENT_EARNINGS_SOON` | 決算発表が近い | 5営業日以内 |
 | `DATA_STALE` | データが古い | `latest_as_of` が期待より3営業日以上遅れ |
 | `MODEL_LOW_CONFIDENCE` | モデルの直近成績が悪い | 直近20日のRank ICが下位10% |
+| `RANK_FILL` | 定量順位による件数補充 | コア候補が1日の目標件数に足りず、`total_score` 順で枠を埋めた |
 
-`DATA_STALE` と `MODEL_LOW_CONFIDENCE` は**ネガティブな情報も reason code として明示する**ためのものである。良い理由だけを並べない。
+`DATA_STALE` と `MODEL_LOW_CONFIDENCE` と `RANK_FILL` は**ネガティブな情報も reason code として明示する**ためのものである。良い理由だけを並べない。
 
 ### 7.5 推奨カードの必須構成要素
 

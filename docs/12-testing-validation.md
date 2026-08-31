@@ -468,6 +468,25 @@ def test_conviction_forced_to_low_when_few_samples():
     assert rec.conviction == "low"
 ```
 
+### T-LLM-06b: 件数目標への補充
+
+```python
+def test_select_fills_quota_when_one_core_candidate():
+    """コア候補が1件でも、空き枠を定量順位で埋めて10件にする。"""
+    selected = select_recommendation_candidates(scores, max_per_day=10)
+    assert len(selected) == 10
+    assert (selected["candidate_tier"] == "core").sum() == 1
+
+def test_fill_does_not_displace_core_candidate():
+    """補充候補の total_score が高くても、コア候補を追い出さない。"""
+    ...
+
+def test_fill_recommendation_forces_low_conviction_and_rank_fill_code():
+    rec = build_recommendation(..., candidate_tier="fill", n_prior_samples=80)
+    assert rec.conviction == "low"
+    assert "RANK_FILL" in rec.reason_codes
+```
+
 ### T-LLM-07: プロンプトのゴールデンテスト
 
 ```python

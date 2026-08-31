@@ -232,11 +232,14 @@ def score_cross_section(
 
 
 def is_candidate(row: pd.Series) -> bool:
-    """推奨候補の条件（docs §5）。
+    """推奨のコア候補条件（docs §5）。
 
     `quant_score` と `ml_pred` の両方が上位であることを条件にする。前者は
     ルールベースで説明可能だが最適化されていない。後者は最適化されているが説明が
     難しい。両者が一致する銘柄は片方だけで選ぶより頑健である。
+
+    このゲートを満たさない銘柄でも、1日の件数目標に足りないときは定量順位で
+    補充する（`select_recommendation_candidates`）。ゲート自体は緩めない。
     """
     percentile = row.get("quant_percentile")
     pred = row.get("ml_pred_h20")

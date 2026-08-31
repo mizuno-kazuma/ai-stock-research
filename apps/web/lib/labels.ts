@@ -243,6 +243,7 @@ export const REASON_CODES: Record<string, { labelJa: string; tone: Tone }> = {
   EVENT_EARNINGS_SOON: { labelJa: "決算発表が近い", tone: "warning" },
   DATA_STALE: { labelJa: "データが古い", tone: "warning" },
   MODEL_LOW_CONFIDENCE: { labelJa: "モデルの直近成績が低下", tone: "warning" },
+  RANK_FILL: { labelJa: "定量順位による補充", tone: "warning" },
   VAL_EXPENSIVE_VS_SECTOR: { labelJa: "セクター内で割高", tone: "negative" },
   MOM_WEAK_12M: { labelJa: "12ヶ月モメンタム弱い", tone: "negative" },
   VOL_HIGH_REGIME: { labelJa: "高ボラティリティ", tone: "negative" },
