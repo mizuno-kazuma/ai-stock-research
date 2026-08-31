@@ -65,6 +65,7 @@ from .sqlite_repo import (
     to_dict,
     utc_now_iso,
 )
+from .tickers import canonical_jp_ticker, issuer_key, unique_by_issuer
 from .vector_store import (
     DocChunk,
     InMemoryVectorStore,
@@ -77,6 +78,8 @@ from .vector_store import (
 
 __all__ = [
     "DEFAULT_SETTINGS",
+    "LIVE_DATA_KEY",
+    "SEED_DATA_KEY",
     "SETTING_TYPES",
     "AgentMemory",
     "Alert",
@@ -90,14 +93,12 @@ __all__ = [
     "InMemoryVectorStore",
     "InvariantViolation",
     "JobRun",
-    "LIVE_DATA_KEY",
     "LanceDBVectorStore",
     "LlmCall",
     "Market",
     "ParquetLake",
     "Position",
     "RateLimitState",
-    "SEED_DATA_KEY",
     "SQLiteRepo",
     "SearchHit",
     "Setting",
@@ -106,12 +107,14 @@ __all__ = [
     "VectorStore",
     "WatchlistItem",
     "assert_windows_safe",
+    "canonical_jp_ticker",
     "chunk_id_for",
     "doc_blob_name",
     "get_vector_store",
     "init_all",
     "is_serving_seed",
     "is_valid_path_component",
+    "issuer_key",
     "mark_live_ingest",
     "parquet_partition_path",
     "raw_path",
@@ -119,6 +122,7 @@ __all__ = [
     "should_load_seed_payload",
     "timestamp_component",
     "to_dict",
+    "unique_by_issuer",
     "utc_now_iso",
 ]
 

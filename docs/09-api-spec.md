@@ -103,7 +103,7 @@ GET /api/v1/dashboard?market=JP&as_of=2026-08-22
         "note_ja": "ランダムウォークに対する優位性は確認できていません（DM検定 p=0.31）"
       }
     },
-    "top_recommendations": [ /* RecommendationSummary の配列。最大5件 */ ],
+    "top_recommendations": [ /* RecommendationSummary の配列。最大5件。発行体あたり1件 */ ],
     "portfolio_snapshot": {
       "n_positions": 8, "unrealized_pnl_pct": 0.0412,
       "day_change_pct": -0.0083, "currency": "JPY",
@@ -294,6 +294,8 @@ GET /api/v1/stocks/search?q=トヨタ&market=JP&limit=10
 ```
 
 検索は銘柄コード・日本語名・英語名の前方一致と部分一致。日本語のカナ・漢字の両方でヒットするようにする（`securities` に `name_kana` を追加してもよい）。
+
+`securities` は SCD2 のため同一コードが複数行になり、J-Quants は JP を 5 桁（`13010`）で返す。検索結果は発行体あたり 1 件に畳む（現行行・名称がある行を優先。4 桁と末尾 0 の 5 桁は同一銘柄）。
 
 ### 2.5 決算資料
 

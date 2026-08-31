@@ -6,6 +6,7 @@ import datetime as dt
 
 from fastapi import APIRouter, Depends, Query
 
+from packages.core.storage import unique_by_issuer
 from packages.schemas.common import Envelope, OkResponse
 from packages.schemas.recommendations import (
     RecommendationCard,
@@ -81,6 +82,14 @@ def list_recommendations(
             if not include_rejected and card.critic_verdict == "rejected":
                 continue
             items.append(card)
+    items = [
+        RecommendationCard.model_validate(row)
+        if not isinstance(row, RecommendationCard)
+        else row
+        for row in unique_by_issuer(
+            [c.model_dump() for c in items], extra_key="horizon"
+        )
+    ]
     if as_of is not None and not items:
         latest = state.duck.latest_recommendation_date(market)
         raise data_not_ready(

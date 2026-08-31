@@ -6,6 +6,12 @@ import datetime as dt
 
 from fastapi import APIRouter, Depends, Query
 
+from packages.core.models.regime import (
+    correlation_regime,
+    model_degradation,
+    vol_regime_from_levels,
+)
+from packages.core.storage import unique_by_issuer
 from packages.schemas.common import Envelope
 from packages.schemas.dashboard import (
     AdvanceDecline,
@@ -23,16 +29,11 @@ from packages.schemas.dashboard import (
     VolRegime,
     WatchlistFiling,
 )
-from packages.core.models.regime import (
-    correlation_regime,
-    model_degradation,
-    vol_regime_from_levels,
-)
 from packages.schemas.recommendations import RecommendationSummary
 from services.api.deps import AppState, User, get_app_state, require_user
 from services.api.envelope import wrap
 from services.api.mapping import alert_from_row, recommendation_from_seed
-from services.api.util import as_date, as_utc, resolve_market, split_csv
+from services.api.util import as_date, as_utc, resolve_market
 
 router = APIRouter(tags=["dashboard"])
 
@@ -142,7 +143,7 @@ def _dashboard_from_seed(state: AppState, *, market: str, as_of: dt.date) -> Das
     model = payload.get("model_health") or {}
     jobs = payload.get("jobs") or []
     alerts_raw = payload.get("alerts") or []
-    recs = payload.get("recommendations") or []
+    recs = unique_by_issuer(payload.get("recommendations") or [])
     port = payload.get("portfolio") or {}
     filings = payload.get("filings") or []
     watch = payload.get("watchlist") or []
@@ -301,15 +302,8 @@ def _dashboard_from_seed(state: AppState, *, market: str, as_of: dt.date) -> Das
 
 
 def _unique_recs_by_ticker(rows: list[dict]) -> list[dict]:
-    seen: set[tuple[str, str]] = set()
-    unique: list[dict] = []
-    for row in rows:
-        key = (str(row.get("market") or ""), str(row.get("ticker") or ""))
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(row)
-    return unique
+    """発行体あたり 1 件。H5 と H20、4桁と 5桁、日付違いを畳む。"""
+    return unique_by_issuer(rows)
 
 
 def _dashboard_from_warehouse(state: AppState, *, market: str, as_of: dt.date) -> Dashboard:

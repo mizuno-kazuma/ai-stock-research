@@ -22,6 +22,7 @@ import { DataFreshnessIndicator } from "./freshness";
 import { usePrefs } from "./prefs";
 import { Badge, Button, SegmentedControl, cx } from "./ui";
 import { useAlerts, useSettingsQuery, useStockSearch } from "../lib/queries";
+import { uniqueByIssuer } from "../lib/tickers";
 import { ALERT_CATEGORY_LABEL_JA } from "../lib/labels";
 import { ScoreBadge } from "./values";
 
@@ -86,7 +87,7 @@ function SearchSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
 
   if (!open) return null;
 
-  const hits = results.data?.data ?? [];
+  const hits = uniqueByIssuer(results.data?.data ?? []);
 
   return (
     <>
@@ -121,8 +122,8 @@ function SearchSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
               一致する銘柄がありません。銘柄コード（例 7203）または企業名で試してください。
             </li>
           ) : (
-            hits.map((hit) => (
-              <li key={`${hit.market}-${hit.ticker}`}>
+            hits.map((hit, index) => (
+              <li key={`${hit.market}-${hit.ticker}-${index}`}>
                 <Link
                   href={`/stocks/${hit.market}/${hit.ticker}`}
                   onClick={onClose}

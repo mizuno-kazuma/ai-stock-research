@@ -361,6 +361,9 @@ Matching, in this priority order:
 3. Japanese company name, partial match
 4. English company name, partial match
 
+Each issuer appears once. SCD2 history rows and JP 4-digit / 5-digit (`1301` / `13010`) collapse
+to a single hit. Previous queries must not remain visible while the current query is in flight.
+
 Results group by type:
 
 ```
