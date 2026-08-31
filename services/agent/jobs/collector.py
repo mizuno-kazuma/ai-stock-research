@@ -60,6 +60,15 @@ def _latest_coverage(warehouse: Any, table: str, market: str | None) -> date | N
     return date.fromisoformat(text[:10])
 
 
+def _format_step_error(exc: BaseException) -> str:
+    """OSError は filename が str(exc) に出ないことがあるので明示する。"""
+    detail = str(exc).strip() or repr(exc)
+    filename = getattr(exc, "filename", None)
+    if filename and str(filename) not in detail:
+        detail = f"{detail}: {filename}"
+    return f"{type(exc).__name__}: {detail}"
+
+
 def _secret(settings: Any, name: str) -> str:
     value = getattr(settings, name, None)
     if value is None:
@@ -143,7 +152,7 @@ def collector(
             results[name] = StepResult(status="success", metrics=dict(metrics), required=required)
         except Exception as exc:
             results[name] = StepResult(
-                status="failed", error=f"{type(exc).__name__}: {exc}", required=required
+                status="failed", error=_format_step_error(exc), required=required
             )
             if warehouse is not None:
                 try:
@@ -344,9 +353,10 @@ def builtin_connector_steps(
         from packages.core.connectors.base import FetchWindow
 
         settings = get_settings()
+        settings.ensure_directories()
         cls = get_connector(source)
         connector = cls(
-            data_dir=settings.raw_dir,
+            data_dir=settings.data_dir,
             warehouse=warehouse,
             state=state,
             env=_env_from_settings(settings),

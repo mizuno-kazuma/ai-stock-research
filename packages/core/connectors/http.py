@@ -179,6 +179,12 @@ class HttpClient:
                 response = self._client.request(
                     method, url, params=dict(params or {}), headers=merged_headers
                 )
+            except FileNotFoundError as exc:
+                path = exc.filename or str(exc)
+                raise TransientError(
+                    f"{self.source}: 必要なファイルが見つかりません（{path}）。"
+                    "仮想環境を作り直したあとは API を再起動してください。"
+                ) from exc
             except (httpx.TimeoutException, httpx.TransportError) as exc:
                 last_error = TransientError(f"{self.source}: 通信エラー: {scrub(str(exc))}")
                 self._backoff(attempt, last_error)
