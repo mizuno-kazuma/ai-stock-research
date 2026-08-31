@@ -300,10 +300,28 @@ def _dashboard_from_seed(state: AppState, *, market: str, as_of: dt.date) -> Das
     )
 
 
+def _unique_recs_by_ticker(rows: list[dict]) -> list[dict]:
+    seen: set[tuple[str, str]] = set()
+    unique: list[dict] = []
+    for row in rows:
+        key = (str(row.get("market") or ""), str(row.get("ticker") or ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(row)
+    return unique
+
+
 def _dashboard_from_warehouse(state: AppState, *, market: str, as_of: dt.date) -> Dashboard:
-    recs = state.duck.get_recommendations(market=market, as_of=as_of, limit=5)
+    recs = state.duck.get_recommendations(market=market, as_of=as_of, limit=20)
     if not recs:
-        recs = state.duck.get_recommendations(market=market, limit=5)
+        latest = state.duck.latest_recommendation_date(market)
+        recs = (
+            state.duck.get_recommendations(market=market, as_of=latest, limit=20)
+            if latest
+            else []
+        )
+    recs = _unique_recs_by_ticker(recs)[:5]
     summaries: list[RecommendationSummary] = []
     for row in recs:
         sec = state.duck.get_security(row["ticker"], row["market"]) or {}

@@ -937,7 +937,7 @@ export function mapRecHistory(raw: unknown): RecommendationHistoryRow[] {
 }
 
 export function mapSearchHits(raw: unknown): StockSearchHit[] {
-  return unwrapItems(raw).map((row) => {
+  const mapped = unwrapItems(raw).map((row) => {
     const d = rec(row);
     return {
       ...(d as unknown as StockSearchHit),
@@ -946,6 +946,28 @@ export function mapSearchHits(raw: unknown): StockSearchHit[] {
       name_local: str(d.name_local, str(d.ticker)),
     };
   });
+  const best = new Map<string, StockSearchHit>();
+  const named = (hit: StockSearchHit) => Boolean(hit.name_local && hit.name_local !== hit.ticker);
+  for (const hit of mapped) {
+    const canonical =
+      hit.market === "JP" && hit.ticker.length === 5 && hit.ticker.endsWith("0")
+        ? hit.ticker.slice(0, 4)
+        : hit.ticker;
+    const key = `${hit.market}:${canonical}`;
+    const prev = best.get(key);
+    if (!prev) {
+      best.set(key, hit);
+      continue;
+    }
+    if (named(hit) && !named(prev)) {
+      best.set(key, hit);
+      continue;
+    }
+    if (named(hit) === named(prev) && hit.ticker.length < prev.ticker.length) {
+      best.set(key, hit);
+    }
+  }
+  return [...best.values()];
 }
 
 function mapFxForecast(raw: unknown): FxForecast {
