@@ -2,7 +2,7 @@
 
 docs/02-data-ingestion.md §5、docs/06-filings-access.md §3。
 
-- 認証は `Subscription-Key` ヘッダ `[要検証]`
+- 認証は `Ocp-Apim-Subscription-Key` ヘッダ（`Subscription-Key` では 401 になる）
 - 日次バッチで前営業日の `documents.json?date=...&type=2` を1回取得する
 - 取得対象は `docTypeCode` で絞る
 - PDF（`type=2`）を優先ダウンロードする（Gemini が PDF をネイティブ入力できるため）
@@ -26,6 +26,7 @@ from packages.core.connectors.base import (
     tag_table,
 )
 from packages.core.connectors.errors import (
+    AuthError,
     ConfigurationError,
     NotFoundError,
     SchemaDriftError,
@@ -137,6 +138,20 @@ class EdinetConnector(HttpConnector):
                 source=self.source,
                 endpoint=EP_DOCUMENTS,
             )
+        apim_status = _apim_status(payload)
+        if apim_status in {"401", "403"}:
+            message = str(payload.get("message") or "").strip()
+            raise AuthError(
+                f"edinet: 認証に失敗しました（StatusCode={apim_status}）。"
+                "リトライせず中断します。APIキーと権限を確認してください。"
+                + (f" {message}" if message else "")
+            )
+        if apim_status is not None and apim_status not in {"200", "201"}:
+            message = str(payload.get("message") or "").strip()
+            raise TransientError(
+                f"edinet: date={day.isoformat()} type={list_type} "
+                f"StatusCode={apim_status} {message}".strip()
+            )
         meta = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
         status = str(meta.get("status") or "200")
         if status not in {"200", "201"}:
@@ -221,6 +236,22 @@ class EdinetConnector(HttpConnector):
 
     def checkpoint(self) -> Checkpoint:
         return self._checkpoint
+
+
+def _apim_status(payload: dict[str, Any]) -> str | None:
+    """Azure APIM は HTTP 200 のまま `{StatusCode, message}` だけ返すことがある。
+
+    `metadata` がある通常レスポンスは対象外。ヘッダ名を `Subscription-Key` に
+    すると 401 になり、空の results として成功扱いになっていた。
+    """
+    if isinstance(payload.get("metadata"), dict):
+        return None
+    raw = payload.get("StatusCode")
+    if raw is None:
+        raw = payload.get("statusCode")
+    if raw is None:
+        return None
+    return str(raw)
 
 
 def _result_rows(payload: Any) -> list[Any]:

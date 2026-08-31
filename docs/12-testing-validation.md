@@ -291,6 +291,13 @@ def test_negative_per_becomes_null():
     assert f["earnings_yield"] == pytest.approx(-0.1)   # 逆数は負値として有効
 ```
 
+### T-DQ-06: EDINET の APIM 401 を空一覧にしない
+
+Azure APIM は誤った認証ヘッダでも HTTP 200 で `{StatusCode: 401}` を返す。
+`Ocp-Apim-Subscription-Key` 以外のヘッダ名だと書類が 0 件に見える。
+`tests/unit/connectors/test_edinet_normalize.py` の
+`test_get_documents_json_rejects_apim_401_body` がこれを固定する。
+
 ## 5. 統計実装のテスト
 
 ### T-STAT-01: Diebold-Mariano 検定の既知ケース

@@ -8,7 +8,7 @@ import pytest
 
 from packages.core.connectors.base import RawBatch
 from packages.core.connectors.edinet import EdinetConnector, _result_rows
-from packages.core.connectors.errors import TransientError
+from packages.core.connectors.errors import AuthError, TransientError
 
 
 def _connector(tmp_path) -> EdinetConnector:
@@ -60,6 +60,30 @@ def test_get_documents_json_rejects_non_200_metadata(tmp_path, monkeypatch) -> N
         return {"metadata": {"status": "400", "message": "Bad Request"}, "results": []}
 
     monkeypatch.setattr(connector.http, "get_json", fake_get_json)
-    with pytest.raises(TransientError, match="metadata.status=400"):
+    with pytest.raises(TransientError, match=r"metadata.status=400"):
+        connector._get_documents_json(date(2026, 8, 27), "2")
+    connector.close()
+
+
+def test_auth_header_is_ocp_apim_subscription_key(tmp_path) -> None:
+    connector = _connector(tmp_path)
+    headers = connector.auth_headers()
+    connector.close()
+    assert headers["Ocp-Apim-Subscription-Key"] == "test-key"
+    assert "Subscription-Key" not in headers
+
+
+def test_get_documents_json_rejects_apim_401_body(tmp_path, monkeypatch) -> None:
+    """HTTP 200 でも本文 StatusCode=401 は空一覧ではなく認証失敗。"""
+    connector = _connector(tmp_path)
+
+    def fake_get_json(url, *, params=None, endpoint=""):
+        return {
+            "StatusCode": 401,
+            "message": "Access denied due to invalid subscription key.",
+        }
+
+    monkeypatch.setattr(connector.http, "get_json", fake_get_json)
+    with pytest.raises(AuthError, match="StatusCode=401"):
         connector._get_documents_json(date(2026, 8, 27), "2")
     connector.close()

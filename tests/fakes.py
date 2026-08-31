@@ -15,6 +15,7 @@ from packages.core.interfaces.storage import (
     SearchHit,
 )
 from packages.core.llm.errors import InvariantViolationError
+from packages.core.storage import jp_ticker_aliases
 
 
 class FakeStateRepo:
@@ -302,7 +303,8 @@ class FakeWarehouse:
         rows = list(self.documents.values())
         tickers = kwargs.get("tickers")
         if tickers:
-            rows = [r for r in rows if str(r.get("ticker")) in {str(t) for t in tickers}]
+            wanted = {alias for t in tickers for alias in jp_ticker_aliases(str(t))}
+            rows = [r for r in rows if str(r.get("ticker")) in wanted]
         return pd.DataFrame(rows)
 
     def get_document(self, doc_id: str) -> dict[str, Any] | None:
@@ -324,7 +326,7 @@ class FakeWarehouse:
         q = (query or "").lower()
         hits: list[SearchHit] = []
         for doc_id, row in self.documents.items():
-            if ticker and str(row.get("ticker")) != str(ticker):
+            if ticker and str(row.get("ticker")) not in jp_ticker_aliases(str(ticker)):
                 continue
             if market and str(row.get("market")) != str(market):
                 continue

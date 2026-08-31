@@ -6,7 +6,7 @@ import datetime as dt
 
 from fastapi import APIRouter, Depends, Query, Response
 
-from packages.core.storage import unique_by_issuer
+from packages.core.storage import issuer_key, unique_by_issuer
 from packages.schemas.common import Envelope
 from packages.schemas.documents import DocumentList
 from packages.schemas.recommendations import (
@@ -362,11 +362,13 @@ def get_stock_documents(
     rows = state.duck.get_documents(ticker=ticker, market=market, doc_type=mapped, limit=limit)
     items = [document_from_row(r) for r in rows]
     if not items:
+        wanted = issuer_key(market, ticker)
         for row in state.payload.get("filings") or []:
-            if row.get("ticker") == ticker and row.get("market") == market:
-                if mapped and map_doc_type(row.get("doc_type")) != mapped:
-                    continue
-                items.append(document_from_row(row, has_summary=bool(row.get("has_summary"))))
+            if issuer_key(row.get("market"), row.get("ticker")) != wanted:
+                continue
+            if mapped and map_doc_type(row.get("doc_type")) != mapped:
+                continue
+            items.append(document_from_row(row, has_summary=bool(row.get("has_summary"))))
     return wrap(state, DocumentList(items=items[:limit], total=len(items), limit=limit, offset=0))
 
 

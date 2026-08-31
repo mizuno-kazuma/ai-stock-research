@@ -19,6 +19,7 @@ from packages.core.llm.prompts import render_prompt
 from packages.core.llm.rag import index_document
 from packages.core.llm.router import LLMRouter
 from packages.core.llm.schemas import DocSummaryOutput
+from packages.core.storage import jp_ticker_aliases
 from services.agent.checkpoint import with_checkpoint
 from services.agent.deps import begin_run, finish_run, require_not_failed
 from services.agent.types import JobResult, StepResult
@@ -162,7 +163,8 @@ def researcher(
     )
     if tickers:
         if not docs.empty and "ticker" in docs.columns:
-            docs = docs.loc[docs["ticker"].astype(str).isin(tickers)]
+            wanted = {alias for t in tickers for alias in jp_ticker_aliases(str(t))}
+            docs = docs.loc[docs["ticker"].astype(str).isin(wanted)]
     targets = (
         sorted(docs["ticker"].astype(str).unique().tolist())
         if not docs.empty and "ticker" in docs.columns
@@ -171,8 +173,9 @@ def researcher(
 
     def process(ticker: str) -> None:
         nonlocal overall
+        aliases = jp_ticker_aliases(ticker)
         subset = (
-            docs.loc[docs["ticker"].astype(str) == ticker]
+            docs.loc[docs["ticker"].astype(str).isin(aliases)]
             if not docs.empty and "ticker" in docs.columns
             else pd.DataFrame()
         )

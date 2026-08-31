@@ -63,3 +63,19 @@ def test_warehouse_counts_sample_week_only(seeded_repos) -> None:
     assert seed_sample.new_filings_count == 5
     seed_this_week = _dashboard_from_seed(state, market="JP", as_of=date(2026, 8, 29))
     assert seed_this_week.new_filings_count == 0
+
+
+def test_warehouse_watchlist_matches_jquants_padded_ticker(seeded_repos) -> None:
+    duck, sqlite, _payload = seeded_repos
+    sqlite.add_to_watchlist("72030", "JP")
+    state = AppState(
+        settings=get_settings(),
+        duck=duck,
+        sqlite=sqlite,
+        bus=EventBus(),
+        started_at=utc_now(),
+        payload={},
+    )
+    sample_week = _dashboard_from_warehouse(state, market="JP", as_of=date(2026, 8, 22))
+    tickers = {row.ticker for row in sample_week.watchlist_filings}
+    assert "7203" in tickers

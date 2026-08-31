@@ -11,7 +11,7 @@ from packages.core.models.regime import (
     model_degradation,
     vol_regime_from_levels,
 )
-from packages.core.storage import unique_by_issuer
+from packages.core.storage import issuer_key, unique_by_issuer
 from packages.schemas.common import Envelope
 from packages.schemas.dashboard import (
     AdvanceDecline,
@@ -147,7 +147,7 @@ def _dashboard_from_seed(state: AppState, *, market: str, as_of: dt.date) -> Das
     port = payload.get("portfolio") or {}
     filings = payload.get("filings") or []
     watch = payload.get("watchlist") or []
-    watch_tickers = {(w.get("market"), w.get("ticker")) for w in watch}
+    watch_tickers = {issuer_key(w.get("market"), w.get("ticker")) for w in watch}
     start, end = _filings_range(as_of)
     filings = [
         doc
@@ -193,7 +193,7 @@ def _dashboard_from_seed(state: AppState, *, market: str, as_of: dt.date) -> Das
     last_job = jobs[0] if jobs else {}
     watch_filings = []
     for doc in filings:
-        key = (doc.get("market"), doc.get("ticker"))
+        key = issuer_key(doc.get("market"), doc.get("ticker"))
         if key in watch_tickers:
             watch_filings.append(
                 WatchlistFiling(
@@ -386,10 +386,12 @@ def _dashboard_from_warehouse(state: AppState, *, market: str, as_of: dt.date) -
         )
 
     start, end = _filings_range(as_of)
-    watch = {(w.market, w.ticker) for w in state.sqlite.get_watchlist()}
+    watch = {issuer_key(w.market, w.ticker) for w in state.sqlite.get_watchlist()}
     docs = state.duck.get_documents(market=market, since=start, until=end, limit=80)
     preferred = [
-        row for row in docs if not watch or (row.get("market"), row.get("ticker")) in watch
+        row
+        for row in docs
+        if not watch or issuer_key(row.get("market"), row.get("ticker")) in watch
     ]
     source_docs = preferred or docs
     watch_filings: list[WatchlistFiling] = []

@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, Response
 
 from packages.core.config import get_settings
 from packages.core.llm.errors import CostCapExceeded, KillSwitchActive
+from packages.core.storage import issuer_key
 from packages.schemas.common import Envelope
 from packages.schemas.documents import (
     Document,
@@ -73,8 +74,8 @@ def list_documents(
         market = resolve_market(market)
     mapped = map_doc_type(doc_type) if doc_type else None
     items = _all_docs(state)
-    held = {(p.market, p.ticker) for p in state.sqlite.get_positions()}
-    watch = {(w.market, w.ticker) for w in state.sqlite.get_watchlist()}
+    held = {issuer_key(p.market, p.ticker) for p in state.sqlite.get_positions()}
+    watch = {issuer_key(w.market, w.ticker) for w in state.sqlite.get_watchlist()}
     filtered: list[Document] = []
     for doc in items:
         if market and doc.market != market:
@@ -86,7 +87,7 @@ def list_documents(
             continue
         if filed_to and filed and filed > filed_to:
             continue
-        key = (doc.market, doc.ticker)
+        key = issuer_key(doc.market, doc.ticker)
         if held_only and key not in held:
             continue
         if watchlist_only and key not in watch:
