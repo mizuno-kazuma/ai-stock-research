@@ -267,13 +267,19 @@ yfinance が以下のいずれかに該当した場合のみ呼ぶ。常用し�
 
 ### 5.1 認証
 
-`Subscription-Key` ヘッダにAPIキーを付与する。`[要検証]`
+Azure API Management のヘッダ `Ocp-Apim-Subscription-Key` に API キーを付与する。
+クエリ `Subscription-Key` でも通るが、実装はヘッダに統一する。
 
 ```
-Subscription-Key: {EDINET_SUBSCRIPTION_KEY}
+Ocp-Apim-Subscription-Key: {EDINET_SUBSCRIPTION_KEY}
 ```
+
+`Subscription-Key` ヘッダは **使わない**。APIM は HTTP 200 のまま本文
+`{ "StatusCode": 401, "message": "Access denied due to invalid subscription key." }`
+を返し、書類一覧が空に見える。コネクタはこの本文を `AuthError` として中断する。
 
 キーは EDINET のサイトから利用登録して取得する。v1 は廃止済みであり v2 のみを使う。
+最終確認: 2026-09-01。
 
 ### 5.2 エンドポイント
 

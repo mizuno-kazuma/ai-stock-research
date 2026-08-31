@@ -209,6 +209,11 @@ CREATE INDEX idx_documents_ticker ON documents(ticker, market, filed_at DESC);
 CREATE INDEX idx_documents_type ON documents(doc_type, filed_at DESC);
 ```
 
+`ticker` は EDINET では 4 桁（`secCode` の末尾 0 を落とした値、例: `7203`）。
+J-Quants の証券マスタと画面は 5 桁（`72030`）のことがある。読み出しは
+`jp_ticker_aliases` で両方を同一銘柄として扱う。英字を含む新コード（`130A`）は
+パディングしない。
+
 `doc_type` の値域（固定値。追加時は本ドキュメントを更新する）:
 
 | 値 | 意味 | 主なソース |

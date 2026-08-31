@@ -174,3 +174,29 @@ def test_sqlite_settings_and_trade_roundtrip() -> None:
         found = state.get_trade("tr_test")
         assert found is not None
         assert state.delete_trade("tr_test") is True
+
+
+def test_get_documents_matches_jquants_padded_ticker() -> None:
+    """EDINET は 4 桁、画面は 5 桁でも同一銘柄として返す。"""
+    with DuckDBRepo.in_memory() as duck:
+        n = duck.upsert_documents(
+            [
+                {
+                    "doc_id": "edinet:S100TEST",
+                    "ticker": "7203",
+                    "market": "JP",
+                    "source": "edinet",
+                    "doc_type": "quarterly_report",
+                    "title": "四半期報告書",
+                    "filed_at": dt.datetime(2026, 8, 27, 15, 0, 0),
+                    "source_url": "https://example.invalid/S100TEST",
+                }
+            ]
+        )
+        assert n == 1
+        four = duck.get_documents(ticker="7203", market="JP")
+        five = duck.get_documents(ticker="72030", market="JP")
+        assert len(four) == 1
+        assert len(five) == 1
+        assert four[0]["doc_id"] == five[0]["doc_id"] == "edinet:S100TEST"
+        assert duck.get_documents(ticker="130A", market="JP") == []

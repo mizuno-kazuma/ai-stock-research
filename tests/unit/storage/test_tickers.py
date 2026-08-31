@@ -1,6 +1,11 @@
 """発行体キーの畳み込み。"""
 
-from packages.core.storage import canonical_jp_ticker, issuer_key, unique_by_issuer
+from packages.core.storage import (
+    canonical_jp_ticker,
+    issuer_key,
+    jp_ticker_aliases,
+    unique_by_issuer,
+)
 
 
 def test_canonical_jp_ticker_strips_jquants_padding() -> None:
@@ -8,6 +13,14 @@ def test_canonical_jp_ticker_strips_jquants_padding() -> None:
     assert canonical_jp_ticker("7203") == "7203"
     assert canonical_jp_ticker("130A") == "130A"
     assert canonical_jp_ticker("AAPL") == "AAPL"
+
+
+def test_jp_ticker_aliases_include_four_and_five_digit() -> None:
+    assert jp_ticker_aliases("7203") == ("7203", "72030")
+    assert jp_ticker_aliases("72030") == ("72030", "7203")
+    assert jp_ticker_aliases("130A") == ("130A",)
+    assert jp_ticker_aliases("AAPL") == ("AAPL",)
+    assert jp_ticker_aliases("") == ()
 
 
 def test_issuer_key_treats_4_and_5_digit_as_same() -> None:

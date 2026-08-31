@@ -40,13 +40,13 @@ EDGAR  ──┘
 EDINET_API = "https://api.edinet-fsa.go.jp/api/v2"
 
 def edinet_download_url(doc_id: str, kind: Literal["xbrl", "pdf", "csv"]) -> str:
-    """API経由のダウンロードURL。Subscription-Key ヘッダが必要なため、
+    """API経由のダウンロードURL。Ocp-Apim-Subscription-Key ヘッダが必要なため、
     ブラウザから直接開くことはできない。サーバ側で取得して保存する。"""
     type_map = {"xbrl": 1, "pdf": 2, "csv": 5}   # [要検証]
     return f"{EDINET_API}/documents/{doc_id}?type={type_map[kind]}"
 ```
 
-**重要**: このURLは `Subscription-Key` ヘッダが必要なので、UIから直接リンクできない。したがって以下の二段構えにする。
+**重要**: このURLは `Ocp-Apim-Subscription-Key` ヘッダが必要なので、UIから直接リンクできない。したがって以下の二段構えにする。
 
 ### 3.2 ブラウザで直接開ける URL（人間用）
 

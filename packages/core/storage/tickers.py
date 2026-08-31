@@ -23,6 +23,27 @@ def canonical_jp_ticker(ticker: str) -> str:
     return value
 
 
+def jp_ticker_aliases(ticker: str) -> tuple[str, ...]:
+    """照会用の 4 桁と J-Quants 5 桁の両方。
+
+    EDINET の `secCode` は末尾 0 を落として 4 桁で保存する。画面と
+    証券マスタは 5 桁のことがあるので、読み出しは両方を同一銘柄とする。
+    `130A` のような英字コードはパディングしない。
+    """
+    value = str(ticker or "").strip()
+    if not value:
+        return ()
+    aliases = [value]
+    canonical = canonical_jp_ticker(value)
+    if canonical not in aliases:
+        aliases.append(canonical)
+    if canonical.isdigit() and len(canonical) == 4:
+        padded = canonical + "0"
+        if padded not in aliases:
+            aliases.append(padded)
+    return tuple(aliases)
+
+
 def issuer_key(market: str | None, ticker: str | None) -> tuple[str, str]:
     m = str(market or "").strip().upper()
     t = str(ticker or "").strip()

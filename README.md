@@ -159,7 +159,7 @@ Figma Make には [docs/ui/SKILL.md](docs/ui/SKILL.md) を主指示書として�
 | --- | --- | --- |
 | J-Quants API | 日本株の価格・財務 | 無料プランは12週遅延・過去2年・毎分5リクエスト。Light プラン（月1,650円）への移行は設定変更のみ |
 | yfinance | 参考現在値（日米）、米国株価格 | 15分遅延。**モデルの学習・検証には使用しない** |
-| EDINET API v2 | 日本の開示資料（有報・四半期報告書） | 無料。`Subscription-Key` ヘッダ |
+| EDINET API v2 | 日本の開示資料（有報・四半期報告書） | 無料。`Ocp-Apim-Subscription-Key` ヘッダ |
 | TDnet | 日本の適時開示 | 公開APIなし。低頻度取得、既定で無効、規約確認のうえ有効化 |
 | SEC EDGAR | 米国の開示資料 | 無料。`User-Agent` 必須、約10 req/s |
 | FRED API | 為替（DEXJPUS）、金利、CPI | 無料 |

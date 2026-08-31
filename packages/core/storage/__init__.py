@@ -65,7 +65,7 @@ from .sqlite_repo import (
     to_dict,
     utc_now_iso,
 )
-from .tickers import canonical_jp_ticker, issuer_key, unique_by_issuer
+from .tickers import canonical_jp_ticker, issuer_key, jp_ticker_aliases, unique_by_issuer
 from .vector_store import (
     DocChunk,
     InMemoryVectorStore,
@@ -115,6 +115,7 @@ __all__ = [
     "is_serving_seed",
     "is_valid_path_component",
     "issuer_key",
+    "jp_ticker_aliases",
     "mark_live_ingest",
     "parquet_partition_path",
     "raw_path",

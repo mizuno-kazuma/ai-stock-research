@@ -38,14 +38,14 @@ DEFAULT_SOURCES: dict[str, dict[str, Any]] = {
         "rate_limit_per_min": 60,  # 公式に明示なし。安全側 [要検証]
         "auth": {
             "kind": "header",
-            "header_name": "Subscription-Key",
+            "header_name": "Ocp-Apim-Subscription-Key",
             "env_var": "EDINET_SUBSCRIPTION_KEY",
         },
         "retry": {"max_attempts": 5, "backoff_base_sec": 4.0},
         "timeout_sec": 30,
         "read_timeout_sec": 120,
         "enabled": True,
-        "last_verified": "2026-08-23",
+        "last_verified": "2026-09-01",
     },
     "tdnet": {
         "base_url": "https://www.release.tdnet.info",

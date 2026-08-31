@@ -32,7 +32,7 @@ import duckdb
 
 from packages.core.config import Settings, get_settings
 from packages.core.interfaces.storage import SearchHit
-from packages.core.storage.tickers import unique_by_issuer
+from packages.core.storage.tickers import jp_ticker_aliases, unique_by_issuer
 
 logger = logging.getLogger(__name__)
 
@@ -751,8 +751,18 @@ class DuckDBRepo:
     ) -> list[dict[str, Any]]:
         where = ["1=1"]
         params: list[Any] = []
+        if ticker:
+            aliases = jp_ticker_aliases(ticker)
+            if not aliases:
+                where.append("1=0")
+            elif len(aliases) == 1:
+                where.append("ticker = ?")
+                params.append(aliases[0])
+            else:
+                placeholders = ", ".join("?" for _ in aliases)
+                where.append(f"ticker IN ({placeholders})")
+                params.extend(aliases)
         for column, value in (
-            ("ticker", ticker),
             ("market", market),
             ("doc_type", doc_type),
             ("source", source),
