@@ -490,9 +490,15 @@ class DuckDBRepo:
     def search_securities(
         self, q: str, *, market: str | None = None, limit: int = 20
     ) -> list[dict[str, Any]]:
-        """ティッカー・名称（日本語 / 英語 / カナ）の部分一致検索。"""
+        """ティッカー・名称（日本語 / 英語 / カナ）の部分一致検索。
+
+        `securities` は SCD2（`valid_from` が主キー）なので、収集のたびに
+        同じ銘柄が複数行になる。検索は現行の 1 銘柄 1 件だけを返す。
+        JP の 4 桁（7203）と J-Quants の 5 桁（72030）も同一銘柄として畳む。
+        """
         pattern = f"%{q}%"
         padded = f"{q}0" if len(q) == 4 else q
+        canonical_q = q[:-1] if len(q) == 5 and q.endswith("0") else q
         where = [
             "(ticker ILIKE ? OR name_local ILIKE ? OR coalesce(name_en,'') ILIKE ?"
             " OR coalesce(name_kana,'') ILIKE ?)",
@@ -502,10 +508,23 @@ class DuckDBRepo:
         if market:
             where.append("market = ?")
             params.append(market)
+        canonical = (
+            "CASE WHEN market = 'JP' AND length(ticker) = 5 "
+            "AND right(ticker, 1) = '0' THEN left(ticker, 4) ELSE ticker END"
+        )
+        named = (
+            "(nullif(trim(coalesce(name_local, '')), '') IS NOT NULL "
+            "AND trim(name_local) <> ticker)"
+        )
         return self.query(
             f"SELECT * FROM securities WHERE {' AND '.join(where)} "
-            "ORDER BY (ticker = ?) DESC, (ticker = ?) DESC, ticker LIMIT ?",
-            [*params, q, padded, limit],
+            f"QUALIFY row_number() OVER ("
+            f"PARTITION BY market, {canonical} "
+            f"ORDER BY {named} DESC, length(ticker), valid_from DESC"
+            f") = 1 "
+            "ORDER BY (ticker = ?) DESC, (ticker = ?) DESC, (ticker = ?) DESC, ticker "
+            "LIMIT ?",
+            [*params, q, padded, canonical_q, limit],
         )
 
     # -- prices ---------------------------------------------------------------

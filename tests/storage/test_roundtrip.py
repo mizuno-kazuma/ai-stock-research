@@ -43,6 +43,59 @@ def test_duckdb_security_and_price_roundtrip() -> None:
         assert close["close"] == 3074
 
 
+def test_search_securities_returns_one_row_per_issuer() -> None:
+    """履歴行と JP の 4桁/5桁は検索では同一銘柄として畳む。"""
+    with DuckDBRepo.in_memory() as duck:
+        duck.upsert_securities(
+            [
+                {
+                    "ticker": "7203",
+                    "market": "JP",
+                    "name_local": "トヨタ自動車",
+                    "name_en": "Toyota Motor Corporation",
+                    "sector_name": "輸送用機器",
+                    "currency": "JPY",
+                    "valid_from": dt.date(2020, 1, 1),
+                    "is_active": True,
+                },
+                {
+                    "ticker": "72030",
+                    "market": "JP",
+                    "name_local": "72030",
+                    "currency": "JPY",
+                    "valid_from": dt.date(2026, 8, 1),
+                    "is_active": True,
+                },
+                {
+                    "ticker": "72030",
+                    "market": "JP",
+                    "name_local": "トヨタ自動車",
+                    "name_en": "TOYOTA MOTOR CORPORATION",
+                    "sector_name": "輸送用機器",
+                    "currency": "JPY",
+                    "valid_from": dt.date(2026, 8, 18),
+                    "is_active": True,
+                },
+                {
+                    "ticker": "72030",
+                    "market": "JP",
+                    "name_local": "トヨタ自動車",
+                    "name_en": "TOYOTA MOTOR CORPORATION",
+                    "sector_name": "輸送用機器",
+                    "currency": "JPY",
+                    "valid_from": dt.date(2026, 8, 25),
+                    "is_active": True,
+                },
+            ]
+        )
+        hits = duck.search_securities("7203", limit=10)
+        assert [row["ticker"] for row in hits] == ["7203"]
+        named = duck.search_securities("トヨタ", limit=10)
+        assert len(named) == 1
+        assert named[0]["ticker"] == "7203"
+        assert named[0]["name_local"] == "トヨタ自動車"
+
+
 def test_sqlite_settings_and_trade_roundtrip() -> None:
     with SQLiteRepo.in_memory() as state:
         state.set_setting("ui.direction_colors", "jp")

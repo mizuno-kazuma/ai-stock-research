@@ -48,7 +48,8 @@ def list_recommendations(
         market = resolve_market(market)
     actions = split_csv(action)
     convictions = split_csv(conviction)
-    day = as_of
+    # docs/09-api-spec.md §2.2: as_of 省略時は最新日。日付をまたぐと同じ銘柄が並ぶ。
+    day = as_of or state.duck.latest_recommendation_date(market)
     items: list[RecommendationCard] = []
     db_rows = state.duck.get_recommendations(
         as_of=day,
@@ -80,10 +81,10 @@ def list_recommendations(
             if not include_rejected and card.critic_verdict == "rejected":
                 continue
             items.append(card)
-    if day is not None and not items:
+    if as_of is not None and not items:
         latest = state.duck.latest_recommendation_date(market)
         raise data_not_ready(
-            f"{day.isoformat()} の推奨はまだ計算されていません。",
+            f"{as_of.isoformat()} の推奨はまだ計算されていません。",
             latest_available_as_of=as_date(latest),
             instance="/api/v1/recommendations",
         )
