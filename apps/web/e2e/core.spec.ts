@@ -43,6 +43,9 @@ test.describe("主要フロー", () => {
     await expect(page.getByRole("heading", { name: "決算資料" })).toBeVisible();
     await expect(page.getByRole("link", { name: /7203.*トヨタ自動車/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /6758.*ソニーグループ/ })).toBeVisible();
+    await expect(page.getByText("原文の取得に失敗しています")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "原文（別タブ）" }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: "提供元サイトで開く" }).first()).toBeVisible();
   });
 
   test("スクロールしてもヘッダーと左ペインが残る", async ({ page }) => {

@@ -11,6 +11,7 @@ from typing import Any
 import pandas as pd
 
 from packages.core.backtest.engine import BacktestError, run_backtest
+from packages.core.connectors.paths import existing_document_blob
 from packages.core.factors.screening import UniverseFilter
 from packages.core.llm.cache import input_hash, prompt_hash
 from packages.core.llm.prompts import render_prompt
@@ -663,9 +664,15 @@ def generate_document_summary(state: AppState, *, doc_id: str, doc: Any) -> Docu
     )
     files: list[Path] = []
     row = state.duck.get_document(doc_id) or {}
-    blob = row.get("blob_path")
-    if blob and Path(blob).is_file():
-        files = [Path(blob)]
+    blob = existing_document_blob(
+        data_dir=getattr(state.settings, "data_dir", Path("data")),
+        source=str(row.get("source") or getattr(doc, "source", None) or "edinet"),
+        doc_id=doc_id,
+        stored_path=row.get("blob_path"),
+        ext="pdf",
+    )
+    if blob is not None:
+        files = [blob]
     resp = router.complete(
         tier="bulk",
         purpose="doc_summary",

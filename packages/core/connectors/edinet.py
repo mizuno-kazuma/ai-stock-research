@@ -11,6 +11,7 @@ docs/02-data-ingestion.md §5、docs/06-filings-access.md §3。
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 from datetime import date
 from typing import Any
@@ -32,6 +33,9 @@ from packages.core.connectors.errors import (
     SchemaDriftError,
     TransientError,
 )
+from packages.core.connectors.paths import blob_path, document_native_id, existing_document_blob
+
+logger = logging.getLogger(__name__)
 
 EP_DOCUMENTS = "documents"
 EP_DOCUMENT_FILE = "document_file"
@@ -166,18 +170,57 @@ class EdinetConnector(HttpConnector):
         """PDF / XBRL を取得して Raw層の blobs に保存する。
 
         既に保存済みなら再ダウンロードしない（docs §5.3 の 5.）。
+        HTTP は native `docID`、ファイル名も native ID で揃える。
         """
-        self.require_credentials()
+        native = document_native_id(doc_id)
+        canonical = doc_id if ":" in str(doc_id) else f"{self.source}:{doc_id}"
         ext = {"pdf": "pdf", "xbrl": "zip", "csv": "zip"}[kind]
-        if self.raw.blob_exists(source=self.source, doc_id=doc_id, ext=ext):
+        existing = existing_document_blob(
+            data_dir=self.data_dir, source=self.source, doc_id=canonical, ext=ext
+        )
+        if existing is not None:
             return None
+        self.require_credentials()
         try:
-            content = self.http.get_bytes(self.download_url(doc_id, kind), endpoint=EP_DOCUMENT_FILE)
+            content = self.http.get_bytes(self.download_url(native, kind), endpoint=EP_DOCUMENT_FILE)
         except NotFoundError:
             return None
-        path = self.raw.write_blob(source=self.source, doc_id=doc_id, content=content, ext=ext)
+        path = self.raw.write_blob(source=self.source, doc_id=native, content=content, ext=ext)
         self._checkpoint.bump("blobs_downloaded")
         return content, str(path)
+
+    def persist_document_blobs(self, frame: pd.DataFrame) -> int:
+        """`should_download` の PDF を Raw に保存し `blob_path` を埋める。
+
+        大量保有などメタデータのみの書類は対象外。1件の 404 で全体は止めない。
+        """
+        if frame.empty or "should_download" not in frame.columns:
+            return 0
+        mask = frame["should_download"].fillna(False).astype(bool)
+        stored = 0
+        updates: list[dict[str, Any]] = []
+        for rec in frame.loc[mask].to_dict(orient="records"):
+            doc_id = str(rec.get("doc_id") or "")
+            native = document_native_id(doc_id)
+            if not native:
+                continue
+            try:
+                self.fetch_document_blob(native, kind="pdf")
+            except (AuthError, ConfigurationError):
+                raise
+            except NotFoundError:
+                continue
+            except Exception:
+                logger.exception("EDINET PDF の取得に失敗しました: %s", native)
+                continue
+            path = blob_path(self.data_dir, source=self.source, doc_id=native, ext="pdf")
+            if not path.is_file():
+                continue
+            updates.append({**rec, "blob_path": str(path)})
+            stored += 1
+        if updates and self.warehouse is not None:
+            self.warehouse.upsert_documents(updates)
+        return stored
 
     # ------------------------------------------------------------------
     def normalize(self, batch: RawBatch) -> pd.DataFrame:

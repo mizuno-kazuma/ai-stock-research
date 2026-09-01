@@ -304,9 +304,9 @@ Ocp-Apim-Subscription-Key: {EDINET_SUBSCRIPTION_KEY}
 | 350 | 大量保有報告書 | メタデータのみ |
 | その他 | 臨時報告書等 | メタデータのみ |
 
-3. 取得対象の書類は `type=2`（PDF）を優先ダウンロードする。理由は **Gemini 3.7 Flash がPDFをネイティブ入力できる**ため、XBRLパースを経ずに要約できる点にある
+3. 取得対象の書類は `type=2`（PDF）を優先ダウンロードする。理由は **Gemini 3.7 Flash がPDFをネイティブ入力できる**ため、XBRLパースを経ずに要約できる点にある。Collector の documents ステップは正規化のあと `persist_document_blobs` を呼び、保存先を `documents.blob_path` に書く
 4. 数値の厳密な抽出が必要な場合（財務諸表の勘定科目単位）は `type=1` の XBRL も落とし、`arelle` などでパースする。ただし Phase A では PDF + LLM を主経路とし、XBRLパースは Phase C 以降の任意項目とする
-5. ダウンロード済みかは `documents.blob_path` の有無で判定し、同じ書類を再ダウンロードしない
+5. ダウンロード済みかは規約パス（`data/raw/edinet/blobs/{docID}.pdf`）と `documents.blob_path` の両方で判定し、同じ書類を再ダウンロードしない。カラム追加前の行は Raw の `filerName` から `name_local` を復元する
 
 ### 5.4 文字コード（Windows環境で必ず踏む落とし穴）
 

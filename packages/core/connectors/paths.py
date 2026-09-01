@@ -87,6 +87,46 @@ def blob_path(data_dir: Path, *, source: str, doc_id: str, ext: str) -> Path:
     return Path(data_dir) / "raw" / safe_component(source) / "blobs" / f"{safe_id}.{ext.lstrip('.')}"
 
 
+def document_native_id(doc_id: str) -> str:
+    """`edinet:S100XXXX` からソース側の ID を取り出す。"""
+    text = str(doc_id or "").strip()
+    if ":" in text:
+        return text.split(":", 1)[1]
+    return text
+
+
+def existing_document_blob(
+    *,
+    data_dir: Path | str,
+    source: str,
+    doc_id: str,
+    stored_path: str | None = None,
+    ext: str = "pdf",
+) -> Path | None:
+    """`blob_path` 列・規約パスの両方から、実在するファイルを探す。"""
+    root = Path(data_dir)
+    candidates: list[Path] = []
+    if stored_path:
+        stored = Path(stored_path)
+        candidates.append(stored)
+        if not stored.is_absolute():
+            candidates.append(root / stored)
+    native = document_native_id(doc_id)
+    seen: set[str] = set()
+    for ident in (doc_id, native):
+        if not ident or ident in seen:
+            continue
+        seen.add(ident)
+        candidates.append(blob_path(root, source=source or "edinet", doc_id=ident, ext=ext))
+    for path in candidates:
+        try:
+            if path.is_file():
+                return path
+        except OSError:
+            continue
+    return None
+
+
 def parquet_partition_path(
     data_dir: Path, *, table: str, partitions: dict[str, str], part: int = 0
 ) -> Path:

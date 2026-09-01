@@ -34,6 +34,7 @@ from services.api.deps import AppState, User, get_app_state, require_user
 from services.api.envelope import wrap
 from services.api.mapping import (
     alert_from_row,
+    company_name_candidates,
     display_company_name,
     recommendation_from_seed,
     securities_by_issuer,
@@ -399,6 +400,13 @@ def _dashboard_from_warehouse(state: AppState, *, market: str, as_of: dt.date) -
         if not watch or issuer_key(row.get("market"), row.get("ticker")) in watch
     ]
     source_docs = preferred or docs
+    extra_names = {}
+    try:
+        from packages.core.connectors.document_files import ensure_document_names
+
+        extra_names = ensure_document_names(state)
+    except Exception:
+        extra_names = {}
     secs = securities_by_issuer(state.duck, source_docs)
     watch_filings: list[WatchlistFiling] = []
     for row in source_docs:
@@ -413,7 +421,8 @@ def _dashboard_from_warehouse(state: AppState, *, market: str, as_of: dt.date) -
                 market=row.get("market"),
                 name_local=display_company_name(
                     sec.get("name_local"),
-                    row.get("name_local"),
+                    *company_name_candidates(row),
+                    extra_names.get(str(row.get("doc_id") or "")),
                     ticker=str(row.get("ticker") or ""),
                     market=str(row.get("market") or market),
                 ),

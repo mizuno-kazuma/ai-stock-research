@@ -89,3 +89,57 @@ def test_get_documents_json_rejects_apim_401_body(tmp_path, monkeypatch) -> None
     with pytest.raises(AuthError, match="StatusCode=401"):
         connector._get_documents_json(date(2026, 8, 27), "2")
     connector.close()
+
+
+def test_persist_document_blobs_skips_metadata_only_and_saves_pdf(tmp_path, monkeypatch) -> None:
+    import pandas as pd
+
+    class Warehouse:
+        def __init__(self) -> None:
+            self.rows: list[dict] = []
+
+        def upsert_documents(self, rows):
+            self.rows.extend(list(rows))
+            return len(self.rows)
+
+    warehouse = Warehouse()
+    connector = EdinetConnector(
+        data_dir=tmp_path,
+        warehouse=warehouse,
+        env={"EDINET_SUBSCRIPTION_KEY": "test-key"},
+        require_enabled=True,
+    )
+    monkeypatch.setattr(connector.http, "get_bytes", lambda url, *, endpoint="": b"%PDF-1.4")
+    frame = pd.DataFrame(
+        [
+            {
+                "doc_id": "edinet:S100PDF",
+                "ticker": "7203",
+                "market": "JP",
+                "source": "edinet",
+                "doc_type": "quarterly_report",
+                "title": "四半期報告書",
+                "filed_at": date(2026, 8, 22),
+                "source_url": "https://example.invalid/S100PDF",
+                "should_download": True,
+            },
+            {
+                "doc_id": "edinet:S100HOLD",
+                "ticker": "1887",
+                "market": "JP",
+                "source": "edinet",
+                "doc_type": "large_holding",
+                "title": "大量保有報告書",
+                "filed_at": date(2026, 8, 22),
+                "source_url": "https://example.invalid/S100HOLD",
+                "should_download": False,
+            },
+        ]
+    )
+    stored = connector.persist_document_blobs(frame)
+    connector.close()
+    assert stored == 1
+    assert len(warehouse.rows) == 1
+    assert warehouse.rows[0]["doc_id"] == "edinet:S100PDF"
+    assert warehouse.rows[0]["blob_path"].endswith("S100PDF.pdf")
+

@@ -386,17 +386,36 @@ def builtin_connector_steps(
         window = FetchWindow(start=start, end=end)
         batches = 0
         rows = 0
+        blobs = 0
         extra = fetch_kwargs or {}
         try:
             for batch in connector.fetch(window, **extra):
                 batches += 1
                 frame = connector.normalize(batch)
                 rows += int(connector.upsert(frame) or 0)
+                persist = getattr(connector, "persist_document_blobs", None)
+                if callable(persist):
+                    blobs += int(persist(frame) or 0)
         finally:
             close = getattr(connector, "close", None)
             if callable(close):
                 close()
-        return {"batches": batches, "rows": rows, "window_start": start.isoformat(), "window_end": end.isoformat()}
+        names_backfilled = 0
+        if source in {"edinet", "tdnet"} and warehouse is not None:
+            from packages.core.connectors.document_files import backfill_document_names_from_raw
+
+            names_backfilled = backfill_document_names_from_raw(warehouse, settings.data_dir)
+        metrics = {
+            "batches": batches,
+            "rows": rows,
+            "window_start": start.isoformat(),
+            "window_end": end.isoformat(),
+        }
+        if blobs:
+            metrics["blobs"] = blobs
+        if names_backfilled:
+            metrics["names_backfilled"] = names_backfilled
+        return metrics
 
     def _run_edgar(
         market: str,
