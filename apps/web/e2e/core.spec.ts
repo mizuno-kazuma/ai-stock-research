@@ -37,4 +37,35 @@ test.describe("主要フロー", () => {
     await expect(page.getByRole("heading", { name: "弱気の論拠" }).first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "推奨銘柄" })).toBeVisible();
   });
+
+  test("決算資料の開示一覧に会社名が出る", async ({ page }) => {
+    await page.goto("/filings");
+    await expect(page.getByRole("heading", { name: "決算資料" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /7203.*トヨタ自動車/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /6758.*ソニーグループ/ })).toBeVisible();
+  });
+
+  test("スクロールしてもヘッダーと左ペインが残る", async ({ page }) => {
+    await page.goto("/screener");
+    const header = page.locator("header.app-header");
+    const sidebar = page.getByRole("navigation", { name: "メインナビゲーション" });
+    await expect(header).toBeVisible();
+    await expect(sidebar).toBeVisible();
+    const headerBefore = await header.boundingBox();
+    const sidebarBefore = await sidebar.boundingBox();
+    expect(headerBefore).not.toBeNull();
+    expect(sidebarBefore).not.toBeNull();
+
+    await page.locator("#main").evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+    await page.evaluate(() => window.scrollTo(0, 2000));
+
+    await expect(header).toBeInViewport();
+    await expect(sidebar).toBeInViewport();
+    const headerAfter = await header.boundingBox();
+    const sidebarAfter = await sidebar.boundingBox();
+    expect(headerAfter?.y).toBe(headerBefore?.y);
+    expect(sidebarAfter?.x).toBe(sidebarBefore?.x);
+  });
 });

@@ -29,7 +29,8 @@ in the sidebar or bottom navigation.
 ### 1.2 Desktop navigation
 
 Persistent left sidebar, 240px, collapsible to 64px (icons only) with the state persisted in
-`localStorage`. The active item shows an accent background and a 2px left border.
+`localStorage`. The active item shows an accent background and a 2px left border. The header and
+sidebar stay in the viewport; only `main` scrolls.
 
 ### 1.3 Mobile navigation
 

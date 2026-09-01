@@ -131,6 +131,12 @@ class TdnetConnector(HttpConnector):
         raw = pd.DataFrame(rows)
         titles = raw.get("title", pd.Series([""] * len(raw))).astype(str)
         seq = raw.get("seq", pd.Series(range(1, len(raw) + 1)))
+        if "company_name" in raw.columns:
+            names = raw["company_name"]
+        elif "name" in raw.columns:
+            names = raw["name"]
+        else:
+            names = pd.Series([None] * len(raw))
         df = pd.DataFrame(
             {
                 "doc_id": [
@@ -138,6 +144,7 @@ class TdnetConnector(HttpConnector):
                 ],
                 "ticker": _normalize_code(raw.get("code")),
                 "market": "JP",
+                "name_local": names,
                 "source": self.source,
                 "doc_type": titles.map(classify_title),
                 "form_code": None,

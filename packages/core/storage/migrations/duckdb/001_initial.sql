@@ -151,6 +151,7 @@ CREATE TABLE IF NOT EXISTS documents (
     doc_id            VARCHAR NOT NULL PRIMARY KEY,
     ticker            VARCHAR,
     market            VARCHAR NOT NULL,
+    name_local        VARCHAR,
     source            VARCHAR NOT NULL,
     doc_type          VARCHAR NOT NULL,
     form_code         VARCHAR,

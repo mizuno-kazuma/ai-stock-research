@@ -641,7 +641,7 @@ function SettingsInner() {
       />
       <div className="grid gap-4 desktop:grid-cols-12">
         <nav className="desktop:col-span-3 card p-2" aria-label="設定セクション">
-          <ul className="desktop:sticky desktop:top-20">
+          <ul className="desktop:sticky desktop:top-0">
             {SECTIONS.map((id) => (
               <li key={id}>
                 <button

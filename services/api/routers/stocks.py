@@ -32,7 +32,7 @@ from services.api.deps import AppState, User, get_app_state, require_user
 from services.api.envelope import wrap
 from services.api.errors import not_found
 from services.api.mapping import (
-    document_from_row,
+    documents_from_storage,
     map_doc_type,
     security_from_row,
 )
@@ -360,15 +360,17 @@ def get_stock_documents(
 ) -> Envelope[DocumentList]:
     mapped = map_doc_type(doc_type) if doc_type else None
     rows = state.duck.get_documents(ticker=ticker, market=market, doc_type=mapped, limit=limit)
-    items = [document_from_row(r) for r in rows]
+    items = documents_from_storage(state.duck, rows)
     if not items:
         wanted = issuer_key(market, ticker)
+        seed_rows = []
         for row in state.payload.get("filings") or []:
             if issuer_key(row.get("market"), row.get("ticker")) != wanted:
                 continue
             if mapped and map_doc_type(row.get("doc_type")) != mapped:
                 continue
-            items.append(document_from_row(row, has_summary=bool(row.get("has_summary"))))
+            seed_rows.append(row)
+        items = documents_from_storage(state.duck, seed_rows)
     return wrap(state, DocumentList(items=items[:limit], total=len(items), limit=limit, offset=0))
 
 

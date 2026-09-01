@@ -177,7 +177,7 @@ function JobsTab({ selectedId, onSelect }: { selectedId: string | null; onSelect
               <div className="grid gap-4 desktop:grid-cols-12 desktop:items-start">
                 <SectionCard
                   title="実行履歴"
-                  className="desktop:col-span-5 desktop:sticky desktop:top-4 desktop:self-start"
+                  className="desktop:col-span-5 desktop:sticky desktop:top-0 desktop:self-start"
                   bodyClassName="max-h-96 overflow-y-auto overscroll-contain"
                   actions={
                     <Button

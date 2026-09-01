@@ -760,7 +760,7 @@ export function mapDocumentRow(raw: unknown): DocumentSummaryRow {
     doc_id: str(d.doc_id),
     ticker: str(d.ticker),
     market: asMarket(d.market),
-    name_local: str(d.name_local, str(d.ticker)),
+    name_local: str(d.name_local),
     doc_type: str(d.doc_type),
     title: str(d.title),
     filed_at: str(d.filed_at),

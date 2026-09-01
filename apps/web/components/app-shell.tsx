@@ -4,6 +4,8 @@
  * 画面の外枠。components.md §1.1 の階層に対応する。
  *   KillSwitchBanner → AppHeader → Sidebar / BottomNav → main
  *
+ * Header と左ペインはビューポートに固定し、スクロールは main だけにする。
+ *
  * レスポンシブ（interaction-patterns.md §2.2）:
  *   1280px 以上 … サイドバー（240px、ラベルあり）
  *   768-1279px  … アイコンレール（64px）
@@ -45,7 +47,7 @@ export function useOnlineStatus(): boolean {
 
 function OfflineBanner({ lastSyncedAt }: { lastSyncedAt: string | null }) {
   return (
-    <div className="app-banner sticky top-0 flex items-center gap-2 bg-status-warning-bg px-4 py-1.5 text-caption text-status-warning" role="status">
+    <div className="app-banner flex items-center gap-2 bg-status-warning-bg px-4 py-1.5 text-caption text-status-warning" role="status">
       <CloudOff size={14} aria-hidden="true" />
       オフラインです。表示はキャッシュです
       {lastSyncedAt ? <span className="num">（取得時刻 {formatDateTimeJst(lastSyncedAt)}）</span> : null}
@@ -57,7 +59,7 @@ function KillSwitchBanner() {
   const settings = useSettingsQuery();
   if (!settings.data?.data["llm.kill_switch"]) return null;
   return (
-    <div className="app-banner sticky top-0 bg-status-danger-bg px-4 py-1.5 text-caption text-status-danger" role="alert">
+    <div className="app-banner bg-status-danger-bg px-4 py-1.5 text-caption text-status-danger" role="alert">
       LLMの停止スイッチが有効です。要約と論拠の生成は行われません（設定 &gt; コストで解除できます）
     </div>
   );
@@ -324,7 +326,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
   return (
-    <div className="min-h-screen bg-base">
+    <div className="app-shell">
       <a className="skip-link" href="#main">
         メインコンテンツへスキップ
       </a>
@@ -332,7 +334,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {!online ? <OfflineBanner lastSyncedAt={lastRefreshed} /> : null}
       <KillSwitchBanner />
 
-      <header className="app-header sticky top-0 flex items-center gap-3 border-b border-divider bg-surface px-3">
+      <header className="app-header flex items-center gap-3 border-b border-divider bg-surface px-3">
         <Link href="/" className="flex items-center gap-2 shrink-0">
           <span className="text-h4 text-fg-primary">AIリサーチ</span>
         </Link>
@@ -384,7 +386,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <div className="flex">
+      <div className="app-shell-body">
         {/* 768px 以上でサイドバー。1280px 未満はアイコンだけのレール */}
         <nav
           className="hidden tablet:flex app-nav-rail shrink-0 flex-col gap-1 border-r border-divider bg-surface p-2"
@@ -414,6 +416,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <main id="main" className="app-content min-w-0 flex-1 px-4 py-4 tablet:px-6 tablet:py-6">
+          <div className="app-content-inner">
           {/* 遷移先の画面名を読み上げる（interaction-patterns.md §4.3） */}
           <p className="visually-hidden" aria-live="polite">
             {routeTitle(pathname)}
@@ -421,6 +424,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
           {/* ボトムナビに隠れないようにモバイルだけ下余白を足す */}
           <div className="h-16 tablet:hidden" aria-hidden="true" />
+          </div>
         </main>
       </div>
 
