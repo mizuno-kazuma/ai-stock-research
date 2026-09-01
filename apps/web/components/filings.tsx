@@ -36,6 +36,7 @@ export function FilingListItem({
   onOpenSummary?: (docId: string) => void;
   selected?: boolean;
 }) {
+  const name = companyName(row);
   return (
     <li
       className={cx(
@@ -48,7 +49,7 @@ export function FilingListItem({
         <Badge tone={docTypeStyle(row.doc_type)}>{docTypeLabel(row.doc_type)}</Badge>
         <Link href={`/stocks/${row.market}/${row.ticker}`} className="text-body-sm text-fg-primary hover:text-accent">
           <span className="num mr-1.5 text-fg-secondary">{row.ticker}</span>
-          {companyName(row)}
+          {name ? <span>{name}</span> : null}
         </Link>
         {row.guidance_tone ? (
           <Badge tone={GUIDANCE_TONE_STYLE[row.guidance_tone]}>
@@ -92,6 +93,7 @@ export function FilingListItem({
             href={row.source_url}
             target="_blank"
             rel="noopener noreferrer"
+            data-testid="filings-source-link"
           >
             提供元サイトで開く
           </a>

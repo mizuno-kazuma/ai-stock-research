@@ -48,6 +48,9 @@ def test_normalize_keeps_rows_when_submit_datetime_missing(tmp_path) -> None:
     assert row["name_local"] == "トヨタ自動車株式会社"
     assert row["title"] == "edinet:S100TEST"
     assert str(row["filed_at"])[:10] == "2026-08-27"
+    assert row["source_url"] == "https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?S100TEST"
+    assert "wzek0130" not in str(row["source_url"]).lower()
+    assert "S100=" not in str(row["source_url"])
 
 
 def test_result_rows_reads_results_key() -> None:

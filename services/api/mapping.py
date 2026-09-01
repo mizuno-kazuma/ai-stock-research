@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from packages.core.connectors.edinet_urls import resolve_edinet_source_url
 from packages.core.connectors.paths import existing_document_blob
 from packages.core.storage import issuer_key, jp_ticker_aliases, to_dict
 from packages.schemas.agent import AgentMemory, JobCheckpoint, JobPhase, JobRun
@@ -252,18 +254,57 @@ def display_company_name(
     return None
 
 
+def _payload_mapping(raw: Any) -> Mapping[str, Any] | None:
+    """DuckDB に JSON 文字列で残った payload も dict として読む。"""
+    if isinstance(raw, Mapping):
+        return raw
+    if isinstance(raw, (bytes, bytearray)):
+        raw = raw.decode("utf-8", errors="replace")
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    if not text or text[0] not in "{[":
+        return None
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, Mapping) else None
+
+
 def company_name_candidates(row: Mapping[str, Any]) -> list[Any]:
     """documents 行と生 payload（EDINET filerName 等）から会社名候補を拾う。"""
     names: list[Any] = []
-    payload = row.get("payload")
+    payload = _payload_mapping(row.get("payload"))
     sources: list[Mapping[str, Any]] = [row]
-    if isinstance(payload, Mapping):
+    if payload is not None:
         sources.append(payload)
+        nested = payload.get("results")
+        if isinstance(nested, list):
+            for item in nested:
+                if isinstance(item, Mapping):
+                    sources.append(item)
     for src in sources:
         for key in _NAME_KEYS:
             if key in src:
                 names.append(src.get(key))
     return names
+
+
+def resolve_public_source_url(
+    row: Mapping[str, Any],
+    *,
+    source: str | None = None,
+    doc_id: str | None = None,
+) -> str:
+    """一覧と原文フォールバックで人間が開ける URL。壊れた EDINET リンクは作り直す。"""
+    ident = str(doc_id or row.get("doc_id") or "")
+    src = str(source or row.get("source") or "")
+    stored = str(row.get("source_url") or "").strip() or None
+    pdf = str(row.get("pdf_url") or "").strip() or None
+    if src == "edinet" or ident.startswith("edinet:"):
+        return resolve_edinet_source_url(ident, stored or pdf)
+    return stored or pdf or f"https://example.invalid/{ident or 'document'}"
 
 
 def securities_by_issuer(
@@ -377,7 +418,7 @@ def document_from_row(
         period_end=as_date(row.get("period_end")),
         filed_at=as_utc(row.get("filed_at")) or dt.datetime.now(dt.UTC),
         disclosed_at=as_utc(row.get("disclosed_at")),
-        source_url=row.get("source_url") or row.get("pdf_url") or f"https://example.invalid/{row['doc_id']}",
+        source_url=resolve_public_source_url(row, source=source, doc_id=str(row["doc_id"])),
         pdf_url=row.get("pdf_url"),
         xbrl_url=row.get("xbrl_url"),
         has_local_copy=has_local,
