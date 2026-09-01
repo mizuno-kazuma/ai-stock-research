@@ -468,25 +468,26 @@ class DuckDBRepo:
     def get_security(
         self, ticker: str, market: str, *, as_of: dt.date | None = None
     ) -> dict[str, Any] | None:
-        wanted = [ticker]
-        if market == "JP" and len(ticker) == 4:
-            wanted.append(ticker + "0")
+        wanted = list(jp_ticker_aliases(ticker)) if market == "JP" else [ticker]
+        wanted = [code for code in wanted if code]
+        if not wanted:
+            return None
         rows = self.get_securities(
             market=market, tickers=wanted, active_only=False, as_of=as_of
         )
         if not rows:
             return None
-        latest: dict[str, dict[str, Any]] = {}
+        named: dict[str, Any] | None = None
+        fallback: dict[str, Any] | None = None
         for row in rows:
-            latest.setdefault(str(row["ticker"]), row)
-        padded = latest.get(ticker + "0") if market == "JP" and len(ticker) == 4 else None
-        if padded is not None:
-            name = str(padded.get("name_local") or "").strip()
-            if name and name != padded["ticker"]:
-                return padded
-            if ticker not in latest:
-                return padded
-        return latest.get(ticker) or padded
+            if fallback is None:
+                fallback = row
+            name = str(row.get("name_local") or "").strip()
+            code = str(row.get("ticker") or "")
+            if name and name != code:
+                if named is None or len(code) < len(str(named.get("ticker") or "")):
+                    named = row
+        return named or fallback
 
     def search_securities(
         self, q: str, *, market: str | None = None, limit: int = 20

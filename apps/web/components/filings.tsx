@@ -21,6 +21,12 @@ export function docFileHref(docId: string): string {
   return `${API_BASE_URL}/documents/${docId}/file?disposition=inline`;
 }
 
+function companyName(row: DocumentSummaryRow): string | null {
+  const name = row.name_local?.trim();
+  if (!name || name === row.ticker) return null;
+  return name;
+}
+
 export function FilingListItem({
   row,
   onOpenSummary,
@@ -42,7 +48,7 @@ export function FilingListItem({
         <Badge tone={docTypeStyle(row.doc_type)}>{docTypeLabel(row.doc_type)}</Badge>
         <Link href={`/stocks/${row.market}/${row.ticker}`} className="text-body-sm text-fg-primary hover:text-accent">
           <span className="num mr-1.5 text-fg-secondary">{row.ticker}</span>
-          {row.name_local}
+          {companyName(row)}
         </Link>
         {row.guidance_tone ? (
           <Badge tone={GUIDANCE_TONE_STYLE[row.guidance_tone]}>

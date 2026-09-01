@@ -34,6 +34,7 @@ def test_normalize_keeps_rows_when_submit_datetime_missing(tmp_path) -> None:
                     "docTypeCode": "140",
                     "docDescription": None,
                     "submitDateTime": None,
+                    "filerName": "トヨタ自動車株式会社",
                 }
             ],
         },
@@ -44,6 +45,7 @@ def test_normalize_keeps_rows_when_submit_datetime_missing(tmp_path) -> None:
     row = frame.iloc[0]
     assert row["doc_id"] == "edinet:S100TEST"
     assert row["ticker"] == "7203"
+    assert row["name_local"] == "トヨタ自動車株式会社"
     assert row["title"] == "edinet:S100TEST"
     assert str(row["filed_at"])[:10] == "2026-08-27"
 

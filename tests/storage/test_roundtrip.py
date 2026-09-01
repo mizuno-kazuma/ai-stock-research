@@ -43,6 +43,26 @@ def test_duckdb_security_and_price_roundtrip() -> None:
         assert close["close"] == 3074
 
 
+def test_get_security_matches_jquants_padded_ticker() -> None:
+    with DuckDBRepo.in_memory() as duck:
+        duck.upsert_securities(
+            [
+                {
+                    "ticker": "72030",
+                    "market": "JP",
+                    "name_local": "トヨタ自動車",
+                    "currency": "JPY",
+                    "valid_from": dt.date(2020, 1, 1),
+                    "is_active": True,
+                }
+            ]
+        )
+        four = duck.get_security("7203", "JP")
+        five = duck.get_security("72030", "JP")
+        assert four is not None and five is not None
+        assert four["name_local"] == five["name_local"] == "トヨタ自動車"
+
+
 def test_search_securities_returns_one_row_per_issuer() -> None:
     """履歴行と JP の 4桁/5桁は検索では同一銘柄として畳む。"""
     with DuckDBRepo.in_memory() as duck:
@@ -200,3 +220,25 @@ def test_get_documents_matches_jquants_padded_ticker() -> None:
         assert len(five) == 1
         assert four[0]["doc_id"] == five[0]["doc_id"] == "edinet:S100TEST"
         assert duck.get_documents(ticker="130A", market="JP") == []
+
+
+def test_upsert_documents_persists_name_local() -> None:
+    with DuckDBRepo.in_memory() as duck:
+        duck.upsert_documents(
+            [
+                {
+                    "doc_id": "edinet:S100NAME",
+                    "ticker": "7203",
+                    "market": "JP",
+                    "name_local": "トヨタ自動車株式会社",
+                    "source": "edinet",
+                    "doc_type": "quarterly_report",
+                    "title": "四半期報告書",
+                    "filed_at": dt.datetime(2026, 8, 27, 15, 0, 0),
+                    "source_url": "https://example.invalid/S100NAME",
+                }
+            ]
+        )
+        row = duck.get_document("edinet:S100NAME")
+        assert row is not None
+        assert row["name_local"] == "トヨタ自動車株式会社"

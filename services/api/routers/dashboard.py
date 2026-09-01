@@ -32,7 +32,12 @@ from packages.schemas.dashboard import (
 from packages.schemas.recommendations import RecommendationSummary
 from services.api.deps import AppState, User, get_app_state, require_user
 from services.api.envelope import wrap
-from services.api.mapping import alert_from_row, recommendation_from_seed
+from services.api.mapping import (
+    alert_from_row,
+    display_company_name,
+    recommendation_from_seed,
+    securities_by_issuer,
+)
 from services.api.util import as_date, as_utc, resolve_market
 
 router = APIRouter(tags=["dashboard"])
@@ -394,18 +399,24 @@ def _dashboard_from_warehouse(state: AppState, *, market: str, as_of: dt.date) -
         if not watch or issuer_key(row.get("market"), row.get("ticker")) in watch
     ]
     source_docs = preferred or docs
+    secs = securities_by_issuer(state.duck, source_docs)
     watch_filings: list[WatchlistFiling] = []
     for row in source_docs:
         filed = as_utc(row.get("filed_at"))
         if filed is None:
             continue
-        sec = state.duck.get_security(row.get("ticker") or "", row.get("market") or market) or {}
+        sec = secs.get(issuer_key(row.get("market"), row.get("ticker"))) or {}
         watch_filings.append(
             WatchlistFiling(
                 doc_id=str(row["doc_id"]),
                 ticker=row.get("ticker"),
                 market=row.get("market"),
-                name_local=sec.get("name_local"),
+                name_local=display_company_name(
+                    sec.get("name_local"),
+                    row.get("name_local"),
+                    ticker=str(row.get("ticker") or ""),
+                    market=str(row.get("market") or market),
+                ),
                 doc_type=str(row.get("doc_type") or "other_disclosure"),
                 title=str(row.get("title") or row["doc_id"]),
                 filed_at=filed,

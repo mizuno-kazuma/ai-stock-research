@@ -197,6 +197,7 @@ class EdinetConnector(HttpConnector):
 
         doc_type_code = raw.get("docTypeCode", pd.Series([None] * len(raw))).astype(str)
         titles = raw["docDescription"] if "docDescription" in raw.columns else pd.Series([None] * len(raw))
+        filer = raw["filerName"] if "filerName" in raw.columns else pd.Series([None] * len(raw))
         period_end = (
             pd.to_datetime(raw["periodEnd"], errors="coerce").dt.date
             if "periodEnd" in raw.columns
@@ -207,6 +208,7 @@ class EdinetConnector(HttpConnector):
                 "doc_id": "edinet:" + raw["docID"].astype(str),
                 "ticker": _normalize_sec_code(raw.get("secCode")),
                 "market": "JP",
+                "name_local": filer,
                 "source": self.source,
                 "form_code": doc_type_code,
                 "doc_type": doc_type_code.map(lambda c: DOC_TYPE_MAP.get(c, "other_disclosure")),
@@ -227,6 +229,8 @@ class EdinetConnector(HttpConnector):
             df.loc[missing_filed, "filed_at"] = pd.Timestamp(batch.as_of)
         df["title"] = df["title"].fillna("").astype(str).str.strip()
         df.loc[df["title"] == "", "title"] = df.loc[df["title"] == "", "doc_id"]
+        names = df["name_local"].astype("string").str.strip()
+        df["name_local"] = names.mask(names.isin(["", "<NA>"]))
         df["source_url"] = raw["docID"].astype(str).map(self.viewer_url)
         df["pdf_url"] = raw["docID"].astype(str).map(lambda d: self.download_url(d, "pdf"))
         df["xbrl_url"] = raw["docID"].astype(str).map(lambda d: self.download_url(d, "xbrl"))

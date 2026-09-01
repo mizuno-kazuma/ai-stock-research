@@ -238,6 +238,7 @@ class EdgarConnector(HttpConnector):
             return tag_table(pd.DataFrame(), "documents")
         cik = str(payload.get("cik") or batch.request.get("cik") or "")
         ticker = _first_ticker(payload)
+        company = str(payload.get("name") or "").strip() or None
         records = []
         for row in rows:
             accession = str(row["accessionNumber"])
@@ -255,6 +256,7 @@ class EdgarConnector(HttpConnector):
                     "doc_id": f"edgar:{accession}",
                     "ticker": ticker,
                     "market": "US",
+                    "name_local": company,
                     "source": self.source,
                     "form_code": form,
                     "doc_type": FORM_TO_DOC_TYPE.get(form, "other_disclosure"),

@@ -23,7 +23,7 @@ from services.agent.wiring import llm_keys_configured
 from services.api.deps import AppState, User, get_app_state, require_user, spent_today_usd
 from services.api.envelope import wrap
 from services.api.errors import cost_cap_exceeded, not_found, upstream_unavailable
-from services.api.mapping import document_from_row, document_summary_from_row, map_doc_type
+from services.api.mapping import document_summary_from_row, documents_from_storage, map_doc_type
 from services.api.runtime import generate_document_summary, load_document_chunks
 from services.api.util import as_date, resolve_market
 
@@ -32,27 +32,27 @@ router = APIRouter(tags=["documents"])
 
 def _all_docs(state: AppState) -> list[Document]:
     rows = state.duck.get_documents(limit=500)
-    items = [document_from_row(r) for r in rows]
-    if items:
-        return items
+    if rows:
+        return documents_from_storage(state.duck, rows)
     if not state.is_seed_data:
         return []
-    return [
-        document_from_row(r, has_summary=bool(r.get("has_summary")))
-        for r in state.payload.get("filings") or []
-    ]
+    return documents_from_storage(state.duck, state.payload.get("filings") or [])
 
 
 def _find_doc(state: AppState, doc_id: str) -> Document | None:
     row = state.duck.get_document(doc_id)
     if row:
         has = state.duck.get_document_summary(doc_id) is not None
-        return document_from_row(row, has_summary=has)
+        found = documents_from_storage(state.duck, [row], has_summary=has)
+        return found[0] if found else None
     if not state.is_seed_data:
         return None
     for item in state.payload.get("filings") or []:
         if item.get("doc_id") == doc_id:
-            return document_from_row(item, has_summary=bool(item.get("has_summary")))
+            found = documents_from_storage(
+                state.duck, [item], has_summary=bool(item.get("has_summary"))
+            )
+            return found[0] if found else None
     return None
 
 

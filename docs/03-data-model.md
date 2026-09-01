@@ -185,6 +185,8 @@ CREATE TABLE documents (
                                                      -- 'tdnet:20260823-1234'
     ticker            VARCHAR,
     market            VARCHAR NOT NULL,
+    name_local        VARCHAR,            -- 提出者名（EDINET filerName 等）。一覧表示用。
+                                          -- 証券マスタがある場合は API 側でそちらの名称を優先する。
     source            VARCHAR NOT NULL,   -- 'edinet' | 'tdnet' | 'edgar'
     doc_type          VARCHAR NOT NULL,   -- 下表参照
     form_code         VARCHAR,            -- EDINET docTypeCode / EDGAR form

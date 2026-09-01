@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Iterable, Mapping
 from typing import Any
 
-from packages.core.storage import to_dict
+from packages.core.storage import issuer_key, jp_ticker_aliases, to_dict
 from packages.schemas.agent import AgentMemory, JobCheckpoint, JobPhase, JobRun
 from packages.schemas.common import DataFreshness
 from packages.schemas.documents import Document, DocumentSummary
@@ -213,15 +214,103 @@ def score_from_row(row: dict[str, Any], *, name_local: str | None = None) -> Sco
     )
 
 
-def document_from_row(row: dict[str, Any], *, has_summary: bool = False) -> Document:
+def display_company_name(
+    *candidates: Any, ticker: str | None = None, market: str | None = None
+) -> str | None:
+    """ティッカーそのものではない会社名を返す。コードだけの行は一覧に出さない。"""
+    aliases = {str(ticker or "").strip()}
+    if market == "JP" and ticker:
+        aliases.update(jp_ticker_aliases(ticker))
+    aliases.discard("")
+    for raw in candidates:
+        name = str(raw or "").strip()
+        if name and name not in aliases:
+            return name
+    return None
+
+
+def securities_by_issuer(
+    duck: Any, rows: Iterable[Mapping[str, Any]]
+) -> dict[tuple[str, str], dict[str, Any]]:
+    """開示行のティッカー（4桁/5桁）から証券マスタをまとめて引く。"""
+    by_market: dict[str, set[str]] = {}
+    for row in rows:
+        market = str(row.get("market") or "JP")
+        ticker = str(row.get("ticker") or "").strip()
+        if not ticker:
+            continue
+        aliases = jp_ticker_aliases(ticker) if market == "JP" else (ticker,)
+        by_market.setdefault(market, set()).update(code for code in aliases if code)
+    index: dict[tuple[str, str], dict[str, Any]] = {}
+    for market, tickers in by_market.items():
+        if not tickers:
+            continue
+        for sec in duck.get_securities(market=market, tickers=list(tickers), active_only=False):
+            key = issuer_key(market, str(sec.get("ticker") or ""))
+            name = display_company_name(sec.get("name_local"), ticker=str(sec.get("ticker") or ""), market=market)
+            prev = index.get(key)
+            if prev is None:
+                index[key] = sec
+                continue
+            prev_name = display_company_name(
+                prev.get("name_local"), ticker=str(prev.get("ticker") or ""), market=market
+            )
+            if name and not prev_name:
+                index[key] = sec
+                continue
+            if (
+                bool(name) == bool(prev_name)
+                and len(str(sec.get("ticker") or "")) < len(str(prev.get("ticker") or ""))
+            ):
+                index[key] = sec
+    return index
+
+
+def documents_from_storage(
+    duck: Any,
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    has_summary: bool | None = None,
+) -> list[Document]:
+    materialized = [dict(row) for row in rows]
+    names = securities_by_issuer(duck, materialized)
+    items: list[Document] = []
+    for row in materialized:
+        key = issuer_key(row.get("market"), row.get("ticker"))
+        flag = bool(has_summary) if has_summary is not None else bool(row.get("has_summary"))
+        items.append(
+            document_from_row(
+                row,
+                has_summary=flag,
+                security=names.get(key),
+            )
+        )
+    return items
+
+
+def document_from_row(
+    row: dict[str, Any],
+    *,
+    has_summary: bool = False,
+    security: Mapping[str, Any] | None = None,
+) -> Document:
     source = map_doc_source(row.get("source"))
     if source not in {"edinet", "tdnet", "edgar"}:
         source = "edinet"
+    sec = security or {}
+    market = row.get("market") or "JP"
+    ticker = row.get("ticker")
+    name = display_company_name(
+        sec.get("name_local"),
+        row.get("name_local"),
+        ticker=str(ticker or ""),
+        market=str(market),
+    )
     return Document(
         doc_id=row["doc_id"],
-        ticker=row.get("ticker"),
-        market=row.get("market") or "JP",
-        name_local=row.get("name_local"),
+        ticker=ticker,
+        market=market,
+        name_local=name,
         source=source,  # type: ignore[arg-type]
         doc_type=map_doc_type(row.get("doc_type")),  # type: ignore[arg-type]
         form_code=row.get("form_code"),

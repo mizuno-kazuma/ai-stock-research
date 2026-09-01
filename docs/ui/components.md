@@ -14,11 +14,14 @@ Wraps every page.
 AppShell
 ├── OfflineBanner            (conditional, z-banner)
 ├── KillSwitchBanner         (conditional, z-banner)
-├── AppHeader                (sticky, z-header)
-├── Sidebar                  (desktop/tablet only, z-sidebar)
-├── main                     (page content)
+├── AppHeader                (fixed in the viewport, z-header)
+├── Sidebar                  (desktop/tablet only, fixed in the viewport, z-sidebar)
+├── main                     (the only region that scrolls)
 └── BottomNav                (mobile only, z-bottom-nav)
 ```
+
+The shell is viewport-sized (`html, body { height: 100%; overflow: hidden }`). Header and sidebar
+stay visible while page content scrolls inside `main`.
 
 ### 1.2 AppHeader
 

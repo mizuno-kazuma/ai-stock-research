@@ -221,6 +221,7 @@ def seed_duck(duck: DuckDBRepo, payload: dict[str, Any]) -> dict[str, int]:
                 "source": map_doc_source(item.get("source")),
                 "doc_type": map_doc_type(item.get("doc_type")),
                 "title": item.get("title") or item["doc_id"],
+                "name_local": item.get("name_local"),
                 "filed_at": item.get("filed_at"),
                 "source_url": f"https://example.invalid/docs/{item['doc_id']}",
                 "page_count": item.get("pages"),
