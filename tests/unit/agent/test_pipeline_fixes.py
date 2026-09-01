@@ -471,3 +471,61 @@ def test_strategist_fills_to_ten_when_only_one_core_candidate() -> None:
     fill_recs = [r for r in warehouse.recs if r["ticker"] != "1301"]
     assert all("RANK_FILL" in r["reason_codes"] for r in fill_recs)
     assert all(r["conviction"] == "low" for r in fill_recs)
+
+
+def test_format_step_error_includes_oserror_filename() -> None:
+    from services.agent.jobs.collector import _format_step_error
+
+    err = FileNotFoundError(2, "No such file or directory")
+    assert "FileNotFoundError" in _format_step_error(err)
+    with_path = FileNotFoundError(2, "No such file or directory", "/missing/cacert.pem")
+    text = _format_step_error(with_path)
+    assert "/missing/cacert.pem" in text
+
+
+def test_builtin_connector_passes_data_dir_not_raw_dir(tmp_path: Path, monkeypatch) -> None:
+    """RawStore は data_dir/raw を書く。raw_dir を渡すと raw/raw になる。"""
+    from packages.core.config import Settings
+    from services.agent.jobs.collector import builtin_connector_steps
+
+    captured: dict[str, object] = {}
+
+    class _Fake:
+        delay_weeks = 0
+
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        def fetch(self, window, **extra):  # type: ignore[no-untyped-def]
+            del window, extra
+            return iter(())
+
+        def close(self) -> None:
+            return None
+
+    settings = Settings(data_dir=tmp_path / "data")
+    monkeypatch.setattr("packages.core.config.get_settings", lambda: settings)
+    monkeypatch.setattr("packages.core.connectors.get_connector", lambda _name: _Fake)
+    steps = builtin_connector_steps(warehouse=FakeWarehouse(), state=FakeStateRepo())
+    metrics = steps["securities_master"]("JP", date(2026, 8, 28))
+    assert metrics.get("rows") == 0
+    assert captured["data_dir"] == settings.data_dir
+    assert captured["data_dir"] != settings.raw_dir
+
+
+def test_collector_records_filenotfound_without_filename() -> None:
+    def _boom(_market: str, _as_of: date) -> dict:
+        raise FileNotFoundError(2, "No such file or directory")
+
+    steps = {name: _ok for name, _required in COLLECTOR_STEPS}
+    steps["securities_master"] = _boom
+    steps["prices"] = _boom
+    result = collector(
+        "JP",
+        date(2026, 8, 28),
+        state=FakeStateRepo(),
+        warehouse=FakeWarehouse(),
+        steps=steps,
+    )
+    assert result.status == "failed"
+    assert "FileNotFoundError" in (result.steps["prices"].error or "")
