@@ -402,9 +402,14 @@ def builtin_connector_steps(
                 close()
         names_backfilled = 0
         if source in {"edinet", "tdnet"} and warehouse is not None:
-            from packages.core.connectors.document_files import backfill_document_names_from_raw
+            try:
+                from packages.core.connectors.document_names import backfill_document_names_from_raw
 
-            names_backfilled = backfill_document_names_from_raw(warehouse, settings.data_dir)
+                names_backfilled = int(
+                    backfill_document_names_from_raw(warehouse, settings.data_dir) or 0
+                )
+            except Exception:
+                names_backfilled = 0
         metrics = {
             "batches": batches,
             "rows": rows,

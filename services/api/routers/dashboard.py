@@ -402,7 +402,7 @@ def _dashboard_from_warehouse(state: AppState, *, market: str, as_of: dt.date) -
     source_docs = preferred or docs
     extra_names = {}
     try:
-        from packages.core.connectors.document_files import ensure_document_names
+        from packages.core.connectors.document_names import ensure_document_names
 
         extra_names = ensure_document_names(state)
     except Exception:

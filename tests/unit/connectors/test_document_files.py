@@ -9,6 +9,7 @@ import pandas as pd
 from packages.core.connectors.base import tag_table
 from packages.core.connectors.document_names import (
     backfill_document_names_from_raw,
+    ensure_document_names,
     load_filer_names_from_raw,
 )
 from packages.core.connectors.edinet import EdinetConnector
@@ -108,3 +109,17 @@ def test_persist_document_blobs_sets_blob_path(tmp_path, monkeypatch) -> None:
         assert row is not None
         assert row["blob_path"]
         assert (tmp_path / "raw" / "edinet" / "blobs" / "S100PDF.pdf").is_file()
+
+
+def test_collector_and_dashboard_import_document_names() -> None:
+    """存在しない connectors.document_files ではなく document_names を読む。"""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3]
+    collector = (root / "services/agent/jobs/collector.py").read_text(encoding="utf-8")
+    dashboard = (root / "services/api/routers/dashboard.py").read_text(encoding="utf-8")
+    names_mod = "packages.core.connectors.document_names"
+    assert f"from {names_mod} import backfill_document_names_from_raw" in collector
+    assert f"from {names_mod} import ensure_document_names" in dashboard
+    assert callable(ensure_document_names)
+    assert callable(backfill_document_names_from_raw)
