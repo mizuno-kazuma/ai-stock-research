@@ -88,6 +88,11 @@ async def get_document_file(doc_id: str, disposition: str = "inline"):
     return FileResponse(...)
 ```
 
+実装は `services/api/document_files.py`。`documents.blob_path` が空でも
+`data/raw/{source}/blobs/` の規約パスを探す。ローカルもオンデマンド取得も失敗したら
+`source_url`（EDINET 閲覧画面など）へ 302 する。一覧は「原文（別タブ）」がこの
+エンドポイントを開き、併せて「提供元サイトで開く」を出す。
+
 **この設計の利点**:
 
 - UI からは常に同じ形式のURLになる（ソースを意識しない）
@@ -326,6 +331,8 @@ def get_or_create_summary(doc: Document, template: PromptTemplate) -> Summary:
 | ソース自体が停止中 | 「EDINETからの取得が停止しています（最終取得: 3日前）」 | 公式サイトへの外部リンク |
 
 **どのケースでも「公式サイトへのリンク」は必ず出す。** 要約や取得が失敗しても、資料に到達する手段が失われないことが最低保証である。
+
+`GET /api/v1/documents/{doc_id}/file` はローカル PDF が無いとき、EDINET からオンデマンド取得を試み、それでも無ければ `source_url`（閲覧画面）へ 302 する。大量保有報告書などバッチでは PDF を落とさない書類も、一覧の「原文」から公式サイトへ届く。
 
 ## 10. 決算発表予定日の管理
 

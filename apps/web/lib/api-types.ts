@@ -368,8 +368,10 @@ export interface DocumentSummaryRow {
   title: string;
   filed_at: IsoDateTime;
   source: string;
+  source_url?: string;
   has_summary: boolean;
   has_local_copy: boolean;
+  local_copy_error_ja?: string | null;
   guidance_tone: GuidanceTone | null;
   summary_preview_ja: string | null;
   info_value_score: number | null;

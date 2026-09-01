@@ -76,20 +76,29 @@ export function FilingListItem({
             {row.has_summary ? "要約を見る" : "要約を生成"}
           </Button>
         ) : null}
-        {row.has_local_copy ? (
+        <a
+          className="btn btn-ghost"
+          href={docFileHref(row.doc_id)}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <FileText size={13} aria-hidden="true" />
+          原文（別タブ）
+          <ExternalLink size={11} aria-hidden="true" />
+        </a>
+        {row.source_url ? (
           <a
-            className="btn btn-ghost"
-            href={docFileHref(row.doc_id)}
+            className="text-caption text-fg-secondary hover:text-accent"
+            href={row.source_url}
             target="_blank"
             rel="noopener noreferrer"
           >
-            <FileText size={13} aria-hidden="true" />
-            原文（別タブ）
-            <ExternalLink size={11} aria-hidden="true" />
+            提供元サイトで開く
           </a>
-        ) : (
-          <span className="text-caption text-fg-tertiary">原文の取得に失敗しています</span>
-        )}
+        ) : null}
+        {row.local_copy_error_ja ? (
+          <span className="text-caption text-status-warning">{row.local_copy_error_ja}</span>
+        ) : null}
         <span className="text-caption text-fg-muted ml-auto">
           情報価値 <NullableText value={row.info_value_score !== null ? String(row.info_value_score) : null} />
         </span>

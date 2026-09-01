@@ -26,6 +26,8 @@ from packages.core.connectors.errors import (
 from packages.core.connectors.http import HttpClient, RetryPolicy, mask_url
 from packages.core.connectors.paths import (
     blob_path,
+    document_native_id,
+    existing_document_blob,
     is_valid_path_component,
     raw_path,
     safe_component,
@@ -66,6 +68,8 @@ __all__ = [
     "TokenBucket",
     "TransientError",
     "blob_path",
+    "document_native_id",
+    "existing_document_blob",
     "is_valid_path_component",
     "jquants_plan_params",
     "load_sources_config",

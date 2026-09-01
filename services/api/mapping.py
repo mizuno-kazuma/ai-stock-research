@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import datetime as dt
 from collections.abc import Iterable, Mapping
+from pathlib import Path
 from typing import Any
 
+from packages.core.connectors.paths import existing_document_blob
 from packages.core.storage import issuer_key, jp_ticker_aliases, to_dict
 from packages.schemas.agent import AgentMemory, JobCheckpoint, JobPhase, JobRun
 from packages.schemas.common import DataFreshness
@@ -214,6 +216,27 @@ def score_from_row(row: dict[str, Any], *, name_local: str | None = None) -> Sco
     )
 
 
+_NAME_KEYS = ("name_local", "filerName", "company_name", "filer_name", "name")
+
+
+def _as_company_name(raw: Any) -> str | None:
+    if raw is None or isinstance(raw, (dict, list, tuple, set, bytes, bytearray)):
+        return None
+    if not isinstance(raw, str):
+        if type(raw).__name__ in {"NAType", "NaTType"}:
+            return None
+        try:
+            if raw != raw:
+                return None
+        except Exception:
+            return None
+        raw = str(raw)
+    name = raw.strip()
+    if not name or name in {"<NA>", "nan", "None", "NaT"}:
+        return None
+    return name
+
+
 def display_company_name(
     *candidates: Any, ticker: str | None = None, market: str | None = None
 ) -> str | None:
@@ -223,10 +246,24 @@ def display_company_name(
         aliases.update(jp_ticker_aliases(ticker))
     aliases.discard("")
     for raw in candidates:
-        name = str(raw or "").strip()
+        name = _as_company_name(raw)
         if name and name not in aliases:
             return name
     return None
+
+
+def company_name_candidates(row: Mapping[str, Any]) -> list[Any]:
+    """documents 行と生 payload（EDINET filerName 等）から会社名候補を拾う。"""
+    names: list[Any] = []
+    payload = row.get("payload")
+    sources: list[Mapping[str, Any]] = [row]
+    if isinstance(payload, Mapping):
+        sources.append(payload)
+    for src in sources:
+        for key in _NAME_KEYS:
+            if key in src:
+                names.append(src.get(key))
+    return names
 
 
 def securities_by_issuer(
@@ -271,9 +308,12 @@ def documents_from_storage(
     rows: Iterable[Mapping[str, Any]],
     *,
     has_summary: bool | None = None,
+    data_dir: Path | str | None = None,
+    extra_names: Mapping[str, str] | None = None,
 ) -> list[Document]:
     materialized = [dict(row) for row in rows]
     names = securities_by_issuer(duck, materialized)
+    extras = extra_names or {}
     items: list[Document] = []
     for row in materialized:
         key = issuer_key(row.get("market"), row.get("ticker"))
@@ -283,6 +323,8 @@ def documents_from_storage(
                 row,
                 has_summary=flag,
                 security=names.get(key),
+                data_dir=data_dir,
+                extra_name=extras.get(str(row.get("doc_id") or "")),
             )
         )
     return items
@@ -293,6 +335,8 @@ def document_from_row(
     *,
     has_summary: bool = False,
     security: Mapping[str, Any] | None = None,
+    data_dir: Path | str | None = None,
+    extra_name: str | None = None,
 ) -> Document:
     source = map_doc_source(row.get("source"))
     if source not in {"edinet", "tdnet", "edgar"}:
@@ -302,10 +346,23 @@ def document_from_row(
     ticker = row.get("ticker")
     name = display_company_name(
         sec.get("name_local"),
-        row.get("name_local"),
+        *company_name_candidates(row),
+        extra_name,
         ticker=str(ticker or ""),
         market=str(market),
     )
+    blob = None
+    if data_dir is not None:
+        blob = existing_document_blob(
+            data_dir=data_dir,
+            source=source,
+            doc_id=str(row["doc_id"]),
+            stored_path=row.get("blob_path"),
+            ext="pdf",
+        )
+        has_local = blob is not None or bool(row.get("local_copy") or row.get("has_local_copy"))
+    else:
+        has_local = bool(row.get("blob_path") or row.get("local_copy") or row.get("has_local_copy"))
     return Document(
         doc_id=row["doc_id"],
         ticker=ticker,
@@ -323,7 +380,7 @@ def document_from_row(
         source_url=row.get("source_url") or row.get("pdf_url") or f"https://example.invalid/{row['doc_id']}",
         pdf_url=row.get("pdf_url"),
         xbrl_url=row.get("xbrl_url"),
-        has_local_copy=bool(row.get("blob_path") or row.get("local_copy") or row.get("has_local_copy")),
+        has_local_copy=has_local,
         local_copy_error_ja=row.get("local_copy_error_ja"),
         page_count=row.get("page_count") or row.get("pages"),
         byte_size=row.get("byte_size") or row.get("bytes"),
@@ -335,6 +392,18 @@ def document_from_row(
         estimated_summary_cost_usd=row.get("estimated_summary_cost_usd"),
         info_value_rank=row.get("info_value_rank"),
     )
+
+
+def documents_for_state(state: Any, rows: Iterable[Mapping[str, Any]], **kwargs: Any) -> list[Document]:
+    """一覧用。Raw の提出者名と実在 PDF を載せる。"""
+    from packages.core.connectors.document_names import ensure_document_names
+
+    extra = ensure_document_names(state)
+    data_dir = getattr(getattr(state, "settings", None), "data_dir", None)
+    return documents_from_storage(
+        state.duck, rows, data_dir=data_dir, extra_names=extra, **kwargs
+    )
+
 
 
 def document_summary_from_row(row: dict[str, Any]) -> DocumentSummary:
