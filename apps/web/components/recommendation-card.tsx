@@ -326,8 +326,8 @@ function ScoreOnlyRow({ item }: { item: RecommendationFeedItem }) {
   const stockHref = `/stocks/${item.market}/${item.ticker}`;
   const name = companyDisplayName(item);
   return (
-    <Card as="article" className="p-3 tablet:px-4 tablet:py-3 min-w-0" data-testid="score-only-row">
-      <div className="flex items-center gap-3 min-w-0">
+    <Card as="article" className="p-3 tablet:px-4 tablet:py-3 min-w-0">
+      <div className="flex items-center gap-3 min-w-0" data-testid="score-only-row">
         <Link href={stockHref} className="min-w-0 flex-1 flex items-baseline gap-2 hover:text-accent">
           <span className="num shrink-0 text-fg-secondary">{item.ticker}</span>
           <span
