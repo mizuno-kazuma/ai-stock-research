@@ -1,7 +1,8 @@
 """開示資料のローカル PDF 配信と、無いときの公式サイトへの縮退。
 
 docs/06-filings-access.md §3.3 / §9。UI は常に `/documents/{id}/file` を開き、
-ローカルコピーが無ければ `source_url`（EDINET 閲覧画面など）へ送る。
+ローカルコピーが無ければ公式の閲覧 URL へ 302 する。blob 欠落で 404 JSON
+を返してはいけない。
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from typing import Any
 
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
+from packages.core.connectors.edinet_urls import EDINET_SEARCH_TOP, resolve_edinet_source_url
 from packages.core.connectors.errors import (
     AuthError,
     ConfigurationError,
@@ -106,8 +108,15 @@ def document_file_response(
                 "Content-Disposition": f'{disposition}; filename="{filename}"',
             },
         )
-    if doc.source_url:
-        return RedirectResponse(url=doc.source_url, status_code=302)
-    from services.api.errors import not_found
-
-    raise not_found("ローカルに PDF がなく、公式サイトの URL もありません。")
+    # 大量保有 / 自己株券買付などメタデータのみの行も、404 JSON ではなく閲覧画面へ送る。
+    stored = ""
+    if row:
+        stored = str(row.get("source_url") or row.get("pdf_url") or "").strip()
+    if not stored:
+        stored = str(doc.source_url or "").strip()
+    if str(doc.source) == "edinet" or str(doc.doc_id).startswith("edinet:"):
+        url = resolve_edinet_source_url(doc.doc_id, stored)
+        return RedirectResponse(url=url or EDINET_SEARCH_TOP, status_code=302)
+    if stored:
+        return RedirectResponse(url=stored, status_code=302)
+    return RedirectResponse(url=EDINET_SEARCH_TOP, status_code=302)

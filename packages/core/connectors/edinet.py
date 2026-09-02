@@ -26,6 +26,7 @@ from packages.core.connectors.base import (
     now_utc,
     tag_table,
 )
+from packages.core.connectors.edinet_urls import edinet_viewer_url
 from packages.core.connectors.errors import (
     AuthError,
     ConfigurationError,
@@ -81,10 +82,10 @@ class EdinetConnector(HttpConnector):
     def viewer_url(doc_id: str) -> str:
         """ブラウザで直接開ける閲覧画面URL。
 
-        `[要検証]` EDINET の閲覧画面URLは過去に何度か変わっている。
-        変更時にここ1箇所を直せば済むようにしている。
+        `[要検証]` `packages.core.connectors.edinet_urls.edinet_viewer_url` を正とする。
+        `?S100=` 形式は規定外操作（WZEK0130）になる。
         """
-        return f"https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?S100={doc_id}"
+        return edinet_viewer_url(doc_id)
 
     def require_credentials(self) -> None:
         if not self.auth_headers():

@@ -71,6 +71,68 @@ def test_documents_fill_name_from_payload_when_not_in_master() -> None:
     assert items[0].name_local == "弁護士ドットコム株式会社"
 
 
+def test_documents_fill_name_from_json_payload_string() -> None:
+    from services.api.mapping import documents_from_storage
+
+    class _Duck:
+        def get_securities(self, **kwargs):
+            return []
+
+    items = documents_from_storage(
+        _Duck(),
+        [
+            {
+                "doc_id": "edinet:S100JSON",
+                "ticker": "1887",
+                "market": "JP",
+                "source": "edinet",
+                "doc_type": "large_holding",
+                "title": "大量保有報告書",
+                "filed_at": dt.datetime(2026, 9, 2, 2, 10, 0),
+                "source_url": "",
+                "payload": '{"filerName": "日本国土開発株式会社", "docID": "S100JSON"}',
+            }
+        ],
+    )
+    assert items[0].name_local == "日本国土開発株式会社"
+
+
+def test_documents_fill_name_from_four_digit_securities_alias(seeded_repos) -> None:
+    duck, sqlite, payload = seeded_repos
+    duck.upsert_securities(
+        [
+            {
+                "ticker": "18870",
+                "market": "JP",
+                "name_local": "日本国土開発",
+                "currency": "JPY",
+                "valid_from": dt.date(2020, 1, 1),
+                "is_active": True,
+            }
+        ]
+    )
+    duck.upsert_documents(
+        [
+            {
+                "doc_id": "edinet:S100ALIAS",
+                "ticker": "1887",
+                "market": "JP",
+                "source": "edinet",
+                "doc_type": "large_holding",
+                "title": "大量保有報告書",
+                "filed_at": dt.datetime(2026, 9, 2, 2, 10, 0),
+                "source_url": "https://example.invalid/S100ALIAS",
+            }
+        ]
+    )
+    application = create_app(duck=duck, sqlite=sqlite, payload=payload)
+    with TestClient(application) as client:
+        r = client.get("/api/v1/documents?market=JP")
+    row = next(item for item in r.json()["data"]["items"] if item["doc_id"] == "edinet:S100ALIAS")
+    assert row["ticker"] == "1887"
+    assert row["name_local"] == "日本国土開発"
+
+
 def test_documents_fill_name_from_stored_filer_when_master_missing(seeded_repos) -> None:
     duck, sqlite, payload = seeded_repos
     duck.upsert_documents(

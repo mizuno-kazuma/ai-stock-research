@@ -53,14 +53,34 @@ def edinet_download_url(doc_id: str, kind: Literal["xbrl", "pdf", "csv"]) -> str
 ```python
 def edinet_viewer_url(doc_id: str) -> str:
     """EDINET の書類閲覧画面。ヘッダ認証不要でブラウザから開ける。
-    [要検証] EDINET のUIリニューアルでパスが変わる可能性がある。"""
-    return (
-        "https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx"
-        f"?S100={doc_id}"          # [要検証] 実際のクエリパラメータ名を確認
-    )
+    [要検証] 公式のディープリンク仕様は公開されていない。パスは UI 変更で変わりうる。"""
+    native = doc_id.split(":", 1)[-1]          # edinet:S100XXXX → S100XXXX
+    return f"https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?{native}"
 ```
 
-`[要検証]` EDINET の閲覧画面URLは過去に何度か変わっている。実装時に実際のURLを確認し、この関数1箇所を直せば済むようにしておく。
+**原因**: 2024 年以降の閲覧サイト（`disclosure2.edinet-fsa.go.jp`）は、書類管理番号を
+クエリ文字列そのもの（`WZEK0040.aspx?S100XXXX`）として受け取る。かつての実装
+`WZEK0040.aspx?S100={doc_id}`（パラメータ名 `S100`）は HTTP 301 で
+`wzek0130.aspx` へ送られ、「規定外操作が行われました。ブラウザを閉じて再度操作を
+行ってください。」と表示される。WZEK0130 はエラー／セッション切れ画面であり、
+doc id 無しで開いても同じメッセージになる。`api.edinet-fsa.go.jp` は
+Subscription-Key が必要な API であり、ブラウザ向けではない。
+
+**対策**: 閲覧 URL は `packages/core/connectors/edinet_urls.py` の
+`edinet_viewer_url` 1 箇所で作る。一覧の `source_url` と
+`GET /documents/{id}/file` の 302 先は、保存済み URL が次のいずれかに該当したら
+`doc_id` から作り直す。
+
+- `wzek0130.aspx`（クエリの有無を問わない）
+- `WZEK0040.aspx?S100=S100XXXX`（パラメータ名 `S100`）
+- ホストが `api.edinet-fsa.go.jp`
+- 空、または `example.invalid`
+
+`[要検証]` 2026-09-01 に `WZEK0040.aspx?S100TMMG` が HTTP 200
+「提出書類内容照会画面（提出本文書）」になることを確認した。公式ドキュメントに
+ディープリンクが書かれたらこの関数だけを直す。古い書類（提出から約 10 年超）は
+原本が消えて規定外操作になることがあり、その場合は検索トップ
+`https://disclosure2.edinet-fsa.go.jp/` から照合する。
 
 ### 3.3 ローカル配信 URL（推奨経路）
 
@@ -88,10 +108,14 @@ async def get_document_file(doc_id: str, disposition: str = "inline"):
     return FileResponse(...)
 ```
 
-実装は `services/api/document_files.py`。`documents.blob_path` が空でも
-`data/raw/{source}/blobs/` の規約パスを探す。ローカルもオンデマンド取得も失敗したら
-`source_url`（EDINET 閲覧画面など）へ 302 する。一覧は「原文（別タブ）」がこの
-エンドポイントを開き、併せて「提供元サイトで開く」を出す。
+実装は `services/api/document_files.py` の `document_file_response`。
+`documents.blob_path` が空でも `data/raw/{source}/blobs/` の規約パスを探す。
+ローカルもオンデマンド取得も失敗したら、壊れていない閲覧 URL へ **302** する。
+blob が無くても 404 JSON（「ローカルに PDF がありません」）は返さない。
+大量保有報告書・自己株券買付状況報告書などバッチでは PDF を落とさない書類も、
+一覧の「原文（別タブ）」から公式サイトへ届く。保存済み `source_url` が
+WZEK0130 や `?S100=` 形式なら `doc_id` から作り直した URL を使う。
+一覧は「原文（別タブ）」がこのエンドポイントを開き、併せて「提供元サイトで開く」を出す。
 
 **この設計の利点**:
 
@@ -332,7 +356,7 @@ def get_or_create_summary(doc: Document, template: PromptTemplate) -> Summary:
 
 **どのケースでも「公式サイトへのリンク」は必ず出す。** 要約や取得が失敗しても、資料に到達する手段が失われないことが最低保証である。
 
-`GET /api/v1/documents/{doc_id}/file` はローカル PDF が無いとき、EDINET からオンデマンド取得を試み、それでも無ければ `source_url`（閲覧画面）へ 302 する。大量保有報告書などバッチでは PDF を落とさない書類も、一覧の「原文」から公式サイトへ届く。
+`GET /api/v1/documents/{doc_id}/file` はローカル PDF が無いとき、EDINET からオンデマンド取得を試み、それでも無ければ閲覧画面へ 302 する。大量保有報告書などバッチでは PDF を落とさない書類も、一覧の「原文」から公式サイトへ届く。404 JSON は出さない。
 
 ## 10. 決算発表予定日の管理
 

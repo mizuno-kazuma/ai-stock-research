@@ -46,7 +46,7 @@ export default function FilingsPage() {
   };
 
   return (
-    <>
+    <div className="filings-page">
       <PageHeader
         title="決算資料"
         asOf={meta?.as_of}
@@ -56,7 +56,7 @@ export default function FilingsPage() {
         description="要約は言語モデルが生成したものです。数字の確認は必ず原文で行ってください。"
       />
 
-      <SectionCard title="種類で絞り込む" bodyClassName="flex flex-wrap gap-2">
+      <SectionCard title="種類で絞り込む" className="shrink-0" bodyClassName="flex flex-wrap gap-2">
         <Chip selected={docType === null} onClick={() => setDocType(null)}>
           すべて
         </Chip>
@@ -67,8 +67,8 @@ export default function FilingsPage() {
         ))}
       </SectionCard>
 
-      <div className="mt-4 grid gap-4 desktop:grid-cols-2">
-        <SectionCard title="開示一覧" bodyClassName="p-0">
+      <div className="filings-split">
+        <SectionCard title="開示一覧" className="filings-pane" bodyClassName="p-0 filings-pane-body">
           <QuerySection
             label="開示一覧"
             query={query}
@@ -86,7 +86,7 @@ export default function FilingsPage() {
             }}
           >
             {(rows) => (
-              <ul>
+              <ul data-testid="filings-list">
                 {rows.map((row) => (
                   <FilingListItem
                     key={row.doc_id}
@@ -100,10 +100,12 @@ export default function FilingsPage() {
           </QuerySection>
         </SectionCard>
 
-        {/* 768px 以上は右側に常設。未満ではボトムシートとして出す */}
-        <div className="hidden desktop:block">
+        {/* 1280px 以上は右側に常設。未満ではボトムシートとして出す */}
+        <div className="hidden desktop:block min-h-0 h-full">
           <SectionCard
             title="要約"
+            className="filings-pane"
+            bodyClassName="filings-pane-body"
             actions={
               selected ? (
                 <a className="btn btn-ghost" href={docFileHref(selected)} target="_blank" rel="noopener noreferrer">
@@ -173,6 +175,6 @@ export default function FilingsPage() {
           直近の生成コスト {formatUsdPrecise(generate.data.data.cost_usd, 4)}
         </p>
       ) : null}
-    </>
+    </div>
   );
 }

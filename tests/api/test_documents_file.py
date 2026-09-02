@@ -32,8 +32,64 @@ def test_document_file_redirects_to_source_url_when_blob_missing(seeded_repos, t
     )
     with TestClient(application, follow_redirects=False) as client:
         r = client.get("/api/v1/documents/edinet:S100MISS/file")
+        listed = client.get("/api/v1/documents?market=JP")
     assert r.status_code == 302
-    assert r.headers["location"] == "https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?S100=S100MISS"
+    assert r.headers["location"] == "https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?S100MISS"
+    assert "wzek0130" not in r.headers["location"].lower()
+    row = next(item for item in listed.json()["data"]["items"] if item["doc_id"] == "edinet:S100MISS")
+    assert row["source_url"] == "https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?S100MISS"
+
+
+def test_document_file_redirects_when_source_url_empty(seeded_repos, tmp_path) -> None:
+    duck, sqlite, payload = seeded_repos
+    duck.upsert_documents(
+        [
+            {
+                "doc_id": "edinet:S100EMPTY",
+                "ticker": "1887",
+                "market": "JP",
+                "source": "edinet",
+                "doc_type": "large_holding",
+                "title": "大量保有報告書",
+                "filed_at": dt.datetime(2026, 9, 2, 2, 10, 0),
+                "source_url": "",
+            }
+        ]
+    )
+    application = create_app(
+        duck=duck, sqlite=sqlite, payload=payload, settings=Settings(data_dir=tmp_path)
+    )
+    with TestClient(application, follow_redirects=False) as client:
+        r = client.get("/api/v1/documents/edinet:S100EMPTY/file")
+    assert r.status_code == 302
+    assert r.headers["location"] == "https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?S100EMPTY"
+    assert r.status_code != 404
+    assert "ローカルに PDF がありません" not in (r.text or "")
+
+
+def test_document_file_rewrites_wzek0130(seeded_repos, tmp_path) -> None:
+    duck, sqlite, payload = seeded_repos
+    duck.upsert_documents(
+        [
+            {
+                "doc_id": "edinet:S100HOLD",
+                "ticker": "1887",
+                "market": "JP",
+                "source": "edinet",
+                "doc_type": "large_holding",
+                "title": "大量保有報告書",
+                "filed_at": dt.datetime(2026, 9, 2, 2, 10, 0),
+                "source_url": "https://disclosure2.edinet-fsa.go.jp/wzek0130.aspx",
+            }
+        ]
+    )
+    application = create_app(
+        duck=duck, sqlite=sqlite, payload=payload, settings=Settings(data_dir=tmp_path)
+    )
+    with TestClient(application, follow_redirects=False) as client:
+        r = client.get("/api/v1/documents/edinet:S100HOLD/file")
+    assert r.status_code == 302
+    assert r.headers["location"] == "https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?S100HOLD"
 
 
 def test_document_file_serves_existing_blob(seeded_repos, tmp_path) -> None:

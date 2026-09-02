@@ -461,6 +461,49 @@
   }
   .app-content-inner {
     max-width: var(--content-max-width);
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  /* 決算資料: 絞り込みは固定し、開示一覧と要約だけが内部スクロールする */
+  .filings-page {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .filings-page > :not(.filings-split) {
+    flex-shrink: 0;
+  }
+  .filings-split {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    margin-top: 16px;
+  }
+  @media (min-width: 1280px) {
+    .filings-split {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  .filings-pane.card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    height: 100%;
+  }
+  .filings-pane-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   /* タッチデバイスの最小タップ領域 44x44px（padding で確保する） */
