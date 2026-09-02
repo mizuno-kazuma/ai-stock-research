@@ -60,7 +60,7 @@ import {
   mapQuintileList,
   mapRateDifferential,
   mapRecHistory,
-  mapRecommendationCard,
+  mapRecommendationFeedItem,
   mapRecommendationList,
   mapScreener,
   mapScreenerPreset,
@@ -105,7 +105,6 @@ import type {
   PriceSeriesData,
   QuintileReturn,
   RateDifferentialPoint,
-  RecommendationCard,
   RecommendationHistoryRow,
   RecommendationListData,
   ScreenerData,
@@ -220,12 +219,10 @@ async function fetchDashboard(market: Market): Promise<ApiResult<DashboardData>>
   const mapped = mapDashboard(dash.data);
   const jobs = mapped.jobs.length ? mapped.jobs : unwrapItems(jobsRes?.data).map(mapAgentJob);
   const watchlist = mapped.watchlist.length ? mapped.watchlist : unwrapItems(watchRes?.data).map(mapWatchlistRow);
-  const recItems = unwrapItems(recsRes?.data).map(mapRecommendationCard);
+  const recItems = unwrapItems(recsRes?.data).map(mapRecommendationFeedItem);
   const uniqueDash = uniqueByIssuer(mapped.top_recommendations);
   const uniqueRecs = uniqueByIssuer(recItems);
-  const top = (
-    uniqueDash.some((r) => r.bear_case_ja.length >= 20) ? uniqueDash : uniqueRecs
-  ).slice(0, 5);
+  const top = (uniqueDash.length >= uniqueRecs.length ? uniqueDash : uniqueRecs).slice(0, 10);
   return {
     ...dash,
     data: {

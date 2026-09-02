@@ -6,7 +6,6 @@ import datetime as dt
 
 from fastapi import APIRouter, Depends, Query
 
-from packages.core.storage import unique_by_issuer
 from packages.schemas.common import Envelope, OkResponse
 from packages.schemas.recommendations import (
     RecommendationCard,
@@ -18,6 +17,7 @@ from services.api.deps import AppState, User, get_app_state, require_user
 from services.api.envelope import wrap
 from services.api.errors import data_not_ready, not_found
 from services.api.mapping import recommendation_from_row, recommendation_from_seed
+from services.api.recommendation_feed import FeedQuery, build_recommendation_feed
 from services.api.util import as_date, as_utc, resolve_market, split_csv, utc_now
 
 router = APIRouter(tags=["recommendations"])
@@ -36,75 +36,55 @@ def _db_card(state: AppState, row: dict) -> RecommendationCard:
 def list_recommendations(
     market: str | None = Query(default=None),
     as_of: dt.date | None = None,
-    horizon: str | None = None,
+    horizon: str | None = Query(default="H20"),
     action: str | None = None,
     conviction: str | None = None,
-    include_rejected: bool = False,
-    limit: int = Query(default=20, ge=1, le=200),
+    critic_verdict: str | None = None,
+    sector: str | None = None,
+    min_score: float | None = None,
+    reason_code: str | None = None,
+    pred_sign: str | None = Query(default=None, pattern="^(positive|negative)$"),
+    has_card: bool | None = None,
+    include_rejected: bool = True,
+    sort: str = Query(default="total_score"),
+    limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     _user: User = Depends(require_user),
     state: AppState = Depends(get_app_state),
 ) -> Envelope[RecommendationList]:
-    if market:
-        market = resolve_market(market)
-    actions = split_csv(action)
-    convictions = split_csv(conviction)
-    # docs/09-api-spec.md §2.2: as_of 省略時は最新日。日付をまたぐと同じ銘柄が並ぶ。
-    day = as_of or state.duck.latest_recommendation_date(market)
-    items: list[RecommendationCard] = []
-    db_rows = state.duck.get_recommendations(
-        as_of=day,
-        market=market,
-        horizon=horizon,
-        include_rejected=include_rejected,
-        limit=500,
-        offset=0,
+    resolved = resolve_market(market) if market else resolve_market(None)
+    pred: str | None = pred_sign if pred_sign in {"positive", "negative"} else None
+    feed = build_recommendation_feed(
+        state,
+        FeedQuery(
+            market=resolved,
+            as_of=as_of,
+            horizon=horizon,
+            actions=split_csv(action) or [],
+            convictions=split_csv(conviction) or [],
+            critic_verdicts=split_csv(critic_verdict) or [],
+            sector=sector,
+            min_score=min_score,
+            reason_codes=split_csv(reason_code) or [],
+            pred_sign=pred,  # type: ignore[arg-type]
+            has_card=has_card,
+            include_rejected=include_rejected,
+            limit=limit,
+            offset=offset,
+            sort=sort,
+        ),
     )
-    if db_rows:
-        for row in db_rows:
-            if actions and row.get("action") not in actions:
-                continue
-            if convictions and row.get("conviction") not in convictions:
-                continue
-            items.append(_db_card(state, row))
-    elif state.is_seed_data and state.payload:
-        for card in _seed_cards(state):
-            if market and card.market != market:
-                continue
-            if day and card.as_of != day:
-                continue
-            if horizon and card.horizon != horizon:
-                continue
-            if actions and card.action not in actions:
-                continue
-            if convictions and card.conviction not in convictions:
-                continue
-            if not include_rejected and card.critic_verdict == "rejected":
-                continue
-            items.append(card)
-    items = [
-        RecommendationCard.model_validate(row)
-        if not isinstance(row, RecommendationCard)
-        else row
-        for row in unique_by_issuer(
-            [c.model_dump() for c in items], extra_key="horizon"
+    if as_of is not None and feed.universe_size == 0:
+        latest = state.duck.latest_score_date(resolved) or state.duck.latest_recommendation_date(
+            resolved
         )
-    ]
-    if as_of is not None and not items:
-        latest = state.duck.latest_recommendation_date(market)
         raise data_not_ready(
             f"{as_of.isoformat()} の推奨はまだ計算されていません。",
             latest_available_as_of=as_date(latest),
             instance="/api/v1/recommendations",
         )
-    total = len(items)
-    page = items[offset : offset + limit]
-    as_of_out = day or (page[0].as_of if page else state.as_of)
-    return wrap(
-        state,
-        RecommendationList(items=page, total=total, limit=limit, offset=offset),
-        as_of=as_of_out,
-    )
+    as_of_out = as_of or (feed.items[0].as_of if feed.items else state.as_of)
+    return wrap(state, feed, as_of=as_of_out)
 
 
 @router.get("/recommendations/{rec_id}", response_model=Envelope[RecommendationCard])
@@ -135,7 +115,6 @@ def get_recommendation_outcome(
 ) -> Envelope[RecommendationOutcome | None]:
     rows = state.duck.get_recommendation_outcomes(rec_id=rec_id, limit=10)
     if not rows:
-        # シードの履歴から pending 以外を探す
         history = (state.payload.get("recommendation_history") or {}).get("JP:7203") or {}
         for row in history.get("rows") or []:
             if row.get("rec_id") == rec_id and row.get("outcome") in {"hit", "miss"}:

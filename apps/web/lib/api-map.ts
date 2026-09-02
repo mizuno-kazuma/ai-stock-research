@@ -38,6 +38,7 @@ import type {
   PortfolioTotals,
   QuintileReturn,
   RecommendationCard,
+  RecommendationFeedItem,
   RecommendationHistoryRow,
   RecommendationListData,
   ScreenerData,
@@ -199,15 +200,54 @@ export function mapRecommendationCard(raw: unknown): RecommendationCard {
   };
 }
 
+function asDisplayTier(v: unknown): RecommendationFeedItem["display_tier"] {
+  if (v === "core" || v === "fill" || v === "score_only") return v;
+  return "score_only";
+}
+
+export function mapRecommendationFeedItem(raw: unknown): RecommendationFeedItem {
+  const d = rec(raw);
+  const nested = d.card;
+  const looksLikeCard = d.thesis_ja != null && d.bear_case_ja != null && d.display_tier == null;
+  const cardRaw = nested ?? (looksLikeCard ? raw : null);
+  const card = cardRaw ? mapRecommendationCard(cardRaw) : null;
+  const ticker = str(d.ticker, card?.ticker ?? "");
+  return {
+    ticker,
+    market: asMarket(d.market ?? card?.market),
+    as_of: str(d.as_of, card?.as_of ?? ""),
+    name_local: str(d.name_local, card?.name_local ?? ticker) || ticker,
+    sector_code: d.sector_code != null ? str(d.sector_code) : card?.sector_code ?? null,
+    sector_name: d.sector_name != null ? str(d.sector_name) : card?.sector_name ?? null,
+    display_tier: asDisplayTier(d.display_tier ?? (card?.reason_codes.includes("RANK_FILL") ? "fill" : card ? "core" : "score_only")),
+    total_score: num(d.total_score) ?? card?.total_score ?? null,
+    quant_score: num(d.quant_score) ?? card?.quant_score ?? null,
+    quant_rank: num(d.quant_rank) ?? card?.quant_rank ?? null,
+    quant_percentile: num(d.quant_percentile) ?? card?.quant_percentile ?? null,
+    ml_pred_h20: num(d.ml_pred_h20) ?? card?.ml_pred ?? card?.expected_ret ?? null,
+    ml_pred_h20_lo: num(d.ml_pred_h20_lo) ?? card?.expected_ret_lo ?? null,
+    ml_pred_h20_hi: num(d.ml_pred_h20_hi) ?? card?.expected_ret_hi ?? null,
+    reason_codes: strArr(d.reason_codes).length ? strArr(d.reason_codes) : card?.reason_codes ?? [],
+    critic_verdict: (d.critic_verdict as RecommendationFeedItem["critic_verdict"]) ?? card?.critic_verdict ?? null,
+    rec_id: d.rec_id != null ? str(d.rec_id) : card?.rec_id ?? null,
+    action: (d.action as RecommendationFeedItem["action"]) ?? card?.action ?? null,
+    horizon: (d.horizon as RecommendationFeedItem["horizon"]) ?? card?.horizon ?? null,
+    conviction: (d.conviction as RecommendationFeedItem["conviction"]) ?? card?.conviction ?? null,
+    card,
+  };
+}
+
 export function mapRecommendationList(raw: unknown): RecommendationListData {
-  const items = uniqueByIssuer(unwrapItems(raw).map(mapRecommendationCard), (row) => row.horizon);
+  const items = uniqueByIssuer(unwrapItems(raw).map(mapRecommendationFeedItem));
   const d = rec(raw);
   return {
     items,
     total: num0(d.total) || items.length,
+    universe_size: num0(d.universe_size),
+    filled_count: num0(d.filled_count),
     limit: num(d.limit),
     offset: num(d.offset),
-  } as RecommendationListData;
+  };
 }
 
 export function mapAgentJob(raw: unknown): AgentJob {
@@ -1136,7 +1176,7 @@ export function mapDashboard(raw: unknown): DashboardData {
   const watchlist = unwrapItems(d.watchlist).map(mapWatchlistRow);
   const alerts = unwrapField(d, "alerts").map(mapAlert);
   const filings = unwrapField(d, "watchlist_filings").map(mapDocumentRow);
-  const recs = unwrapField(d, "top_recommendations").map(mapRecommendationCard);
+  const recs = unwrapField(d, "top_recommendations").map(mapRecommendationFeedItem);
   const jobStatus = rec(d.job_status);
   const portfolio = rec(d.portfolio_snapshot);
   return {

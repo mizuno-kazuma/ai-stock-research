@@ -11,7 +11,7 @@ from packages.core.models.regime import (
     model_degradation,
     vol_regime_from_levels,
 )
-from packages.core.storage import issuer_key, unique_by_issuer
+from packages.core.storage import issuer_key
 from packages.schemas.common import Envelope
 from packages.schemas.dashboard import (
     AdvanceDecline,
@@ -29,16 +29,16 @@ from packages.schemas.dashboard import (
     VolRegime,
     WatchlistFiling,
 )
-from packages.schemas.recommendations import RecommendationSummary
+from packages.schemas.recommendations import RecommendationFeedItem
 from services.api.deps import AppState, User, get_app_state, require_user
 from services.api.envelope import wrap
 from services.api.mapping import (
     alert_from_row,
     company_name_candidates,
     display_company_name,
-    recommendation_from_seed,
     securities_by_issuer,
 )
+from services.api.recommendation_feed import FeedQuery, build_recommendation_feed
 from services.api.util import as_date, as_utc, resolve_market
 
 router = APIRouter(tags=["dashboard"])
@@ -149,7 +149,6 @@ def _dashboard_from_seed(state: AppState, *, market: str, as_of: dt.date) -> Das
     model = payload.get("model_health") or {}
     jobs = payload.get("jobs") or []
     alerts_raw = payload.get("alerts") or []
-    recs = unique_by_issuer(payload.get("recommendations") or [])
     port = payload.get("portfolio") or {}
     filings = payload.get("filings") or []
     watch = payload.get("watchlist") or []
@@ -161,37 +160,10 @@ def _dashboard_from_seed(state: AppState, *, market: str, as_of: dt.date) -> Das
         if (filed := _filed_date(doc.get("filed_at"))) is not None and start <= filed <= end
     ]
 
-    summaries: list[RecommendationSummary] = []
-    for row in recs:
-        if row.get("critic_verdict") == "rejected":
-            continue
-        if row.get("market") != market:
-            continue
-        card = recommendation_from_seed(row)
-        summaries.append(
-            RecommendationSummary(
-                rec_id=card.rec_id,
-                as_of=card.as_of,
-                ticker=card.ticker,
-                market=card.market,
-                name_local=card.name_local,
-                sector_name=card.sector_name,
-                action=card.action,
-                horizon=card.horizon,
-                conviction=card.conviction,
-                conviction_score=card.conviction_score,
-                total_score=card.total_score,
-                expected_ret=card.expected_ret,
-                expected_ret_lo=card.expected_ret_lo,
-                expected_ret_hi=card.expected_ret_hi,
-                hit_rate_prior=card.hit_rate_prior,
-                n_prior_samples=card.n_prior_samples,
-                reason_codes=card.reason_codes,
-                flags=card.flags,
-            )
-        )
-        if len(summaries) >= 5:
-            break
+    summaries: list[RecommendationFeedItem] = build_recommendation_feed(
+        state,
+        FeedQuery(market=market, as_of=as_of, highlights=True),
+    ).items
 
     index = dash.get("index") or {}
     fx_summary = dash.get("fx_summary") or {}
@@ -307,46 +279,18 @@ def _dashboard_from_seed(state: AppState, *, market: str, as_of: dt.date) -> Das
     )
 
 
-def _unique_recs_by_ticker(rows: list[dict]) -> list[dict]:
-    """発行体あたり 1 件。H5 と H20、4桁と 5桁、日付違いを畳む。"""
-    return unique_by_issuer(rows)
-
-
 def _dashboard_from_warehouse(state: AppState, *, market: str, as_of: dt.date) -> Dashboard:
-    recs = state.duck.get_recommendations(market=market, as_of=as_of, limit=20)
-    if not recs:
-        latest = state.duck.latest_recommendation_date(market)
-        recs = (
-            state.duck.get_recommendations(market=market, as_of=latest, limit=20)
-            if latest
-            else []
-        )
-    recs = _unique_recs_by_ticker(recs)[:5]
-    summaries: list[RecommendationSummary] = []
-    for row in recs:
-        sec = state.duck.get_security(row["ticker"], row["market"]) or {}
-        summaries.append(
-            RecommendationSummary(
-                rec_id=row["rec_id"],
-                as_of=as_date(row["as_of"]) or as_of,
-                ticker=row["ticker"],
-                market=row["market"],
-                name_local=sec.get("name_local") or row["ticker"],
-                sector_name=sec.get("sector_name"),
-                action=row["action"],
-                horizon=row["horizon"],
-                conviction=row["conviction"],
-                conviction_score=row["conviction_score"],
-                total_score=row.get("total_score"),
-                expected_ret=row.get("expected_ret"),
-                expected_ret_lo=row.get("expected_ret_lo"),
-                expected_ret_hi=row.get("expected_ret_hi"),
-                hit_rate_prior=row.get("hit_rate_prior"),
-                n_prior_samples=row.get("n_prior_samples"),
-                reason_codes=list(row.get("reason_codes") or []),
-                flags=list(row.get("flags") or []),
-            )
-        )
+    summaries: list[RecommendationFeedItem] = build_recommendation_feed(
+        state,
+        FeedQuery(market=market, as_of=as_of, highlights=True),
+    ).items
+    if not summaries:
+        latest = state.duck.latest_score_date(market) or state.duck.latest_recommendation_date(market)
+        if latest and latest != as_of:
+            summaries = build_recommendation_feed(
+                state,
+                FeedQuery(market=market, as_of=latest, highlights=True),
+            ).items
 
     series_id = "NIKKEI225" if market == "JP" else "SP500"
     bench_rows = state.duck.get_macro_as_of(series_id, as_of=as_of, limit=2)

@@ -38,6 +38,38 @@ test.describe("主要フロー", () => {
     await expect(page.getByRole("heading", { name: "推奨銘柄" })).toBeVisible();
   });
 
+  test("定量のみの行でも会社名とスコアが見える", async ({ page }) => {
+    await page.goto("/recommendations");
+    await page.getByRole("button", { name: "定量のみ", exact: true }).click();
+    const row = page.getByTestId("score-only-row").first();
+    await expect(row).toBeVisible();
+    const name = row.getByTestId("feed-company-name");
+    await expect(name).toBeVisible();
+    await expect(name).not.toHaveText(/^$/);
+    const ticker = await row.locator(".num").first().innerText();
+    await expect(name).not.toHaveText(ticker.trim());
+    const score = row.getByTestId("feed-score");
+    await expect(score).toBeVisible();
+    await expect(score).toContainText("スコア");
+    await expect(score).not.toHaveText(/—/);
+  });
+
+  test("定量のみの行でも会社名とスコアが見える", async ({ page }) => {
+    await page.goto("/recommendations");
+    await page.getByRole("button", { name: "定量のみ", exact: true }).click();
+    const row = page.getByTestId("score-only-row").first();
+    await expect(row).toBeVisible();
+    const name = row.getByTestId("feed-company-name");
+    await expect(name).toBeVisible();
+    await expect(name).not.toHaveText(/^$/);
+    const ticker = await row.locator(".num").first().innerText();
+    await expect(name).not.toHaveText(ticker.trim());
+    const score = row.getByTestId("feed-score");
+    await expect(score).toBeVisible();
+    await expect(score).toContainText("スコア");
+    await expect(score).not.toHaveText(/—/);
+  });
+
     test("決算資料の開示一覧に会社名が出る", async ({ page }) => {
     await page.goto("/filings");
     await expect(page.getByRole("heading", { name: "決算資料" })).toBeVisible();

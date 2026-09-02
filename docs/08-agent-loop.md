@@ -337,7 +337,7 @@ BOILERPLATE_PATTERNS = [
 | --- | --- |
 | `approved` | `critic_verdict='approved'` を記録。UIに表示される |
 | `revised` | Critic の `revised_fields`（`thesis_ja` / `bear_case_ja` / `invalidation_ja` / `conviction`）をカード本文に適用して再保存。`critic_notes_ja` に修正内容を記録。母数不足なら conviction は low のまま。UIには修正後のものを表示し、「レビューで修正済み」バッジを付ける |
-| `rejected` | `critic_verdict='rejected'` を記録。**UIには表示しないが、テーブルには残す** |
+| `rejected` | `critic_verdict='rejected'` を記録。承認としては出さない。推奨タブのユニバース一覧には却下バッジ付きで残す（[05-scoring-screening.md](05-scoring-screening.md) §7.8） |
 
 **却下された推奨を残す理由**: これが学習材料になる。「Strategist が生成したが Critic が却下した」パターンを Evaluator が分析し、Strategist のプロンプト改善に繋げる。エージェントコンソール画面では却下分も確認できる（開発者向けの表示）。
 

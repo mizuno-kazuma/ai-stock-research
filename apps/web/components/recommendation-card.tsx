@@ -22,7 +22,7 @@ import {
   NULL_PLACEHOLDER,
 } from "@ai-stock/ui";
 
-import type { Citation, FactorDetail, RecommendationCard as RecCard } from "../lib/api-types";
+import type { Citation, FactorDetail, RecommendationCard as RecCard, RecommendationFeedItem } from "../lib/api-types";
 import {
   ACTION_LABEL_JA,
   ACTION_TONE,
@@ -30,6 +30,8 @@ import {
   CITATION_STATUS_STYLE,
   CRITIC_VERDICT_LABEL_JA,
   CRITIC_VERDICT_TONE,
+  DISPLAY_TIER_LABEL_JA,
+  DISPLAY_TIER_TONE,
   HORIZON_LABEL_JA,
   MARKET_LABEL_JA,
   reasonCodeLabel,
@@ -301,7 +303,94 @@ const FLAG_LABEL_JA: Record<string, string> = {
   stale_data: "古いデータを含む",
 };
 
-/** 一覧の1行に収める最小形。弱気論拠のプレビューを必ず含める */
+/** カードなし行でも会社名とスコアを必ず出すコンパクト行 */
+export function visibleScore(item: RecommendationFeedItem): number | null {
+  return item.total_score ?? item.quant_score ?? item.card?.total_score ?? item.card?.quant_score ?? null;
+}
+
+export function companyDisplayName(item: RecommendationFeedItem): string {
+  const name = item.name_local.trim();
+  return name || item.ticker;
+}
+
+function FeedScore({ item, size = "lg" }: { item: RecommendationFeedItem; size?: "sm" | "md" | "lg" }) {
+  return (
+    <span className="shrink-0 inline-flex items-baseline gap-1.5" data-testid="feed-score">
+      <span className="text-caption text-fg-tertiary">スコア</span>
+      <ScoreBadge score={visibleScore(item)} size={size} />
+    </span>
+  );
+}
+
+function ScoreOnlyRow({ item }: { item: RecommendationFeedItem }) {
+  const stockHref = `/stocks/${item.market}/${item.ticker}`;
+  const name = companyDisplayName(item);
+  return (
+    <Card as="article" className="p-3 tablet:px-4 tablet:py-3 min-w-0" data-testid="score-only-row">
+      <div className="flex items-center gap-3 min-w-0">
+        <Link href={stockHref} className="min-w-0 flex-1 flex items-baseline gap-2 hover:text-accent">
+          <span className="num shrink-0 text-fg-secondary">{item.ticker}</span>
+          <span
+            className="text-h3 text-fg-primary min-w-0 truncate"
+            data-testid="feed-company-name"
+            title={name}
+          >
+            {name}
+          </span>
+        </Link>
+        <FeedScore item={item} />
+      </div>
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <Badge tone="neutral">{MARKET_LABEL_JA[item.market]}</Badge>
+        <Badge tone={DISPLAY_TIER_TONE[item.display_tier]}>{DISPLAY_TIER_LABEL_JA[item.display_tier]}</Badge>
+        <span className="text-caption text-fg-tertiary">{item.sector_name ?? NULL_PLACEHOLDER}</span>
+      </div>
+      {item.reason_codes.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {item.reason_codes.slice(0, 4).map((code) => (
+            <Chip key={code} tone={reasonCodeTone(code)}>
+              {reasonCodeLabel(code)}
+            </Chip>
+          ))}
+        </div>
+      ) : null}
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <span className="text-caption text-fg-tertiary">
+          レビュー済みの推奨カードはありません。定量スコアに基づく表示です。
+        </span>
+        <Link href={stockHref} className="btn btn-ghost">
+          銘柄詳細
+          <ExternalLink size={13} aria-hidden="true" />
+        </Link>
+      </div>
+    </Card>
+  );
+}
+
+export function RecommendationFeedRow({
+  item,
+  variant = "list",
+}: {
+  item: RecommendationFeedItem;
+  variant?: "list" | "highlight";
+}) {
+  if (!item.card) {
+    return <ScoreOnlyRow item={item} />;
+  }
+  return (
+    <div className="min-w-0 space-y-2" data-testid="feed-card-row">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone={DISPLAY_TIER_TONE[item.display_tier]}>{DISPLAY_TIER_LABEL_JA[item.display_tier]}</Badge>
+        {item.critic_verdict ? (
+          <Badge tone={CRITIC_VERDICT_TONE[item.critic_verdict]}>
+            レビュー: {CRITIC_VERDICT_LABEL_JA[item.critic_verdict]}
+          </Badge>
+        ) : null}
+      </div>
+      <RecommendationCard rec={item.card} variant={variant === "highlight" ? "compact" : "full"} />
+    </div>
+  );
+}
 export function RecommendationRowSummary({ rec }: { rec: RecCard }) {
   return (
     <div className="min-w-0">

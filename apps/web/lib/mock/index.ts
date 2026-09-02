@@ -8,8 +8,85 @@
  */
 
 import { ApiError, type ApiResult, type QueryParams } from "../api-client";
-import type { ApiWarning, Meta, ProblemDetails } from "../api-types";
+import type { ApiWarning, Meta, ProblemDetails, RecommendationFeedItem } from "../api-types";
 import * as fx from "./fixtures";
+
+function mockUniverse(params?: QueryParams): RecommendationFeedItem[] {
+  const cards = new Map(fx.RECOMMENDATIONS.map((card) => [`${card.market}:${card.ticker}`, card]));
+  const rows: RecommendationFeedItem[] = fx.SCREENER_ROWS.map((row) => {
+    const card = cards.get(`${row.market}:${row.ticker}`) ?? null;
+    return {
+      ticker: row.ticker,
+      market: row.market,
+      as_of: fx.MOCK_AS_OF,
+      name_local: row.name_local,
+      sector_name: row.sector_name,
+      display_tier: card ? (card.reason_codes.includes("RANK_FILL") ? "fill" : "core") : "score_only",
+      total_score: row.quant_score,
+      quant_score: row.quant_score,
+      ml_pred_h20: row.ml_pred_h20,
+      ml_pred_h20_lo: row.ml_pred_h20_lo,
+      ml_pred_h20_hi: row.ml_pred_h20_hi,
+      reason_codes: card?.reason_codes ?? row.reason_codes,
+      critic_verdict: card?.critic_verdict ?? null,
+      rec_id: card?.rec_id ?? null,
+      action: card?.action ?? null,
+      horizon: card?.horizon ?? null,
+      conviction: card?.conviction ?? null,
+      card,
+    };
+  });
+  for (const card of fx.RECOMMENDATIONS) {
+    if (rows.some((row) => row.market === card.market && row.ticker === card.ticker)) continue;
+    rows.push({
+      ticker: card.ticker,
+      market: card.market,
+      as_of: card.as_of,
+      name_local: card.name_local,
+      sector_name: card.sector_name,
+      display_tier: card.reason_codes.includes("RANK_FILL") ? "fill" : "core",
+      total_score: card.total_score,
+      quant_score: card.quant_score,
+      ml_pred_h20: card.expected_ret,
+      ml_pred_h20_lo: card.expected_ret_lo,
+      ml_pred_h20_hi: card.expected_ret_hi,
+      reason_codes: card.reason_codes,
+      critic_verdict: card.critic_verdict,
+      rec_id: card.rec_id,
+      action: card.action,
+      horizon: card.horizon,
+      conviction: card.conviction,
+      card,
+    });
+  }
+  const market = params?.market;
+  const sector = params?.sector != null ? String(params.sector) : "";
+  const minScore = params?.min_score != null ? Number(params.min_score) : null;
+  const predSign = params?.pred_sign != null ? String(params.pred_sign) : "";
+  const hasCardRaw = params?.has_card;
+  const hasCard =
+    hasCardRaw === true || hasCardRaw === "true" ? true : hasCardRaw === false || hasCardRaw === "false" ? false : null;
+  const action = params?.action != null ? String(params.action) : "";
+  const conviction = params?.conviction != null ? String(params.conviction) : "";
+  const verdicts = params?.critic_verdict != null ? String(params.critic_verdict).split(",") : [];
+  return rows.filter((row) => {
+    if (market && row.market !== market) return false;
+    if (sector && row.sector_name !== sector) return false;
+    if (minScore != null && (row.total_score ?? row.quant_score ?? -Infinity) < minScore) return false;
+    if (predSign === "positive" && (row.ml_pred_h20 == null || row.ml_pred_h20 <= 0)) return false;
+    if (predSign === "negative" && (row.ml_pred_h20 == null || row.ml_pred_h20 >= 0)) return false;
+    if (hasCard === true && !row.card) return false;
+    if (hasCard === false && row.card) return false;
+    if (action && row.action !== action) return false;
+    if (conviction && row.conviction !== conviction) return false;
+    if (verdicts.length && (row.critic_verdict == null || !verdicts.includes(row.critic_verdict))) return false;
+    return true;
+  }).sort((a, b) => {
+    const sa = a.total_score ?? a.quant_score ?? Number.NEGATIVE_INFINITY;
+    const sb = b.total_score ?? b.quant_score ?? Number.NEGATIVE_INFINITY;
+    return sb - sa;
+  });
+}
 
 export type MockState =
   | "ok"
@@ -136,22 +213,15 @@ function resolve(method: string, path: string, params?: QueryParams, body?: unkn
     if (empty) {
       return { ...fx.DASHBOARD, top_recommendations: [], alerts: [], watchlist: [], watchlist_filings: [], new_filings_count: 0 };
     }
-    return fx.DASHBOARD;
+    const highlights = mockUniverse({ market: params?.market }).slice(0, 10);
+    return { ...fx.DASHBOARD, top_recommendations: highlights };
   }
 
   // 2) /recommendations
   if (seg[0] === "recommendations" && seg.length === 1) {
-    if (empty) return { items: [], total: 0 };
-    const market = params?.market;
-    const conviction = params?.conviction;
-    const action = params?.action;
-    const criticVerdict = params?.critic_verdict;
-    let items = fx.RECOMMENDATIONS;
-    if (market) items = items.filter((r) => r.market === market);
-    if (conviction) items = items.filter((r) => r.conviction === conviction);
-    if (action) items = items.filter((r) => r.action === action);
-    if (criticVerdict) items = items.filter((r) => r.critic_verdict === criticVerdict);
-    return { items, total: items.length };
+    if (empty) return { items: [], total: 0, universe_size: 0, filled_count: 0 };
+    const items = mockUniverse(params);
+    return { items, total: items.length, universe_size: items.length, filled_count: 0 };
   }
   if (seg[0] === "recommendations" && seg[2] === "feedback") {
     return { accepted: true };

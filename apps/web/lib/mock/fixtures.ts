@@ -40,6 +40,7 @@ import type {
   PriceSeriesData,
   QuintileReturn,
   RecommendationCard,
+  RecommendationFeedItem,
   RecommendationHistoryRow,
   ScreenerField,
   ScreenerPreset,
@@ -439,6 +440,32 @@ export const RECOMMENDATIONS: RecommendationCard[] = [
   },
 ];
 
+function feedItemFromCard(card: RecommendationCard): RecommendationFeedItem {
+  return {
+    ticker: card.ticker,
+    market: card.market,
+    as_of: card.as_of,
+    name_local: card.name_local,
+    sector_code: card.sector_code ?? null,
+    sector_name: card.sector_name ?? null,
+    display_tier: card.reason_codes.includes("RANK_FILL") ? "fill" : "core",
+    total_score: card.total_score ?? card.quant_score ?? null,
+    quant_score: card.quant_score ?? null,
+    quant_rank: card.quant_rank ?? null,
+    quant_percentile: card.quant_percentile ?? null,
+    ml_pred_h20: card.ml_pred ?? card.expected_ret ?? null,
+    ml_pred_h20_lo: card.expected_ret_lo ?? null,
+    ml_pred_h20_hi: card.expected_ret_hi ?? null,
+    reason_codes: card.reason_codes,
+    critic_verdict: card.critic_verdict ?? null,
+    rec_id: card.rec_id,
+    action: card.action,
+    horizon: card.horizon,
+    conviction: card.conviction,
+    card,
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /* ダッシュボード                                                      */
 /* ------------------------------------------------------------------ */
@@ -518,7 +545,7 @@ export const DASHBOARD: DashboardData = {
     },
     history: usdjpyHistory,
   },
-  top_recommendations: RECOMMENDATIONS.slice(0, 3),
+  top_recommendations: RECOMMENDATIONS.map(feedItemFromCard),
   portfolio_snapshot: {
     n_positions: 7,
     unrealized_pnl_pct: 0.062,

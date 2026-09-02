@@ -447,7 +447,7 @@ CREATE INDEX idx_rec_ticker ON recommendations(ticker, market, as_of DESC);
 3. `citations` が空配列なら挿入を拒否する
 4. `expected_ret_lo` / `expected_ret_hi` が NULL なら挿入を拒否する
 5. `hit_rate_prior` が NULL、または `n_prior_samples < 20` の場合は `conviction` を `low` に強制する
-6. `critic_verdict = 'rejected'` の推奨は UI に出さない（保存はする。学習材料になる）
+6. `critic_verdict = 'rejected'` の推奨は「承認」としては出さない。一覧の母集団からは除外せず、却下バッジ付きで出す（[05-scoring-screening.md](05-scoring-screening.md) §7.8）。保存もする。学習材料になる
 7. `conviction_score` が NULL、非有限、または 0.0..1.0 の外なら挿入を拒否する
 
 `upsert` は DEFAULT のない NOT NULL 列が欠けている／NULL のとき、DuckDB の ConstraintException より先に列名付きの `StorageError` を返す。
