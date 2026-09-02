@@ -856,7 +856,20 @@ def test_manual_job_run_creates_one_history_row():
     assert [row.id for row in after] == [body["job_run_id"]]
 ```
 
-実装の回帰テストは `tests/unit/agent/test_pipeline_fixes.py` と `tests/unit/agent/test_remaining_jobs.py` と `tests/api/test_manual_job_history.py`。ML 予測区間が無くても Critic まで到達すること、INTEGER 列の NaN が INSERT で落ちないこと、開示 0 件かつ既存カバレッジ無しは Collector を partial にすること、為替スポット無しだけで Analyst を partial にしないこと、実績のベンチマークと MFE/MAE、Critic の `revised_fields` 反映、Researcher の要約永続化、週次ジョブが `job_runs` を残すこと、手動実行で `job_runs` が1行だけ増えることを固定する。
+### T-INT-06: 手動パイプラインは親1行と子ジョブ
+
+```python
+def test_manual_pipeline_run_creates_parent_and_children():
+    """POST /agent/jobs/pipeline/run は pipeline 親を再利用し、
+    Collector〜Evaluator の子は parent_run_id で残す。親が2行になるのはバグ。"""
+    before = {row.id for row in sqlite.get_job_runs(limit=200)}
+    body = client.post("/api/v1/agent/jobs/pipeline/run?market=JP").json()["data"]
+    after = [row for row in sqlite.get_job_runs(limit=200) if row.id not in before]
+    parents = [row for row in after if row.job_name == "pipeline"]
+    assert [row.id for row in parents] == [body["job_run_id"]]
+```
+
+実装の回帰テストは `tests/unit/agent/test_pipeline_fixes.py` と `tests/unit/agent/test_remaining_jobs.py` と `tests/api/test_manual_job_history.py`。ML 予測区間が無くても Critic まで到達すること、INTEGER 列の NaN が INSERT で落ちないこと、開示 0 件かつ既存カバレッジ無しは Collector を partial にすること、為替スポット無しだけで Analyst を partial にしないこと、実績のベンチマークと MFE/MAE、Critic の `revised_fields` 反映、Researcher の要約永続化、週次ジョブが `job_runs` を残すこと、手動実行で単体ジョブの `job_runs` が1行だけ増えること、手動パイプラインで親が1行だけ増えることを固定する。
 
 ## 11. E2E テスト（Playwright）
 
@@ -874,6 +887,7 @@ def test_manual_job_run_creates_one_history_row():
 | T-E2E-08 | 為替画面で「優位性は確認できていません」が表示される（`beats_baseline=false` のとき） |
 | T-E2E-09 | モバイル幅でボトムナビゲーションが表示される |
 | T-E2E-10 | キルスイッチを ON にすると定性分析の停止表示が出る |
+| T-E2E-11 | エージェント画面から日次パイプラインを一括実行できる |
 
 ## 12. CI 構成
 

@@ -23,6 +23,7 @@ import { HorizontalBarChart, TimeSeriesChart } from "../../components/charts";
 import { ConfirmDialog, Field } from "../../components/dialog";
 import { JobStatusStrip } from "../../components/jobs";
 import { PageHeader } from "../../components/page-header";
+import { usePrefs } from "../../components/prefs";
 import {
   LoadingRegion,
   QuerySection,
@@ -31,13 +32,14 @@ import {
   SkeletonTable,
 } from "../../components/states";
 import { DataTable, type Column } from "../../components/table";
-import { Badge, Button, Chip, Notice, ProgressBar, SectionCard, Tabs, Toggle } from "../../components/ui";
+import { Badge, Button, Chip, Notice, ProgressBar, SectionCard, SegmentedControl, Tabs, Toggle } from "../../components/ui";
 import { MetricCard, NullableText, RateWithN } from "../../components/values";
-import type { AgentJob, AgentMemory, JobName, LlmCall } from "../../lib/api-types";
+import type { AgentJob, AgentMemory, JobName, LlmCall, Market } from "../../lib/api-types";
 import {
   JOB_NAME_LABEL_JA,
   JOB_STATUS_LABEL_JA,
   JOB_STATUS_TONE,
+  MARKET_LABEL_JA,
   MEMORY_CATEGORY_LABEL_JA,
   MEMORY_CATEGORY_STYLE,
 } from "../../lib/labels";
@@ -128,15 +130,18 @@ const callColumns: Array<Column<LlmCall>> = [
 
 function JobsTab({ selectedId, onSelect }: { selectedId: string | null; onSelect: (id: string) => void }) {
   const online = useOnlineStatus();
+  const prefs = usePrefs();
   const healthQ = useSystemHealth();
   const jobsQ = useAgentJobs();
   const runJob = useRunJob();
   const cancelJob = useCancelJob();
   const clearHistory = useClearJobHistory();
   const [jobName, setJobName] = useState<JobName>("collector");
+  const [market, setMarket] = useState<Market>(prefs.market);
   const [targetDate, setTargetDate] = useState(todayJst);
   const [force, setForce] = useState(false);
   const [confirmRun, setConfirmRun] = useState(false);
+  const [confirmPipeline, setConfirmPipeline] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
 
   return (
@@ -230,6 +235,34 @@ function JobsTab({ selectedId, onSelect }: { selectedId: string | null; onSelect
 
       <SectionCard title="手動実行">
         <div className="grid gap-3 tablet:grid-cols-2 desktop:grid-cols-4">
+          <Field label="市場">
+            <SegmentedControl
+              label="市場"
+              value={market}
+              onChange={setMarket}
+              options={[
+                { value: "JP", label: MARKET_LABEL_JA.JP },
+                { value: "US", label: MARKET_LABEL_JA.US },
+              ]}
+            />
+          </Field>
+          <Field label="対象日">
+            <input className="input" type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
+          </Field>
+        </div>
+        <p className="text-caption text-fg-secondary mt-3">
+          起動時と同じ経路で、データ収集から実績評価まで6ジョブを順に実行します。
+        </p>
+        <Button
+          variant="primary"
+          className="mt-3"
+          disabled={!online || runJob.isPending}
+          onClick={() => setConfirmPipeline(true)}
+        >
+          日次パイプラインを実行
+        </Button>
+        <p className="text-h4 text-fg-primary mt-6">個別のジョブ</p>
+        <div className="grid gap-3 tablet:grid-cols-2 desktop:grid-cols-4 mt-3">
           <Field label="ジョブ">
             <select className="input" value={jobName} onChange={(e) => setJobName(e.target.value as JobName)}>
               {JOB_OPTIONS.map((o) => (
@@ -239,9 +272,6 @@ function JobsTab({ selectedId, onSelect }: { selectedId: string | null; onSelect
               ))}
             </select>
           </Field>
-          <Field label="対象日">
-            <input className="input" type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
-          </Field>
           <Toggle
             checked={force}
             onChange={setForce}
@@ -250,19 +280,33 @@ function JobsTab({ selectedId, onSelect }: { selectedId: string | null; onSelect
             disabled={!online}
           />
         </div>
-        <Button variant="primary" className="mt-3" disabled={!online} onClick={() => setConfirmRun(true)}>
+        <Button variant="secondary" className="mt-3" disabled={!online || runJob.isPending} onClick={() => setConfirmRun(true)}>
           実行
         </Button>
         {!online ? <p className="text-caption text-status-warning mt-2">オフラインでは操作できません</p> : null}
       </SectionCard>
 
       <ConfirmDialog
+        open={confirmPipeline}
+        onClose={() => setConfirmPipeline(false)}
+        title="日次パイプラインを実行しますか"
+        confirmLabel="実行"
+        disabled={!online || runJob.isPending}
+        onConfirm={() => {
+          runJob.mutate({ jobName: "pipeline", asOf: targetDate, market });
+          setConfirmPipeline(false);
+        }}
+      >
+        データ収集 → 分析 → 資料読解 → 推奨生成 → レビュー → 実績評価 を{MARKET_LABEL_JA[market]}の {targetDate}{" "}
+        に対して順に実行します。起動時のキャッチアップと同じ経路です。資料読解と推奨生成でLLMコストが発生する場合があります。
+      </ConfirmDialog>
+      <ConfirmDialog
         open={confirmRun}
         onClose={() => setConfirmRun(false)}
         title="ジョブを実行しますか"
         confirmLabel="実行"
         onConfirm={() => {
-          runJob.mutate({ jobName, asOf: targetDate });
+          runJob.mutate({ jobName, asOf: targetDate, market });
           setConfirmRun(false);
         }}
       >

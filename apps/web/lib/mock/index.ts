@@ -345,7 +345,36 @@ function resolve(method: string, path: string, params?: QueryParams, body?: unkn
     }
     return empty ? [] : fx.AGENT_JOBS;
   }
-  if (seg[0] === "agent" && seg[1] === "jobs" && seg[3] === "run") return { job_run_id: 1048, status: "running" };
+  if (seg[0] === "agent" && seg[1] === "jobs" && seg[3] === "run") {
+    const jobName = seg[2] ?? "collector";
+    const labels: Record<string, string> = {
+      pipeline: "パイプライン",
+      collector: "データ収集",
+      analyst: "分析",
+      researcher: "資料読解",
+      strategist: "推奨生成",
+      critic: "レビュー",
+      evaluator: "実績評価",
+      weekly_review: "週次の深掘り",
+      model_retrain: "ranker 再学習",
+      garch_refit: "GARCH 再推定",
+    };
+    const row = {
+      job_run_id: 2000 + fx.AGENT_JOBS.length,
+      job_name: jobName,
+      label_ja: labels[jobName] ?? jobName,
+      status: "running" as const,
+      trigger: "manual" as const,
+      started_at: new Date().toISOString(),
+      duration_sec: 0,
+      output_ja: null,
+      output_summary_ja: null,
+      failed_steps: [],
+      progress: { completed: 0, total: jobName === "pipeline" ? 6 : 1, eta_sec: null },
+    };
+    fx.AGENT_JOBS.unshift(row as (typeof fx.AGENT_JOBS)[number]);
+    return row;
+  }
   if (seg[0] === "agent" && seg[1] === "jobs" && seg[3] === "cancel") return { cancelled: true };
   if (seg[0] === "agent" && seg[1] === "jobs") {
     const job = fx.AGENT_JOBS.find((j) => String(j.job_run_id) === seg[2]);

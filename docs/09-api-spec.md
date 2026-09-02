@@ -470,11 +470,11 @@ GET  /api/v1/agent/events                  # SSE によるジョブ進捗のリ�
 
 `POST /api/v1/agent/jobs/{job_name}/run` の `job_name` は次のいずれか。未知の値は 422。
 
-`collector` / `collector_jp` / `collector_us` / `analyst` / `researcher` / `strategist` / `critic` / `evaluator` / `weekly_review` / `model_retrain` / `garch_refit`
+`collector` / `collector_jp` / `collector_us` / `analyst` / `researcher` / `strategist` / `critic` / `evaluator` / `weekly_review` / `model_retrain` / `garch_refit` / `pipeline`
 
-日次 6 ジョブに加え、土曜の `weekly_review`、第1土曜の `model_retrain`、月曜の `garch_refit` を手動でも起動できる。`backtest` はこのパスでは受け付けず、`POST /api/v1/backtests` を使う。
+日次 6 ジョブに加え、土曜の `weekly_review`、第1土曜の `model_retrain`、月曜の `garch_refit` を手動でも起動できる。`pipeline` は起動時キャッチアップと同じ Collector → Evaluator の一括実行（[08-agent-loop.md](08-agent-loop.md) §9.4）。`backtest` はこのパスでは受け付けず、`POST /api/v1/backtests` を使う。
 
-手動実行は `job_runs` を1行だけ作る。API が先に作った行をジョブ本体が再利用する（[08-agent-loop.md](08-agent-loop.md) §9.4）。`GET /api/v1/agent/jobs` に同じ実行が2件出てはいけない。
+単体ジョブの手動実行は `job_runs` を1行だけ作る。API が先に作った行をジョブ本体が再利用する（[08-agent-loop.md](08-agent-loop.md) §9.4）。`GET /api/v1/agent/jobs` に同じ実行が2件出てはいけない。`pipeline` は親1行に加え、6子ジョブが `parent_run_id` で残る。これは一括実行の内訳であり、重複ではない。
 
 SSE のイベント形式:
 

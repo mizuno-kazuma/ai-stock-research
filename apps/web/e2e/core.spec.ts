@@ -31,6 +31,16 @@ test.describe("主要フロー", () => {
     await expect(page.getByText("ジョブの実行履歴がありません")).toBeVisible();
   });
 
+  test("日次パイプラインを手動実行できる", async ({ page }) => {
+    await page.goto("/agent");
+    await page.getByRole("button", { name: "日次パイプラインを実行" }).click();
+    const dialog = page.getByRole("dialog", { name: "日次パイプラインを実行しますか" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(/起動時のキャッチアップと同じ経路/)).toBeVisible();
+    await dialog.getByRole("button", { name: "実行" }).click();
+    await expect(page.getByRole("list", { name: "実行履歴" }).getByText("パイプライン")).toBeVisible();
+  });
+
   test("部分データ時にセクション単位の警告が出て他は表示される", async ({ page }) => {
     await page.goto("/recommendations?mock_state=partial");
     await expect(page.getByText("資料読解が3件スキップされました")).toBeVisible();

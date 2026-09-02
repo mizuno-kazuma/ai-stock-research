@@ -596,6 +596,8 @@ def resume_interrupted_jobs() -> None:
 
 パイプラインの親（`job_name=pipeline`）から各ジョブへ渡す `parent_run_id` は別物で、子ジョブはこれまでどおり自分の行を作る。
 
+日次パイプラインの手動実行は `POST /api/v1/agent/jobs/pipeline/run`。起動時キャッチアップ（`run_startup_catchup`）と同じ `run_pipeline` を `trigger=manual` で呼ぶ。推奨が既にあってもスキップしない（人が明示した実行だから）。親行は `job_name=pipeline` が1件だけで、Collector から Evaluator までの6子ジョブは `parent_run_id` で紐づく。
+
 ## 10. ガードレールの一覧
 
 | ガードレール | 実装箇所 | 動作 |
@@ -625,7 +627,7 @@ def resume_interrupted_jobs() -> None:
 - LLMコストの推移（日次・累計、tier別・用途別の内訳）
 - Critic の却下率と却下理由の内訳
 - `agent_memory` の一覧（有効・無効、confidence、使用回数、効果）
-- 手動実行ボタン（ジョブ単位、市場単位）
+- 手動実行ボタン（日次パイプライン一括、ジョブ単位、市場単位）
 - キルスイッチのトグル
 - `alerts` の一覧
 

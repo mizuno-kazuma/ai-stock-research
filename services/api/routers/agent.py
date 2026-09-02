@@ -48,6 +48,7 @@ KNOWN_JOBS = {
     "backup",
     "backfill",
     "backtest",
+    "pipeline",
 }
 
 

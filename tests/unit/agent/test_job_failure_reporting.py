@@ -90,6 +90,33 @@ def test_payload_from_result_copies_step_errors() -> None:
     assert metrics["inner_run_id"] == 9
 
 
+def test_payload_from_pipeline_result_uses_child_job_failures() -> None:
+    from services.agent.types import PipelineResult
+
+    result = PipelineResult(
+        status="failed",
+        market="JP",
+        as_of=date(2026, 8, 27),
+        run_id=3,
+        jobs={
+            "collector": JobResult(
+                job_name="collector",
+                status="failed",
+                market="JP",
+                as_of=date(2026, 8, 27),
+                error="prices failed",
+            )
+        },
+        metrics={"failed_at": "collector"},
+    )
+    status, metrics, error_type, error_message, failed_steps = _payload_from_result(result)
+    assert status == "failed"
+    assert failed_steps == ["collector"]
+    assert metrics["failed_steps"] == ["collector"]
+    assert error_type == "JobFailed"
+    assert error_message == "collector: prices failed"
+
+
 def test_upsert_features_accepts_tzaware_computed_at() -> None:
     duck = DuckDBRepo.in_memory()
     duck.init_db()
