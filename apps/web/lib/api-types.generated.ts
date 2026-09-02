@@ -4329,6 +4329,8 @@ export interface components {
             name_en?: string | null;
             /** Name Local */
             name_local: string;
+            /** Product Category */
+            product_category?: string | null;
             /** Sector Code */
             sector_code?: string | null;
             /** Sector Name */

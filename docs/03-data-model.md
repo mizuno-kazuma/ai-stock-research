@@ -33,6 +33,7 @@ CREATE TABLE securities (
     sector_code       VARCHAR,            -- JP: 33業種コード / US: GICS セクター
     sector_name       VARCHAR,            -- '輸送用機器'
     industry_name     VARCHAR,
+    product_category  VARCHAR,            -- J-Quants 商品区分（'011'=内国株券 等。§2.1a）
     currency          VARCHAR NOT NULL,   -- 'JPY' | 'USD'
     cik               VARCHAR,            -- 米国のみ。10桁ゼロ埋め文字列
     edinet_code       VARCHAR,            -- 日本のみ。'E02144'
@@ -50,6 +51,23 @@ CREATE INDEX idx_securities_active ON securities(market, is_active);
 ```
 
 **履歴を持つ理由**: 社名変更・コード変更・セクター変更が起こる。過去のバックテストで「当時のセクター」を使わないとセクター中立化が壊れる。また上場廃止銘柄を削除すると生存者バイアスが入るため、`delisting_date` を持って残す。
+
+#### 2.1a `product_category`（商品区分）
+
+J-Quants `/equities/master`（`/listed/info`）の `ProdCat`（`ProductCategory`）をそのまま保存する。
+
+| コード | 内容 |
+| --- | --- |
+| `011` | 内国株券（個別株） |
+| `012` | 優先出資証券 |
+| `013` | REIT |
+| `014` | ETF |
+| `021` | 外国株券 |
+| `022` | 外国REIT |
+| `023` | 外国ETF |
+| `024` | 外国株預託証券 |
+
+`UniverseFilter.common_stock_only`（既定 `True`）は `product_category == '011'` 以外（ETF・REIT・優先出資証券・外国株等）を推奨・スクリーナー・バックテストの対象から除外する。値が `NULL`（未収集・米国など対象外市場）の行は除外しない（[05-scoring-screening.md](05-scoring-screening.md) §7.1）。
 
 ### 2.2 `prices_daily`（リサーチ用・確定値）
 
