@@ -47,6 +47,7 @@ def test_normalize_master_reads_v2_short_names(tmp_path) -> None:
                     "S33Nm": "情報・通信業",
                     "Mkt": "0113",
                     "MktNm": "グロース",
+                    "ProdCat": "011",
                 }
             ]
         },
@@ -60,7 +61,36 @@ def test_normalize_master_reads_v2_short_names(tmp_path) -> None:
     assert row["name_en"] == "BASE, Inc."
     assert row["exchange"] == "グロース"
     assert row["sector_name"] == "情報・通信業"
+    assert row["product_category"] == "011"
     assert str(row["yf_symbol"]).endswith(".T")
+
+
+def test_normalize_master_reads_product_category_for_etf(tmp_path) -> None:
+    """ETF・REIT等を個別株フィルタで除外するための商品区分が保存される。"""
+    connector = _connector(tmp_path)
+    batch = RawBatch(
+        source="jquants",
+        endpoint="equities_master",
+        as_of=date(2026, 8, 26),
+        payload={
+            "data": [
+                {
+                    "Date": "2026-08-26",
+                    "Code": "15600",
+                    "CoName": "野村アセットマネジメント株式会社 NEXT FUNDS",
+                    "S33": "9999",
+                    "S33Nm": "その他",
+                    "Mkt": "0109",
+                    "MktNm": "その他",
+                    "ProdCat": "014",
+                }
+            ]
+        },
+    )
+    frame = connector.normalize(batch)
+    connector.close()
+    assert len(frame) == 1
+    assert frame.iloc[0]["product_category"] == "014"
 
 
 def test_normalize_financials_reads_v2_short_names(tmp_path) -> None:

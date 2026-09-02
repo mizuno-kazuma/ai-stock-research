@@ -295,6 +295,10 @@ class JQuantsConnector(HttpConnector):
                 "sector_code": _as_str(raw, "S33", "Sector33Code"),
                 "sector_name": _col(raw, "S33Nm", "Sector33CodeName"),
                 "industry_name": _col(raw, "S17Nm", "Sector17CodeName"),
+                # 商品区分（011: 内国株券, 012: 優先出資証券, 013: REIT, 014: ETF,
+                # 021-024: 外国株券・REIT・ETF・株式預託証券）。個別株のみに絞る
+                # ユニバースフィルタ（UniverseFilter.common_stock_only）で使う。
+                "product_category": _as_str(raw, "ProdCat", "ProductCategory"),
                 "currency": "JPY",
                 "valid_from": batch.as_of,
                 "is_active": True,

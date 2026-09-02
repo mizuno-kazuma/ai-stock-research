@@ -170,6 +170,7 @@ def security_from_row(row: dict[str, Any]) -> Security:
         sector_code=row.get("sector_code"),
         sector_name=row.get("sector_name"),
         industry_name=row.get("industry_name"),
+        product_category=row.get("product_category"),
         currency=row.get("currency") or ("JPY" if row.get("market") == "JP" else "USD"),
         cik=row.get("cik"),
         edinet_code=row.get("edinet_code"),

@@ -26,6 +26,9 @@ class Security(SchemaModel):
     sector_code: str | None = None
     sector_name: str | None = None
     industry_name: str | None = None
+    # J-Quants の商品区分。'011' が内国株券（個別株）、'014' が ETF など
+    # （docs/03-data-model.md §2.1）。個別株のみに絞るユニバースフィルタで使う。
+    product_category: str | None = None
     currency: str
     cik: str | None = None
     edinet_code: str | None = None

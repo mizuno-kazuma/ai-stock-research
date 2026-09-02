@@ -945,6 +945,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/backup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Backup
+         * @description 手動バックアップ。実装は `services/agent/jobs/backup.py`。画面仕様の Data source と一致させる。
+         */
+        post: operations["run_backup_api_v1_system_backup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/freshness": {
         parameters: {
             query?: never;
@@ -1331,7 +1351,7 @@ export interface components {
             /** N Positions */
             n_positions: number;
             /** N Trials */
-            n_trials?: number | null;
+            n_trials: number;
             /**
              * Period End
              * Format: date
@@ -1506,6 +1526,33 @@ export interface components {
              * @default 0
              */
             total: number;
+        };
+        /**
+         * BackupResponse
+         * @description `POST /api/v1/system/backup`（docs/09-api-spec.md §2.10）。
+         */
+        BackupResponse: {
+            /** Backup Dir */
+            backup_dir?: string | null;
+            /**
+             * Job Name
+             * @default backup
+             */
+            job_name: string;
+            /** Job Run Id */
+            job_run_id?: number | null;
+            /** Message Ja */
+            message_ja?: string | null;
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+            /**
+             * Status
+             * @default running
+             */
+            status: string;
         };
         /** BenchmarkQuote */
         BenchmarkQuote: {
@@ -1986,6 +2033,13 @@ export interface components {
         /** Envelope[BacktestTradeList] */
         Envelope_BacktestTradeList_: {
             data: components["schemas"]["BacktestTradeList"];
+            meta: components["schemas"]["Meta"];
+            /** Warnings */
+            warnings?: components["schemas"]["Warning_"][];
+        };
+        /** Envelope[BackupResponse] */
+        Envelope_BackupResponse_: {
+            data: components["schemas"]["BackupResponse"];
             meta: components["schemas"]["Meta"];
             /** Warnings */
             warnings?: components["schemas"]["Warning_"][];
@@ -4263,6 +4317,8 @@ export interface components {
             name_en?: string | null;
             /** Name Local */
             name_local: string;
+            /** Product Category */
+            product_category?: string | null;
             /** Sector Code */
             sector_code?: string | null;
             /** Sector Name */
@@ -6602,6 +6658,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_backup_api_v1_system_backup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_BackupResponse_"];
                 };
             };
         };
