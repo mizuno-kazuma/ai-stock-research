@@ -36,6 +36,7 @@ def test_begin_run_creates_child_under_pipeline_parent() -> None:
 
 def test_kick_agent_job_does_not_duplicate_history(monkeypatch) -> None:
     """API が作った行を parent にすると collector がもう1行作ってしまう。"""
+    import importlib
     from datetime import UTC, datetime
 
     from packages.core.config import Settings
@@ -61,7 +62,8 @@ def test_kick_agent_job_does_not_duplicate_history(monkeypatch) -> None:
             run_id=rid,
         )
 
-    monkeypatch.setattr("services.agent.jobs.collector.collector", fake_collector)
+    collector_mod = importlib.import_module("services.agent.jobs.collector")
+    monkeypatch.setattr(collector_mod, "collector", fake_collector)
 
     sqlite = SQLiteRepo.in_memory()
     sqlite.init_db()
