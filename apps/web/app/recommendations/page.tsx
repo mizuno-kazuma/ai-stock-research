@@ -3,8 +3,8 @@
 /**
  * 推奨銘柄（docs/ui/screens/02-recommendations.md）。
  *
- * 却下された候補も「なぜ却下したか」とともに見られるようにする。承認だけを見せると
- * ツールが常に自信を持っているように見えてしまう。
+ * 母集団は当日の推奨カードではなく、スコア済みユニバース。絞り込みは全銘柄に効く。
+ * カードがない行でも会社名とスコアは出す。
  */
 
 import { useQueryClient } from "@tanstack/react-query";
@@ -13,14 +13,14 @@ import Link from "next/link";
 
 import { PageHeader } from "../../components/page-header";
 import { usePrefs } from "../../components/prefs";
-import { RecommendationCard } from "../../components/recommendation-card";
-import { EmptyState, QuerySection, SkeletonCards } from "../../components/states";
+import { RecommendationFeedRow } from "../../components/recommendation-card";
+import { QuerySection, SkeletonCards } from "../../components/states";
 import { Badge, Chip, SectionCard, SegmentedControl } from "../../components/ui";
 import {
   ACTION_LABEL_JA,
-  ACTION_TONE,
   CONVICTION_LABEL_JA,
   CRITIC_VERDICT_LABEL_JA,
+  DISPLAY_TIER_LABEL_JA,
 } from "../../lib/labels";
 import type { Conviction, CriticVerdict, Horizon, RecAction } from "../../lib/api-types";
 import { useRecommendations } from "../../lib/queries";
@@ -28,6 +28,7 @@ import { useRecommendations } from "../../lib/queries";
 const ACTIONS: RecAction[] = ["watch", "accumulate", "reduce", "avoid"];
 const CONVICTIONS: Conviction[] = ["high", "medium", "low"];
 const VERDICTS: CriticVerdict[] = ["approved", "revised", "rejected"];
+const SCORE_FLOORS = [null, 60, 70, 80] as const;
 
 export default function RecommendationsPage() {
   const prefs = usePrefs();
@@ -35,7 +36,11 @@ export default function RecommendationsPage() {
   const [horizon, setHorizon] = useState<Horizon>("H20");
   const [action, setAction] = useState<RecAction | null>(null);
   const [conviction, setConviction] = useState<Conviction | null>(null);
-  const [verdicts, setVerdicts] = useState<CriticVerdict[]>(["approved", "revised"]);
+  const [verdicts, setVerdicts] = useState<CriticVerdict[]>([]);
+  const [sector, setSector] = useState<string | null>(null);
+  const [minScore, setMinScore] = useState<number | null>(null);
+  const [predSign, setPredSign] = useState<"positive" | "negative" | null>(null);
+  const [hasCard, setHasCard] = useState<boolean | null>(null);
 
   const params = useMemo(
     () => ({
@@ -43,15 +48,42 @@ export default function RecommendationsPage() {
       horizon,
       ...(action ? { action } : {}),
       ...(conviction ? { conviction } : {}),
+      ...(verdicts.length ? { critic_verdict: verdicts.join(",") } : {}),
+      ...(sector ? { sector } : {}),
+      ...(minScore != null ? { min_score: minScore } : {}),
+      ...(predSign ? { pred_sign: predSign } : {}),
+      ...(hasCard == null ? {} : { has_card: hasCard }),
+      include_rejected: true,
+      limit: 50,
     }),
-    [prefs.market, horizon, action, conviction],
+    [prefs.market, horizon, action, conviction, verdicts, sector, minScore, predSign, hasCard],
   );
 
   const query = useRecommendations(params);
   const meta = query.data?.meta;
+  const data = query.data?.data;
 
   const toggleVerdict = (v: CriticVerdict) =>
     setVerdicts((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
+
+  const sectors = useMemo(() => {
+    const names = new Set<string>();
+    if (sector) names.add(sector);
+    for (const row of data?.items ?? []) {
+      if (row.sector_name) names.add(row.sector_name);
+    }
+    return [...names].sort((a, b) => a.localeCompare(b, "ja"));
+  }, [data?.items, sector]);
+
+  const resetFilters = () => {
+    setAction(null);
+    setConviction(null);
+    setVerdicts([]);
+    setSector(null);
+    setMinScore(null);
+    setPredSign(null);
+    setHasCard(null);
+  };
 
   return (
     <>
@@ -61,7 +93,7 @@ export default function RecommendationsPage() {
         computedAt={meta?.computed_at}
         refreshing={query.isFetching && !query.isPending}
         onRefresh={() => void qc.invalidateQueries({ queryKey: ["recommendations"] })}
-        description="各推奨には弱気の論拠と無効化条件が必ず付いています。判断は利用者が行います。"
+        description="スコア済みの全銘柄から絞り込みます。推奨カードがある銘柄はレビュー結果も併記します。"
         actions={
           <SegmentedControl
             label="予測期間"
@@ -76,6 +108,49 @@ export default function RecommendationsPage() {
       />
 
       <SectionCard title="絞り込み" bodyClassName="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-caption text-fg-tertiary w-20">セクター</span>
+          <Chip selected={sector === null} onClick={() => setSector(null)}>
+            すべて
+          </Chip>
+          {sectors.map((name) => (
+            <Chip key={name} selected={sector === name} onClick={() => setSector(name)}>
+              {name}
+            </Chip>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-caption text-fg-tertiary w-20">スコア</span>
+          {SCORE_FLOORS.map((n) => (
+            <Chip key={String(n)} selected={minScore === n} onClick={() => setMinScore(n)}>
+              {n == null ? "すべて" : `${n}以上`}
+            </Chip>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-caption text-fg-tertiary w-20">予測符号</span>
+          <Chip selected={predSign === null} onClick={() => setPredSign(null)}>
+            すべて
+          </Chip>
+          <Chip selected={predSign === "positive"} onClick={() => setPredSign("positive")}>
+            超過リターン正
+          </Chip>
+          <Chip selected={predSign === "negative"} onClick={() => setPredSign("negative")}>
+            超過リターン負
+          </Chip>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-caption text-fg-tertiary w-20">カード</span>
+          <Chip selected={hasCard === null} onClick={() => setHasCard(null)}>
+            すべて
+          </Chip>
+          <Chip selected={hasCard === true} onClick={() => setHasCard(true)}>
+            推奨カードあり
+          </Chip>
+          <Chip selected={hasCard === false} onClick={() => setHasCard(false)}>
+            定量のみ
+          </Chip>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-caption text-fg-tertiary w-20">行動</span>
           <Chip selected={action === null} onClick={() => setAction(null)}>
@@ -106,62 +181,60 @@ export default function RecommendationsPage() {
             </Chip>
           ))}
           <span className="text-caption text-fg-tertiary">
-            却下された候補も理由つきで確認できます
+            未選択ならレビュー前・却下・定量のみも表示します
           </span>
         </div>
+        <button type="button" className="btn btn-ghost" onClick={resetFilters}>
+          条件をリセット
+        </button>
       </SectionCard>
 
       <div className="mt-4">
         <QuerySection
-          label="推奨一覧"
+          label="銘柄一覧"
           query={query}
           section="recommendations"
           skeleton={<SkeletonCards count={3} />}
-          emptyWhen={(data) => data.items.length === 0}
+          emptyWhen={(payload) => payload.items.length === 0}
           empty={{
-            title: "この条件の推奨はありません",
-            description:
-              "絞り込みを緩めるか、期間を20営業日に変えてみてください。当日のバッチが未完了の場合もあります。",
+            title: "条件に一致する銘柄がありません",
+            description: "絞り込みを緩めるか、条件をリセットしてください。スコアが未計算の日はバッチ完了を待ってください。",
             action: (
-              <Link href="/agent" className="btn btn-secondary">
-                バッチの状況を見る
-              </Link>
+              <button type="button" className="btn btn-secondary" onClick={resetFilters}>
+                条件をリセット
+              </button>
             ),
           }}
         >
-          {(data) => {
-            const items = data.items.filter(
-              (r): r is typeof r & { critic_verdict: CriticVerdict } =>
-                r.critic_verdict != null && verdicts.includes(r.critic_verdict),
-            );
-            if (items.length === 0) {
-              return (
-                <EmptyState
-                  title="表示できる推奨がありません"
-                  description="レビュー状態の絞り込みですべて除外されています。「却下」を含めると内容を確認できます。"
-                />
-              );
-            }
+          {(payload) => {
+            const items = payload.items;
             return (
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-body-sm text-fg-secondary num">{items.length}件</span>
-                  {meta?.excluded_count ? (
-                    <Badge tone="neutral">除外 {meta.excluded_count}件</Badge>
-                  ) : null}
-                  {ACTIONS.map((a) => {
-                    const n = items.filter((r) => r.action === a).length;
+                  <span className="text-body-sm text-fg-secondary num">
+                    {payload.total}件 / {payload.universe_size}銘柄
+                  </span>
+                  {(["core", "fill", "score_only"] as const).map((tier) => {
+                    const n = items.filter((r) => r.display_tier === tier).length;
                     if (n === 0) return null;
                     return (
-                      <Badge key={a} tone={ACTION_TONE[a]}>
-                        {ACTION_LABEL_JA[a]} {n}
+                      <Badge key={tier} tone="neutral">
+                        {DISPLAY_TIER_LABEL_JA[tier]} {n}
                       </Badge>
                     );
                   })}
                 </div>
-                {items.map((rec) => (
-                  <RecommendationCard key={rec.rec_id} rec={rec} />
+                {items.map((item) => (
+                  <RecommendationFeedRow
+                    key={item.rec_id ?? `${item.market}:${item.ticker}`}
+                    item={item}
+                  />
                 ))}
+                <p className="text-caption text-fg-tertiary">
+                  <Link href="/screener" className="text-accent">
+                    条件を細かく組み立てる場合はスクリーナーへ
+                  </Link>
+                </p>
               </div>
             );
           }}

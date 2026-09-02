@@ -34,7 +34,7 @@ Query parameters:
 | 1 | 1-12 | `PageHeader` with date, market switch, freshness summary |
 | 2 | 1-12 | `JobStatusStrip` (single row, 6 job pills, height 72px) |
 | 3 | 1-3 / 4-6 / 7-9 / 10-12 | 4 `MetricCard`: market index, USDJPY, portfolio value, today's P/L |
-| 4 | 1-8 | `RecommendationHighlights` (3 `RecommendationCard` variant `compact`, stacked) |
+| 4 | 1-8 | `RecommendationHighlights` (up to 10 `RecommendationFeedRow`, stacked) |
 | 4 | 9-12 | `AlertFeed` (scrollable, max height 420px) |
 | 5 | 1-6 | `FilingsThisWeek` (up to 6 `FilingListItem`) |
 | 5 | 7-12 | `WatchlistTable` (`DataTable` dense, up to 8 rows) |
@@ -61,7 +61,7 @@ information density:
 2. `FreshnessSummaryRow` (compact, tappable, opens a sheet with per-source detail)
 3. `JobStatusStrip` (horizontal scroll, 6 pills, snap scrolling)
 4. Metric cards as a 2 x 2 grid, `--space-3` gap
-5. `RecommendationHighlights`, 2 cards, "すべての推奨を見る" link
+5. `RecommendationHighlights`, up to 10 rows, "すべての推奨を見る" link
 6. `AlertFeed`, 3 items, "すべて見る" link
 7. `FilingsThisWeek`, 3 items, "すべて見る" link
 8. `WatchlistTable` converted to `WatchlistCardList` (see `components.md` §5, mobile table rule)
@@ -94,7 +94,10 @@ DashboardPage
 │       │   └── MetricCard                    当日損益
 │       ├── SectionCard "今週の注目"
 │       │   ├── SectionHeader + LinkToAll
-│       │   └── RecommendationCard[compact] x3
+│       │   └── RecommendationFeedRow x<=10
+│       │       ├── TickerAndName           always visible
+│       │       ├── ScoreBadge              always visible
+│       │       └── RecommendationCard[compact]  (only when a card exists)
 │       ├── SectionCard "アラート"
 │       │   ├── SectionHeader + MarkAllReadButton
 │       │   └── AlertRow[]
@@ -162,9 +165,10 @@ execution prices.
 
 Section heading: label_en `This week's highlights`, label_ja `今週の注目`.
 Link to all: label_en `View all recommendations`, label_ja `すべての推奨を見る`.
-At most one compact card per issuer. The same ticker on two as_of dates or H5 and H20 must not appear twice here.
+At most one compact row per issuer. The same ticker on two as_of dates or H5 and H20 must not appear twice here.
+The list is the same feed as `/recommendations`, capped at 10 names so the section is not empty when at least 10 scored names exist.
 
-Compact card example content:
+Compact card example content (when a recommendation card exists):
 
 ```
 7203  トヨタ自動車          輸送用機器
@@ -177,6 +181,15 @@ Compact card example content:
 
 The bear-case preview line is present on the compact variant. A compact card that shows only the
 thesis is a defect.
+
+Score-only compact row (no recommendation card). Company name and score stay on the first row;
+the score must not wrap off-screen (`shrink-0`). A row that shows only a ticker is a defect.
+
+```
+7269  スズキ                              スコア 74.2
+日本株  定量のみ  輸送用機器
+レビュー済みの推奨カードはありません。定量スコアに基づく表示です。
+```
 
 ### Alert feed
 
@@ -282,7 +295,7 @@ Section-level empties:
 
 | Section | label_ja |
 | --- | --- |
-| Recommendations | 本日の推奨はありません。条件を満たす銘柄が見つからなかったか、Criticが全件を却下しました。 |
+| Recommendations | スコアが未計算です。初回バッチの完了を待ってください。 |
 | Alerts | 新しいアラートはありません |
 | Filings | 保有・ウォッチ銘柄の今週（8/24–8/29）の開示はありません |
 | Watchlist | ウォッチリストが空です。銘柄詳細から追加してください。 |

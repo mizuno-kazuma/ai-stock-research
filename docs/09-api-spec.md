@@ -136,13 +136,57 @@ GET /api/v1/dashboard?market=JP&as_of=2026-08-22
 ```
 GET /api/v1/recommendations
     ?market=JP
-    &as_of=2026-08-22           # 省略時は最新
-    &horizon=H20                # H5 | H20 | 省略（両方）
-    &action=watch,accumulate    # カンマ区切り
+    &as_of=2026-08-22           # 省略時は最新のスコア日、なければ最新の推奨日
+    &horizon=H20                # カード結合時に優先するホライズン。既定 H20
+    &sector=輸送用機器
+    &min_score=70
+    &pred_sign=positive         # positive | negative
+    &reason_code=VAL_CHEAP_VS_SECTOR
+    &has_card=false
+    &action=watch,accumulate
     &conviction=medium,high
-    &include_rejected=false     # 開発時のみ true
-    &limit=20&offset=0
+    &critic_verdict=approved,revised
+    &include_rejected=true      # 既定 true。false でもスコア行としては残す
+    &sort=total_score
+    &limit=50&offset=0
 ```
+
+レスポンスはユニバース行（`RecommendationFeedItem`）の配列。カードがある銘柄だけ `card` にフルの `RecommendationCard` が入る。カードがなくても `name_local` と `total_score` / `quant_score` は入る。
+
+```json
+{
+  "data": {
+    "items": [{
+      "ticker": "7203", "market": "JP", "as_of": "2026-08-22",
+      "name_local": "トヨタ自動車", "sector_name": "輸送用機器",
+      "display_tier": "core",
+      "total_score": 81.7, "quant_score": 78.4,
+      "ml_pred_h20": 0.024, "ml_pred_h20_lo": -0.031, "ml_pred_h20_hi": 0.079,
+      "reason_codes": ["VAL_CHEAP_VS_SECTOR", "REV_UP_GUIDANCE"],
+      "critic_verdict": "approved",
+      "rec_id": "01J8XKQ3M4N5P6R7S8T9V0W1X2",
+      "action": "watch", "horizon": "H20", "conviction": "medium",
+      "card": { "...": "RecommendationCard" }
+    }, {
+      "ticker": "6501", "market": "JP", "as_of": "2026-08-22",
+      "name_local": "日立製作所", "sector_name": "電気機器",
+      "display_tier": "score_only",
+      "total_score": 88.7, "quant_score": 88.7,
+      "reason_codes": ["QLT_HIGH_ROIC"],
+      "critic_verdict": null, "rec_id": null, "card": null
+    }],
+    "total": 142,
+    "universe_size": 1994,
+    "filled_count": 0,
+    "limit": 50,
+    "offset": 0
+  }
+}
+```
+
+ダッシュボード `top_recommendations` も同じ `RecommendationFeedItem`。既定で 10 件（`universe_size` がそれ未満ならその件数）。詳細は [05-scoring-screening.md](05-scoring-screening.md) §7.8。
+
+単一取得 `GET /api/v1/recommendations/{rec_id}` と、一覧の `card` フィールドは従来の `RecommendationCard` である。
 
 レスポンス（`RecommendationCard`）:
 

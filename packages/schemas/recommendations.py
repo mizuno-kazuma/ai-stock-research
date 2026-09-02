@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from typing import Literal
 
 from pydantic import Field, field_validator
 
@@ -22,6 +23,9 @@ from packages.schemas.enums import (
     Horizon,
     Market,
 )
+
+DisplayTier = Literal["core", "fill", "score_only"]
+MIN_VISIBLE_RECOMMENDATIONS = 10
 
 BEAR_CASE_MIN_LEN = 20
 
@@ -159,9 +163,49 @@ class RecommendationCard(SchemaModel):
         return v
 
 
+class RecommendationFeedItem(SchemaModel):
+    """スコア済みユニバースの 1 行。推奨カードがあれば付ける。
+
+    カードがない行でも `name_local` とスコア（`total_score` または `quant_score`）
+    は必須。ティッカーだけの行にはしない。
+    """
+
+    ticker: str
+    market: Market
+    as_of: dt.date
+    name_local: str
+    sector_code: str | None = None
+    sector_name: str | None = None
+    display_tier: DisplayTier
+    total_score: float | None = None
+    quant_score: float | None = None
+    quant_rank: int | None = None
+    quant_percentile: float | None = None
+    ml_pred_h20: float | None = None
+    ml_pred_h20_lo: float | None = None
+    ml_pred_h20_hi: float | None = None
+    reason_codes: list[str] = Field(default_factory=list)
+    critic_verdict: CriticVerdict | None = None
+    rec_id: str | None = None
+    action: Action | None = None
+    horizon: Horizon | None = None
+    conviction: Conviction | None = None
+    card: RecommendationCard | None = None
+
+    @field_validator("name_local")
+    @classmethod
+    def name_local_must_be_present(cls, v: str) -> str:
+        name = v.strip()
+        if not name:
+            raise ValueError("カードなし行でも name_local（会社名）は必須です")
+        return name
+
+
 class RecommendationList(SchemaModel):
-    items: list[RecommendationCard]
+    items: list[RecommendationFeedItem]
     total: int
+    universe_size: int = 0
+    filled_count: int = 0
     limit: int | None = None
     offset: int | None = None
 
@@ -217,10 +261,13 @@ class RecommendationHistory(SchemaModel):
 
 __all__ = [
     "BEAR_CASE_MIN_LEN",
+    "MIN_VISIBLE_RECOMMENDATIONS",
     "Citation",
+    "DisplayTier",
     "FactorScores",
     "PastPerformance",
     "RecommendationCard",
+    "RecommendationFeedItem",
     "RecommendationFeedbackRequest",
     "RecommendationHistory",
     "RecommendationHistoryRow",

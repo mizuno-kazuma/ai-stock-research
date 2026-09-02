@@ -945,6 +945,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/backup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Backup
+         * @description 手動バックアップ。実装は `services/agent/jobs/backup.py`。画面仕様の Data source と一致させる。
+         */
+        post: operations["run_backup_api_v1_system_backup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/freshness": {
         parameters: {
             query?: never;
@@ -1331,7 +1351,7 @@ export interface components {
             /** N Positions */
             n_positions: number;
             /** N Trials */
-            n_trials?: number | null;
+            n_trials: number;
             /**
              * Period End
              * Format: date
@@ -1506,6 +1526,33 @@ export interface components {
              * @default 0
              */
             total: number;
+        };
+        /**
+         * BackupResponse
+         * @description `POST /api/v1/system/backup`（docs/09-api-spec.md §2.10）。
+         */
+        BackupResponse: {
+            /** Backup Dir */
+            backup_dir?: string | null;
+            /**
+             * Job Name
+             * @default backup
+             */
+            job_name: string;
+            /** Job Run Id */
+            job_run_id?: number | null;
+            /** Message Ja */
+            message_ja?: string | null;
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+            /**
+             * Status
+             * @default running
+             */
+            status: string;
         };
         /** BenchmarkQuote */
         BenchmarkQuote: {
@@ -1701,7 +1748,7 @@ export interface components {
             new_filings_count: number;
             portfolio_snapshot?: components["schemas"]["PortfolioSnapshot"] | null;
             /** Top Recommendations */
-            top_recommendations?: components["schemas"]["RecommendationSummary"][];
+            top_recommendations?: components["schemas"]["RecommendationFeedItem"][];
             /** Watchlist Filings */
             watchlist_filings?: components["schemas"]["WatchlistFiling"][];
         };
@@ -1986,6 +2033,13 @@ export interface components {
         /** Envelope[BacktestTradeList] */
         Envelope_BacktestTradeList_: {
             data: components["schemas"]["BacktestTradeList"];
+            meta: components["schemas"]["Meta"];
+            /** Warnings */
+            warnings?: components["schemas"]["Warning_"][];
+        };
+        /** Envelope[BackupResponse] */
+        Envelope_BackupResponse_: {
+            data: components["schemas"]["BackupResponse"];
             meta: components["schemas"]["Meta"];
             /** Warnings */
             warnings?: components["schemas"]["Warning_"][];
@@ -3780,6 +3834,65 @@ export interface components {
             /** Total Score */
             total_score?: number | null;
         };
+        /**
+         * RecommendationFeedItem
+         * @description スコア済みユニバースの 1 行。推奨カードがあれば付ける。
+         *
+         *     カードがない行でも `name_local` とスコア（`total_score` または `quant_score`）
+         *     は必須。ティッカーだけの行にはしない。
+         */
+        RecommendationFeedItem: {
+            /** Action */
+            action?: ("watch" | "accumulate" | "reduce" | "avoid") | null;
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            card?: components["schemas"]["RecommendationCard"] | null;
+            /** Conviction */
+            conviction?: ("low" | "medium" | "high") | null;
+            /** Critic Verdict */
+            critic_verdict?: ("approved" | "revised" | "rejected") | null;
+            /**
+             * Display Tier
+             * @enum {string}
+             */
+            display_tier: "core" | "fill" | "score_only";
+            /** Horizon */
+            horizon?: ("H5" | "H20") | null;
+            /**
+             * Market
+             * @enum {string}
+             */
+            market: "JP" | "US";
+            /** Ml Pred H20 */
+            ml_pred_h20?: number | null;
+            /** Ml Pred H20 Hi */
+            ml_pred_h20_hi?: number | null;
+            /** Ml Pred H20 Lo */
+            ml_pred_h20_lo?: number | null;
+            /** Name Local */
+            name_local: string;
+            /** Quant Percentile */
+            quant_percentile?: number | null;
+            /** Quant Rank */
+            quant_rank?: number | null;
+            /** Quant Score */
+            quant_score?: number | null;
+            /** Reason Codes */
+            reason_codes?: string[];
+            /** Rec Id */
+            rec_id?: string | null;
+            /** Sector Code */
+            sector_code?: string | null;
+            /** Sector Name */
+            sector_name?: string | null;
+            /** Ticker */
+            ticker: string;
+            /** Total Score */
+            total_score?: number | null;
+        };
         /** RecommendationFeedbackRequest */
         RecommendationFeedbackRequest: {
             /** Note Ja */
@@ -3844,14 +3957,24 @@ export interface components {
         };
         /** RecommendationList */
         RecommendationList: {
+            /**
+             * Filled Count
+             * @default 0
+             */
+            filled_count: number;
             /** Items */
-            items: components["schemas"]["RecommendationCard"][];
+            items: components["schemas"]["RecommendationFeedItem"][];
             /** Limit */
             limit?: number | null;
             /** Offset */
             offset?: number | null;
             /** Total */
             total: number;
+            /**
+             * Universe Size
+             * @default 0
+             */
+            universe_size: number;
         };
         /** RecommendationMarker */
         RecommendationMarker: {
@@ -3937,63 +4060,6 @@ export interface components {
             note_ja?: string | null;
             /** Scope Note Ja */
             scope_note_ja?: string | null;
-        };
-        /**
-         * RecommendationSummary
-         * @description ダッシュボードの上位推奨など、一覧表示用の要約。
-         */
-        RecommendationSummary: {
-            /**
-             * Action
-             * @enum {string}
-             */
-            action: "watch" | "accumulate" | "reduce" | "avoid";
-            /**
-             * As Of
-             * Format: date
-             */
-            as_of: string;
-            /**
-             * Conviction
-             * @enum {string}
-             */
-            conviction: "low" | "medium" | "high";
-            /** Conviction Score */
-            conviction_score: number;
-            /** Expected Ret */
-            expected_ret?: number | null;
-            /** Expected Ret Hi */
-            expected_ret_hi?: number | null;
-            /** Expected Ret Lo */
-            expected_ret_lo?: number | null;
-            /** Flags */
-            flags?: string[];
-            /** Hit Rate Prior */
-            hit_rate_prior?: number | null;
-            /**
-             * Horizon
-             * @enum {string}
-             */
-            horizon: "H5" | "H20";
-            /**
-             * Market
-             * @enum {string}
-             */
-            market: "JP" | "US";
-            /** N Prior Samples */
-            n_prior_samples?: number | null;
-            /** Name Local */
-            name_local: string;
-            /** Reason Codes */
-            reason_codes?: string[];
-            /** Rec Id */
-            rec_id: string;
-            /** Sector Name */
-            sector_name?: string | null;
-            /** Ticker */
-            ticker: string;
-            /** Total Score */
-            total_score?: number | null;
         };
         /** SavedScreen */
         SavedScreen: {
@@ -5986,7 +6052,14 @@ export interface operations {
                 horizon?: string | null;
                 action?: string | null;
                 conviction?: string | null;
+                critic_verdict?: string | null;
+                sector?: string | null;
+                min_score?: number | null;
+                reason_code?: string | null;
+                pred_sign?: string | null;
+                has_card?: boolean | null;
                 include_rejected?: boolean;
+                sort?: string;
                 limit?: number;
                 offset?: number;
             };
@@ -6602,6 +6675,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_backup_api_v1_system_backup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_BackupResponse_"];
                 };
             };
         };

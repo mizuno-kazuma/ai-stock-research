@@ -76,7 +76,8 @@ Empty states explain the cause and the next action. Never a bare "No data".
 
 | Screen / component | Cause | Title (ja) | Body (ja) | Action |
 | --- | --- | --- | --- | --- |
-| Recommendations | No recommendation met the criteria today | 本日の推奨はありません | 定量スコアとMLモデルの条件を満たす銘柄が本日はありませんでした。スクリーナーで条件を緩めて探すこともできます。 | スクリーナーを開く |
+| Recommendations | Universe has no scores yet | まだデータがありません | 初回のスコア計算がまだ完了していません。エージェントコンソールから収集ジョブを実行してください。 | エージェントコンソールを開く |
+| Recommendations | Filter too narrow | 条件に一致する銘柄がありません | 絞り込みを緩めるか、条件をリセットしてください。 | 条件をリセット |
 | Recommendations | Operation just started, no history yet | 実績データの蓄積中です | 推奨の開始から12営業日です。過去実績が20件を超えるまで、確信度は「低」に固定されます。 | — |
 | Screener results | Filter too narrow | 条件に一致する銘柄がありません | 条件を緩めるか、プリセットから選び直してください。 | 条件をリセット |
 | Filings hub | No filings in range | この期間の開示はありません | 期間を広げるか、フィルタを解除してください。 | 期間を1週間に変更 |

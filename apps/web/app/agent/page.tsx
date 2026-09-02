@@ -537,7 +537,7 @@ function CriticTab() {
           {(data) => (
             <ul className="space-y-3">
               {data.items.map((rec) => (
-                <li key={rec.rec_id} className="card-inset p-3">
+                <li key={rec.rec_id ?? `${rec.market}:${rec.ticker}`} className="card-inset p-3">
                   <p className="text-body-sm">
                     <span className="num mr-2">{rec.ticker}</span>
                     {rec.name_local}
@@ -545,7 +545,9 @@ function CriticTab() {
                       却下
                     </Badge>
                   </p>
-                  <p className="text-caption text-fg-secondary mt-1">{rec.critic_notes_ja ?? rec.bear_case_ja}</p>
+                  <p className="text-caption text-fg-secondary mt-1">
+                    {rec.card?.critic_notes_ja ?? rec.card?.bear_case_ja}
+                  </p>
                 </li>
               ))}
             </ul>

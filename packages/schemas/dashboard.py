@@ -8,7 +8,7 @@ from pydantic import Field
 
 from packages.schemas.common import SchemaModel
 from packages.schemas.enums import JobStatus, Market, Severity
-from packages.schemas.recommendations import RecommendationSummary
+from packages.schemas.recommendations import RecommendationFeedItem
 
 
 class BenchmarkQuote(SchemaModel):
@@ -118,7 +118,7 @@ class Dashboard(SchemaModel):
     market: Market = "JP"
     market_summary: MarketSummary | None = None
     fx: DashboardFx | None = None
-    top_recommendations: list[RecommendationSummary] = Field(default_factory=list)
+    top_recommendations: list[RecommendationFeedItem] = Field(default_factory=list)
     portfolio_snapshot: PortfolioSnapshot | None = None
     new_filings_count: int = 0
     watchlist_filings: list[WatchlistFiling] = Field(default_factory=list)

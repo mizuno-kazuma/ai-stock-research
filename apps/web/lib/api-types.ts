@@ -119,7 +119,7 @@ export type DashboardData = OptionalKeys<
   model_health: ModelHealth;
   alerts: Alert[];
   watchlist_filings: DocumentSummaryRow[];
-  top_recommendations: RecommendationCard[];
+  top_recommendations: RecommendationFeedItem[];
   watchlist: WatchlistRow[];
   jobs: AgentJob[];
 };
@@ -160,6 +160,8 @@ export interface FactorDetail {
   contribution: number | null;
 }
 
+export type DisplayTier = "core" | "fill" | "score_only";
+
 /**
  * ci_level / factor_details は OpenAPI 未定義（仕様欠落として報告）。
  * 画面が必須表示に使っているため optional で残す。
@@ -170,7 +172,14 @@ export type RecommendationCard = Omit<Schema["RecommendationCard"], "citations">
   factor_details?: FactorDetail[];
 };
 
-export type RecommendationListData = Schema["RecommendationList"];
+export type RecommendationFeedItem = Omit<Schema["RecommendationFeedItem"], "card" | "reason_codes"> & {
+  reason_codes: string[];
+  card: RecommendationCard | null;
+};
+
+export type RecommendationListData = Omit<Schema["RecommendationList"], "items"> & {
+  items: RecommendationFeedItem[];
+};
 export type FeedbackVerdict = Schema["RecommendationFeedbackRequest"]["verdict"];
 export type RecommendationFeedbackRequest = Schema["RecommendationFeedbackRequest"];
 export type RecommendationOutcome = Schema["RecommendationOutcome"];
@@ -181,7 +190,6 @@ export type RecommendationHistoryRow = Omit<Schema["RecommendationHistoryRow"], 
   realized_excess_ret?: number | null;
   pending_days?: number | null;
 };
-export type RecommendationSummary = Schema["RecommendationSummary"];
 
 /* ------------------------------------------------------------------ */
 /* 2.3 スコアとスクリーナー                                             */

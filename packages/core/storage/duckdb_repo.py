@@ -1084,7 +1084,7 @@ class DuckDBRepo:
         """推奨の保存。docs/03-data-model.md §2.9 の不変条件を強制する。
 
         `critic_verdict = 'rejected'` の行も保存する（学習材料になるため）。
-        UI に出さないのは読み出し側（`get_recommendations(include_rejected=False)`）の責務。
+        承認としては出さない。一覧の母集団からは除外しない。
         """
         materialized = _materialize_rows(rows)
         for r in materialized:

@@ -24,7 +24,7 @@ import { JobStatusStrip } from "../components/jobs";
 import { ModelHealthPanel } from "../components/model-health";
 import { PageHeader } from "../components/page-header";
 import { usePrefs } from "../components/prefs";
-import { RecommendationCard } from "../components/recommendation-card";
+import { RecommendationFeedRow } from "../components/recommendation-card";
 import {
   EmptyState,
   QuerySection,
@@ -222,17 +222,21 @@ export default function DashboardPage() {
                   >
                     {data.top_recommendations.length === 0 ? (
                       <EmptyState
-                        title="本日の推奨はありません"
-                        description="レビューの基準を満たす候補がなかったか、バッチが完了していません。スクリーナーで条件を指定して探すこともできます。"
+                        title="まだデータがありません"
+                        description="初回のスコア計算がまだ完了していません。エージェントコンソールから収集ジョブを実行してください。"
                         action={
-                          <Link href="/screener" className="btn btn-secondary">
-                            スクリーナーを開く
+                          <Link href="/agent" className="btn btn-secondary">
+                            エージェントコンソールを開く
                           </Link>
                         }
                       />
                     ) : (
-                      data.top_recommendations.map((rec) => (
-                        <RecommendationCard key={rec.rec_id} rec={rec} variant="compact" />
+                      data.top_recommendations.map((item) => (
+                        <RecommendationFeedRow
+                          key={item.rec_id ?? `${item.market}:${item.ticker}`}
+                          item={item}
+                          variant="highlight"
+                        />
                       ))
                     )}
                   </SectionCard>

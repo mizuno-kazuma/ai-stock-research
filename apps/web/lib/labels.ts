@@ -70,6 +70,18 @@ export const CRITIC_VERDICT_TONE: Record<CriticVerdict, StatusTone> = {
   rejected: "danger",
 };
 
+export const DISPLAY_TIER_LABEL_JA: Record<"core" | "fill" | "score_only", string> = {
+  core: "コア候補",
+  fill: "定量補充",
+  score_only: "定量のみ",
+};
+
+export const DISPLAY_TIER_TONE: Record<"core" | "fill" | "score_only", StatusTone> = {
+  core: "accent",
+  fill: "warning",
+  score_only: "neutral",
+};
+
 export const MARKET_LABEL_JA: Record<Market, string> = {
   JP: "日本株",
   US: "米国株",

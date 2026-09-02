@@ -746,6 +746,13 @@ def test_dashboard_auto_market_resolves_to_jp_or_us(client):
     assert r.json()["data"]["market"] in ("JP", "US")
 ```
 
+### T-API-07: 推奨一覧はユニバースを母集団にし、既定表示は 10 件以上
+
+`GET /api/v1/recommendations` は `scores_daily` を母集団にする。Critic が全件却下しても
+既定表示は空にしない。カードがない行にも `name_local` とスコアが入る。回帰は
+`tests/api/test_recommendation_feed.py`。利用者が `critic_verdict=approved` に絞った結果が
+0 件になるのは許容する。
+
 ### T-API-06: 検索と今週の注目は発行体あたり 1 件
 
 `securities` の SCD2 履歴と J-Quants の 5 桁コードが残っていても、
