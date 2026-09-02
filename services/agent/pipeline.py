@@ -56,14 +56,16 @@ def run_pipeline(
     collector_steps: dict | None = None,
     memory: MemoryRepo | None = None,
     trigger: str = "schedule",
+    run_id: int | None = None,
     **kwargs: Any,
 ) -> PipelineResult:
     """Collector → Analyst → Researcher → Strategist → Critic → Evaluator。
 
     prices 必須失敗時のみ全体 failed。LLM キャップは partial で推奨を残す。
+    API の手動キックは先に作った `job_runs` 行を `run_id` で渡す。
     """
     pipeline_id = begin_run(
-        state, job_name="pipeline", market=market, trigger=trigger
+        state, job_name="pipeline", market=market, trigger=trigger, run_id=run_id
     )
     jobs: dict[str, JobResult] = {}
     try:
@@ -146,7 +148,7 @@ def _run_pipeline_jobs(
         )
         _notify_pipeline(state, market=market, as_of=as_of, overall="failed", n_recs=0)
         return PipelineResult(
-            status="failed", market=market, as_of=as_of, jobs=jobs
+            status="failed", market=market, as_of=as_of, jobs=jobs, run_id=pipeline_id
         )
 
     ana = analyst(
@@ -248,5 +250,5 @@ def _run_pipeline_jobs(
     publish_job_finished(job_run_id=pipeline_id, status=overall)
     _notify_pipeline(state, market=market, as_of=as_of, overall=overall, n_recs=len(strat.recs))
     return PipelineResult(
-        status=overall, market=market, as_of=as_of, jobs=jobs, metrics=metrics
+        status=overall, market=market, as_of=as_of, jobs=jobs, metrics=metrics, run_id=pipeline_id
     )

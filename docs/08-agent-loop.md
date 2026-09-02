@@ -590,6 +590,14 @@ def resume_interrupted_jobs() -> None:
 
 次に同じ `job_name` + `market` で始まる実行は、最新の `interrupted` ランの `completed_units` を引き継ぐ。Collector のソース単位、Researcher / Strategist / Critic の ticker・doc 単位は再実行しない。
 
+### 9.4 手動実行の記録
+
+`POST /api/v1/agent/jobs/{job_name}/run` と `POST /api/v1/system/backup` は、UI が即座に `running` を出せるよう API 側で先に `job_runs` 行を作る。ジョブ実装の `begin_run` は渡された `run_id` を再利用し、同じジョブでもう1行作らない。実行履歴に同じ手動実行が2件並ぶのはバグである。
+
+パイプラインの親（`job_name=pipeline`）から各ジョブへ渡す `parent_run_id` は別物で、子ジョブはこれまでどおり自分の行を作る。
+
+日次パイプラインの手動実行は `POST /api/v1/agent/jobs/pipeline/run`。起動時キャッチアップ（`run_startup_catchup`）と同じ `run_pipeline` を `trigger=manual` で呼ぶ。推奨が既にあってもスキップしない（人が明示した実行だから）。親行は `job_name=pipeline` が1件だけで、Collector から Evaluator までの6子ジョブは `parent_run_id` で紐づく。
+
 ## 10. ガードレールの一覧
 
 | ガードレール | 実装箇所 | 動作 |
@@ -619,7 +627,7 @@ def resume_interrupted_jobs() -> None:
 - LLMコストの推移（日次・累計、tier別・用途別の内訳）
 - Critic の却下率と却下理由の内訳
 - `agent_memory` の一覧（有効・無効、confidence、使用回数、効果）
-- 手動実行ボタン（ジョブ単位、市場単位）
+- 手動実行ボタン（日次パイプライン一括、ジョブ単位、市場単位）
 - キルスイッチのトグル
 - `alerts` の一覧
 
@@ -630,4 +638,5 @@ def resume_interrupted_jobs() -> None:
 - 再起動対応: [15-windows-runtime.md](15-windows-runtime.md) §7
 - バックアップ: [11-security-ops.md](11-security-ops.md) §4
 - 手動バックアップ API: [09-api-spec.md](09-api-spec.md) §2.10
+- 手動実行 API: [09-api-spec.md](09-api-spec.md) §2.8
 - 評価ループの実行手順: `.cursor/skills/agent-eval-loop/SKILL.md`

@@ -136,17 +136,24 @@ def daily_backup(
     warehouse: WarehouseRepo | None = None,
     trigger: str = "schedule",
     parent_run_id: int | None = None,
+    run_id: int | None = None,
     settings: Settings | None = None,
     backup_dir: Path | None = None,
     now: datetime | None = None,
 ) -> JobResult:
     cfg = settings or get_settings()
     day = as_of or (now.date() if now is not None else datetime.now(JST).date())
-    run_id = None
     if state is not None:
         run_id = begin_run(
-            state, job_name="backup", market=market, trigger=trigger, parent_run_id=parent_run_id
+            state,
+            job_name="backup",
+            market=market,
+            trigger=trigger,
+            parent_run_id=parent_run_id,
+            run_id=run_id,
         )
+    else:
+        run_id = None
     steps: dict[str, StepResult] = {}
     stamp = (now or datetime.now(JST)).strftime("%Y%m%d_%H%M%S")
     root = Path(backup_dir or cfg.backup_dir or (cfg.data_dir.parent / "backups"))

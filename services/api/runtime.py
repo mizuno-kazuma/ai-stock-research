@@ -119,39 +119,57 @@ def kick_agent_job(
             )
             _publish_finished(state, run_id, "failed")
             return
-        fn = fns.get(inner_name or "")
-        if fn is None:
-            raise ValueError(f"未知のジョブです: {job_name}")
-        kwargs: dict[str, Any] = {
-            "state": st,
-            "warehouse": wh,
-            "trigger": "manual",
-            "parent_run_id": run_id,
-        }
-        if inner_name in {"researcher", "strategist", "critic", "evaluator", "weekly_review"}:
-            kwargs["router"] = _maybe_router(state, st, wh)
-        if inner_name in {"researcher", "strategist"}:
-            try:
-                kwargs["vector_store"] = get_vector_store(state.settings)
-            except Exception:
-                logger.info("ベクトルストアを初期化できないためキーワード検索のみ使います")
-            router = kwargs.get("router")
-            if router is not None:
-                kwargs["embed"] = getattr(router, "embed", None)
-        if inner_name == "analyst":
-            kwargs["ranker"] = try_load_ranker(state.settings, market=mkt)
-        if inner_name in {"strategist", "evaluator", "weekly_review"}:
-            kwargs["memory"] = st
-        if inner_name == "critic":
-            kwargs["jquants_plan"] = str(
-                getattr(state.settings, "jquants_plan", "free") or "free"
+        if job_name == "pipeline":
+            from services.agent.pipeline import run_pipeline
+            from services.agent.wiring import pipeline_dependencies
+
+            extras = pipeline_dependencies(st, wh, market=mkt, settings=state.settings)
+            result = run_pipeline(
+                mkt,
+                day,
+                state=st,
+                warehouse=wh,
+                trigger="manual",
+                run_id=run_id,
+                **extras,
             )
-        if inner_name == "model_retrain":
-            kwargs["data_dir"] = getattr(state.settings, "data_dir", None)
-        if inner_name == "backup":
-            kwargs["settings"] = state.settings
-            kwargs["backup_dir"] = getattr(state.settings, "backup_dir", None)
-        result = fn(mkt, day, **kwargs)
+        else:
+            fn = fns.get(inner_name or "")
+            if fn is None:
+                raise ValueError(f"未知のジョブです: {job_name}")
+            # API が作った job_runs 行をジョブ本体が再利用する。
+            # parent_run_id に渡すと begin_run が同じジョブをもう1行作り、
+            # 実行履歴が二重に見える。
+            kwargs: dict[str, Any] = {
+                "state": st,
+                "warehouse": wh,
+                "trigger": "manual",
+                "run_id": run_id,
+            }
+            if inner_name in {"researcher", "strategist", "critic", "evaluator", "weekly_review"}:
+                kwargs["router"] = _maybe_router(state, st, wh)
+            if inner_name in {"researcher", "strategist"}:
+                try:
+                    kwargs["vector_store"] = get_vector_store(state.settings)
+                except Exception:
+                    logger.info("ベクトルストアを初期化できないためキーワード検索のみ使います")
+                router = kwargs.get("router")
+                if router is not None:
+                    kwargs["embed"] = getattr(router, "embed", None)
+            if inner_name == "analyst":
+                kwargs["ranker"] = try_load_ranker(state.settings, market=mkt)
+            if inner_name in {"strategist", "evaluator", "weekly_review"}:
+                kwargs["memory"] = st
+            if inner_name == "critic":
+                kwargs["jquants_plan"] = str(
+                    getattr(state.settings, "jquants_plan", "free") or "free"
+                )
+            if inner_name == "model_retrain":
+                kwargs["data_dir"] = getattr(state.settings, "data_dir", None)
+            if inner_name == "backup":
+                kwargs["settings"] = state.settings
+                kwargs["backup_dir"] = getattr(state.settings, "backup_dir", None)
+            result = fn(mkt, day, **kwargs)
         status, metrics, error_type, error_message, failed_steps = _payload_from_result(result)
         state.sqlite.update_job_run(
             run_id,
@@ -182,6 +200,9 @@ def _payload_from_result(result: Any) -> tuple[str, dict[str, Any], str | None, 
     status = getattr(result, "status", "success") or "success"
     metrics = dict(getattr(result, "metrics", None) or {})
     steps = getattr(result, "steps", None) or {}
+    jobs = getattr(result, "jobs", None) or {}
+    if not steps and jobs:
+        steps = jobs
     failed_steps = [
         name
         for name, step in steps.items()

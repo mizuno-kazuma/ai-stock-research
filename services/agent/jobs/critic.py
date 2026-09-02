@@ -153,9 +153,15 @@ def critic(
     jquants_plan: str = "light",
     trigger: str = "schedule",
     parent_run_id: int | None = None,
+    run_id: int | None = None,
 ) -> JobResult:
     run_id = begin_run(
-        state, job_name="critic", market=market, trigger=trigger, parent_run_id=parent_run_id
+        state,
+        job_name="critic",
+        market=market,
+        trigger=trigger,
+        parent_run_id=parent_run_id,
+        run_id=run_id,
     )
     pending = recs
     if pending is None:

@@ -42,7 +42,16 @@ def begin_run(
     market: str,
     trigger: str = "schedule",
     parent_run_id: int | None = None,
+    run_id: int | None = None,
 ) -> int:
+    """ジョブ実行行を開始する。
+
+    API の手動キックは応答用に先に `job_runs` を作る。その ID を
+    `run_id` で渡せば同じ行を再利用し、実行履歴が二重にならない。
+    `parent_run_id` はパイプライン親から子ジョブへの連鎖にだけ使う。
+    """
+    if run_id is not None:
+        return run_id
     return state.create_job_run(
         job_name=job_name, market=market, trigger=trigger, parent_run_id=parent_run_id
     )

@@ -49,10 +49,16 @@ def weekly_review(
     router: LLMRouter | None = None,
     trigger: str = "schedule",
     parent_run_id: int | None = None,
+    run_id: int | None = None,
 ) -> JobResult:
     """土曜の deep 層レビュー。キーが無ければ集計だけ残して partial。"""
     run_id = begin_run(
-        state, job_name="weekly_review", market=market, trigger=trigger, parent_run_id=parent_run_id
+        state,
+        job_name="weekly_review",
+        market=market,
+        trigger=trigger,
+        parent_run_id=parent_run_id,
+        run_id=run_id,
     )
     recs = warehouse.get_recommendations(market=market, limit=80) or []
     outcomes_df = warehouse.read_recommendation_outcomes(market=market)
@@ -141,10 +147,16 @@ def model_retrain(
     n_trials: int = RETRAIN_N_TRIALS,
     trigger: str = "schedule",
     parent_run_id: int | None = None,
+    run_id: int | None = None,
 ) -> JobResult:
     """月次 ranker 再学習。サンプル不足なら partial で成果物は残さない。"""
     run_id = begin_run(
-        state, job_name="model_retrain", market=market, trigger=trigger, parent_run_id=parent_run_id
+        state,
+        job_name="model_retrain",
+        market=market,
+        trigger=trigger,
+        parent_run_id=parent_run_id,
+        run_id=run_id,
     )
     metrics: dict[str, Any] = {"n_trials": n_trials}
     status = "success"
@@ -259,11 +271,17 @@ def garch_refit(
     warehouse: WarehouseRepo,
     trigger: str = "schedule",
     parent_run_id: int | None = None,
+    run_id: int | None = None,
     max_tickers: int = GARCH_MAX_TICKERS,
 ) -> JobResult:
     """週次 GARCH 再推定。失敗した銘柄は実現ボラへフォールバックし partial。"""
     run_id = begin_run(
-        state, job_name="garch_refit", market=market, trigger=trigger, parent_run_id=parent_run_id
+        state,
+        job_name="garch_refit",
+        market=market,
+        trigger=trigger,
+        parent_run_id=parent_run_id,
+        run_id=run_id,
     )
     start = as_of - timedelta(days=800)
     features = warehouse.read_features_daily(market=market, as_of=as_of)

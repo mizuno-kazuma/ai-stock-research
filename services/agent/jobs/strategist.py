@@ -342,12 +342,18 @@ def strategist(
     max_per_day: int = 10,
     trigger: str = "schedule",
     parent_run_id: int | None = None,
+    run_id: int | None = None,
     researcher_qual: list[dict[str, Any]] | None = None,
     vector_store: VectorStore | None = None,
     embed: Callable[[str], list[float]] | None = None,
 ) -> JobResult:
     run_id = begin_run(
-        state, job_name="strategist", market=market, trigger=trigger, parent_run_id=parent_run_id
+        state,
+        job_name="strategist",
+        market=market,
+        trigger=trigger,
+        parent_run_id=parent_run_id,
+        run_id=run_id,
     )
     try:
         return _strategist_body(

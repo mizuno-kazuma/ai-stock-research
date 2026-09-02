@@ -31,8 +31,9 @@ def test_system_backup_route_returns_envelope(tmp_path: Path) -> None:
         assert data["job_run_id"]
         assert data["backup_dir"] == str(settings.backup_dir)
         jobs = client.get("/api/v1/agent/jobs?limit=20")
-        names = {item["job_name"] for item in jobs.json()["data"]["items"]}
-        assert "backup" in names
+        backup_jobs = [item for item in jobs.json()["data"]["items"] if item["job_name"] == "backup"]
+        assert len(backup_jobs) == 1
+        assert backup_jobs[0]["job_run_id"] == data["job_run_id"]
         backups = list(settings.backup_dir.iterdir()) if settings.backup_dir.exists() else []
         assert any(p.is_dir() for p in backups)
     duck.close()

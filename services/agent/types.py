@@ -36,3 +36,5 @@ class PipelineResult:
     as_of: date
     jobs: dict[str, JobResult] = field(default_factory=dict)
     metrics: dict[str, Any] = field(default_factory=dict)
+    run_id: int | None = None
+    error: str | None = None
