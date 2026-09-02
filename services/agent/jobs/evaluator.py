@@ -233,9 +233,15 @@ def evaluator(
     router: LLMRouter | None = None,
     trigger: str = "schedule",
     parent_run_id: int | None = None,
+    run_id: int | None = None,
 ) -> JobResult:
     run_id = begin_run(
-        state, job_name="evaluator", market=market, trigger=trigger, parent_run_id=parent_run_id
+        state,
+        job_name="evaluator",
+        market=market,
+        trigger=trigger,
+        parent_run_id=parent_run_id,
+        run_id=run_id,
     )
     outcomes = evaluate_outcomes(as_of, warehouse=warehouse)
     metrics: dict[str, Any] = {"n_outcomes": len(outcomes)}

@@ -138,11 +138,17 @@ def researcher(
     tickers: list[str] | None = None,
     trigger: str = "schedule",
     parent_run_id: int | None = None,
+    run_id: int | None = None,
     vector_store: VectorStore | None = None,
     embed: Callable[[str], list[float]] | None = None,
 ) -> JobResult:
     run_id = begin_run(
-        state, job_name="researcher", market=market, trigger=trigger, parent_run_id=parent_run_id
+        state,
+        job_name="researcher",
+        market=market,
+        trigger=trigger,
+        parent_run_id=parent_run_id,
+        run_id=run_id,
     )
     require_not_failed(state, job_name="analyst", market=market, on_date=as_of, required=False)
     overall = "success"

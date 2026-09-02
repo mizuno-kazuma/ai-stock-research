@@ -108,9 +108,15 @@ def collector(
     steps: dict[str, StepFn] | None = None,
     trigger: str = "schedule",
     parent_run_id: int | None = None,
+    run_id: int | None = None,
 ) -> JobResult:
     run_id = begin_run(
-        state, job_name="collector", market=market, trigger=trigger, parent_run_id=parent_run_id
+        state,
+        job_name="collector",
+        market=market,
+        trigger=trigger,
+        parent_run_id=parent_run_id,
+        run_id=run_id,
     )
     fns = steps if steps is not None else builtin_connector_steps(
         warehouse=warehouse, state=state

@@ -163,9 +163,15 @@ def analyst(
     fx: pd.DataFrame | None = None,
     trigger: str = "schedule",
     parent_run_id: int | None = None,
+    run_id: int | None = None,
 ) -> JobResult:
     run_id = begin_run(
-        state, job_name="analyst", market=market, trigger=trigger, parent_run_id=parent_run_id
+        state,
+        job_name="analyst",
+        market=market,
+        trigger=trigger,
+        parent_run_id=parent_run_id,
+        run_id=run_id,
     )
     steps: dict[str, StepResult] = {}
     try:

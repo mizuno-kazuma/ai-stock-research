@@ -91,11 +91,17 @@ def backfill(
     steps: dict[str, StepFn] | None = None,
     trigger: str = "manual",
     parent_run_id: int | None = None,
+    run_id: int | None = None,
 ) -> JobResult:
     """市場引数は互換のため残す。実体は JP/US の固定順序を回す。"""
     del market
     run_id = begin_run(
-        state, job_name="backfill", market="ALL", trigger=trigger, parent_run_id=parent_run_id
+        state,
+        job_name="backfill",
+        market="ALL",
+        trigger=trigger,
+        parent_run_id=parent_run_id,
+        run_id=run_id,
     )
     jp_fns = steps or builtin_connector_steps(
         warehouse=warehouse, state=state, lookbacks=LOOKBACKS_JP

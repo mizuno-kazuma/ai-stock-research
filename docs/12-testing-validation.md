@@ -844,7 +844,19 @@ def test_pipeline_fails_when_prices_unavailable():
     assert result.status == "failed"
 ```
 
-実装の回帰テストは `tests/unit/agent/test_pipeline_fixes.py` と `tests/unit/agent/test_remaining_jobs.py`。ML 予測区間が無くても Critic まで到達すること、INTEGER 列の NaN が INSERT で落ちないこと、開示 0 件かつ既存カバレッジ無しは Collector を partial にすること、為替スポット無しだけで Analyst を partial にしないこと、実績のベンチマークと MFE/MAE、Critic の `revised_fields` 反映、Researcher の要約永続化、週次ジョブが `job_runs` を残すことを固定する。
+### T-INT-05: 手動実行の履歴は1行
+
+```python
+def test_manual_job_run_creates_one_history_row():
+    """POST /agent/jobs/{name}/run は API 用の行とジョブ本体の行を
+    二重に作らない。同じ実行が実行履歴に2件並ぶのはバグ。"""
+    before = {row.id for row in sqlite.get_job_runs(limit=200)}
+    body = client.post("/api/v1/agent/jobs/evaluator/run").json()["data"]
+    after = [row for row in sqlite.get_job_runs(limit=200) if row.id not in before]
+    assert [row.id for row in after] == [body["job_run_id"]]
+```
+
+実装の回帰テストは `tests/unit/agent/test_pipeline_fixes.py` と `tests/unit/agent/test_remaining_jobs.py` と `tests/api/test_manual_job_history.py`。ML 予測区間が無くても Critic まで到達すること、INTEGER 列の NaN が INSERT で落ちないこと、開示 0 件かつ既存カバレッジ無しは Collector を partial にすること、為替スポット無しだけで Analyst を partial にしないこと、実績のベンチマークと MFE/MAE、Critic の `revised_fields` 反映、Researcher の要約永続化、週次ジョブが `job_runs` を残すこと、手動実行で `job_runs` が1行だけ増えることを固定する。
 
 ## 11. E2E テスト（Playwright）
 

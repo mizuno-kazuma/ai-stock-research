@@ -474,6 +474,8 @@ GET  /api/v1/agent/events                  # SSE によるジョブ進捗のリ�
 
 日次 6 ジョブに加え、土曜の `weekly_review`、第1土曜の `model_retrain`、月曜の `garch_refit` を手動でも起動できる。`backtest` はこのパスでは受け付けず、`POST /api/v1/backtests` を使う。
 
+手動実行は `job_runs` を1行だけ作る。API が先に作った行をジョブ本体が再利用する（[08-agent-loop.md](08-agent-loop.md) §9.4）。`GET /api/v1/agent/jobs` に同じ実行が2件出てはいけない。
+
 SSE のイベント形式:
 
 ```

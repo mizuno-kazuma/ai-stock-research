@@ -122,11 +122,14 @@ def kick_agent_job(
         fn = fns.get(inner_name or "")
         if fn is None:
             raise ValueError(f"未知のジョブです: {job_name}")
+        # API が作った job_runs 行をジョブ本体が再利用する。
+        # parent_run_id に渡すと begin_run が同じジョブをもう1行作り、
+        # 実行履歴が二重に見える。
         kwargs: dict[str, Any] = {
             "state": st,
             "warehouse": wh,
             "trigger": "manual",
-            "parent_run_id": run_id,
+            "run_id": run_id,
         }
         if inner_name in {"researcher", "strategist", "critic", "evaluator", "weekly_review"}:
             kwargs["router"] = _maybe_router(state, st, wh)
