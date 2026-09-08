@@ -130,7 +130,7 @@ const DEFAULT_SETTINGS: Settings = {
   "llm.monthly_cap_usd": 20,
   "llm.kill_switch": false,
   "llm.alert_threshold_pct": 0.8,
-  "data.jquants_plan": "free",
+  "data.jquants_plan": "light",
   "data.tdnet_enabled": false,
   "data.universe": "all",
   "analysis.default_horizon": "H20",

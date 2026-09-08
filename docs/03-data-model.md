@@ -880,7 +880,7 @@ CREATE TABLE settings (
 | `llm.daily_cap_usd` | number | `1.0` | 日次コスト上限 |
 | `llm.monthly_cap_usd` | number | `20.0` | 月次コスト上限 |
 | `llm.kill_switch` | boolean | `false` | 全LLM呼び出しの停止 |
-| `data.jquants_plan` | string | `"free"` | `"free"` / `"light"` |
+| `data.jquants_plan` | string | `"light"` | `"free"` / `"light"`。現行運用は `"light"` |
 | `data.tdnet_enabled` | boolean | `false` | 規約確認後に有効化 |
 | `agent.auto_activate_weights` | boolean | `false` | 重み更新の自動適用 |
 | `agent.max_recommendations_per_day` | number | `10` | 推奨カードの目標かつ上限。コア候補が足りなければ定量順位で補充する |

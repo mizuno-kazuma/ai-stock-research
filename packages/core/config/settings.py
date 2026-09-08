@@ -45,7 +45,7 @@ class Settings(BaseSettings):
 
     # ===== データソース =====
     jquants_api_key: SecretStr = SecretStr("")
-    jquants_plan: JQuantsPlan = "free"
+    jquants_plan: JQuantsPlan = "light"
     edinet_subscription_key: SecretStr = SecretStr("")
     fred_api_key: SecretStr = SecretStr("")
     # 未設定は None。値を入れる場合は実名 + メールアドレスを必須とする。

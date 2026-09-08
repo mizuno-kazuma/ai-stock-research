@@ -48,25 +48,28 @@ Content spec:
 
 ### 1.3 DataFreshnessIndicator (critical component)
 
-**This component must appear on every screen.** The Japanese price source runs on a free plan with
-a 12-week delay; hiding that fact causes bad decisions.
+**This component must appear on every screen.** The current deployment uses J-Quants Light (no
+structural delay on research prices). Free plan remains supported and then requires an explicit
+~12-week delay label. Hiding freshness causes bad decisions.
 
 Collapsed form in the header:
 
 ```
-データ鮮度: 一部遅延 ▾
+データ鮮度: 最新 ▾
 ```
 
-Expanded popover:
+Expanded popover (Light — current):
 
 | Field | label_ja | Example value | Visual |
 | --- | --- | --- | --- |
-| J-Quants (research prices) | J-Quants（リサーチ用株価） | `2026-05-31` | Warning color, `12週遅延（無料プラン）` |
-| yfinance (current prices) | yfinance（現在値） | `2026-08-22` | Success color, `約15-20分遅延` |
-| EDINET | EDINET（開示資料） | `2026-08-22` | Success color |
-| EDGAR | EDGAR（米国開示） | `2026-08-22` | Success color |
-| TDnet | TDnet（適時開示） | `2026-08-19` | Danger color, `3日連続で取得に失敗` |
-| FRED | FRED（為替・マクロ） | `2026-08-22` | Success color |
+| J-Quants (research prices) | J-Quants（リサーチ用株価） | `2026-09-03` | Success color when on the latest trading day |
+| yfinance (current prices) | yfinance（現在値） | `2026-09-03` | Success color, `約15-20分遅延` |
+| EDINET | EDINET（開示資料） | `2026-09-02` | Success color |
+| EDGAR | EDGAR（米国開示） | `2026-09-02` | Success color |
+| TDnet | TDnet（適時開示） | — | Info/disabled when TDnet is off |
+| FRED | FRED（為替・マクロ） | `2026-09-02` | Success color |
+
+When `data.jquants_plan=free`, the J-Quants row uses warning color and `12週遅延（無料プラン）`.
 
 Props:
 
@@ -75,9 +78,9 @@ interface DataFreshnessIndicatorProps {
   sources: Array<{
     source: string;
     labelJa: string;
-    latestAsOf: string;          // "2026-05-31"
+    latestAsOf: string;          // "2026-09-03"
     expectedAsOf: string;
-    delayNoteJa?: string;        // "12週遅延（無料プラン）"
+    delayNoteJa?: string;        // free only: "12週遅延（無料プラン）"
     status: "ok" | "delayed" | "stale" | "failed";
   }>;
   variant?: "compact" | "full";
@@ -89,8 +92,8 @@ Status derivation:
 | Condition | status | Color |
 | --- | --- | --- |
 | `latestAsOf >= expectedAsOf` | `ok` | `--status-success` |
-| Known structural delay (J-Quants free plan) | `delayed` | `--status-warning` |
-| 1-3 business days behind expected | `stale` | `--status-warning` |
+| Known structural delay (J-Quants free plan only) | `delayed` | `--status-warning` |
+| 1-3 business days behind expected (collector lag) | `stale` | `--status-warning` |
 | More than 3 business days behind | `failed` | `--status-danger` |
 
 The collapsed label reflects the worst status among sources: `最新` / `一部遅延` / `取得エラー`.
@@ -349,12 +352,18 @@ interface PriceChartProps {
 }
 ```
 
-**The source and delay state are rendered as a caption directly under the chart**, not in a tooltip:
+**The source and delay state are rendered as a caption directly under the chart**, not in a tooltip.
+Light (current):
+
+```
+出所: J-Quants（リサーチ用、最新 2026-09-03）
+```
+
+Free only:
 
 ```
 出所: J-Quants（リサーチ用・12週遅延、最新 2026-05-31）
 ```
-
 Markers: filings render as small triangles below the axis; recommendations as diamonds; user trades
 as circles in the direction color. Clicking a marker opens the corresponding filing or
 recommendation.

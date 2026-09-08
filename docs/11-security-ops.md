@@ -38,7 +38,7 @@ node_modules/
 ```bash
 # ===== データソース =====
 JQUANTS_API_KEY=
-JQUANTS_PLAN=free                    # free | light
+JQUANTS_PLAN=light                   # free | light（現行運用は light）
 EDINET_SUBSCRIPTION_KEY=
 FRED_API_KEY=
 EDGAR_USER_AGENT=Your Name (your-email@example.com)   # 必須。SECのポリシー
@@ -220,7 +220,7 @@ def assert_no_sensitive_data(payload: Any, path: str = "") -> None:
 | 対象 | サイズ | 優先度 | 再生成可能か |
 | --- | --- | --- | --- |
 | `state.sqlite` | 約 50MB | **最高** | **不可**。売買日誌、agent_memory、設定は失うと復元できない |
-| `data/raw/` | 約 2GB/年 | 高 | 不可（過去のAPIレスポンスは取り直せない。特に J-Quants 無料プランは2年分しか遡れない） |
+| `data/raw/` | 約 2GB/年 | 高 | 不可（過去のAPIレスポンスは取り直せない。Free では約2年・Light でも取得範囲外の過去分は失われる） |
 | PDF blob | 約 20GB | 中 | 部分的に可能（TDnet は30日で消えるので不可、EDINET/EDGAR は再取得可能） |
 | `analytics.duckdb` | 約 1.5GB | 低 | **可能**（Raw層から再構築できる） |
 | `data/vectors/` | 約 12GB | 低 | 可能（再埋め込み。ただしコストがかかる） |
@@ -295,7 +295,7 @@ def daily_backup() -> BackupResult:
 8. サービスを起動する
 ```
 
-**手順6が Raw層を保存する意味である。** API を叩き直さずに全データを再構築できる。J-Quants 無料プランでは過去2年しか取得できないため、Raw層がなければ古いデータは永久に失われる。
+**手順6が Raw層を保存する意味である。** API を叩き直さずに全データを再構築できる。取得可能な履歴の上限（Free 約2年 / Light 約5年）を超える過去分は Raw がなければ永久に失われる。
 
 **復旧手順は年1回、実際に試す。** バックアップが取れていても復元できないケースは頻繁にある。`.cursor/skills/verify-windows-runtime/SKILL.md` にチェック項目として含める。
 
@@ -431,15 +431,16 @@ tier別（今月）
 
 ### 6.5 データソース費用
 
-無料枠のみで開始するため 0円。有料化を検討する条件を明記しておく。
+現行は J-Quants Light（月1,650円）。その他ソースは無料枠。プラン変更の条件を明記しておく。
 
-| 移行先 | 費用 | 検討する条件 |
+| 選択肢 | 費用 | 検討する条件 |
 | --- | --- | --- |
-| J-Quants Light | 月1,650円 | 12週遅延が実運用の障害になったとき。または過去5年の履歴が必要になったとき（CV分割数を増やしたい場合） |
+| J-Quants Light（現行） | 月1,650円 | リサーチ用価格の遅延なし・約5年履歴が必要（通常運用） |
+| J-Quants Free への降格 | 0円 | 費用を優先し、リサーチ用価格の約12週遅延と約2年履歴で足りると判断したとき |
 | J-Quants Standard 以上 | 要確認 | 財務詳細や信用残など追加データが必要になったとき |
 | Alpha Vantage 有料 | - | yfinance が恒久的に壊れたとき |
 
-**J-Quants Light への移行判断基準**: 12週遅延データでバックテストを回し、その戦略を yfinance の現在値で実行する運用が3ヶ月継続できたなら、遅延自体は障害になっていない。障害になるのは「決算直後の反応を捉えたい」ような短期戦略の場合であり、その必要性が確認できてから課金する。
+**Free への降格判断**: Light の遅延なしデータが分析・推奨に必要なら維持する。費用だけを理由に Free に戻す場合は、UI の鮮度表示と Critic の遅延チェックが Free 経路で正しく動くことを確認する。切替は `.env` の `JQUANTS_PLAN` のみ。
 
 ## 7. 運用の日常フロー
 

@@ -29,9 +29,11 @@ misleading. Apply them to every screen.
 2. **Every recommendation card must show a bear case.** The bear case is not collapsed behind a
    "show more" toggle by default on the detail view. A recommendation without a bear case cannot
    exist in the data model, so there is no empty state for it.
-3. **Always show data freshness.** The Japanese price source runs on a free plan with a 12-week
-   delay. Hiding this causes bad decisions. The app header carries a persistent freshness
-   indicator, and any price shown as "current" is labeled as a delayed reference value.
+3. **Always show data freshness.** The current deployment uses J-Quants Light (no structural
+   delay on research prices). Free plan remains supported and then shows an explicit ~12-week
+   delay. Hiding freshness causes bad decisions. The app header carries a persistent freshness
+   indicator, and any price shown as "current" from yfinance is labeled as a delayed reference
+   value.
 4. **Show sample sizes next to any rate.** Render "hit rate 58% (n=34)", never "hit rate 58%".
 5. **Show negative information with the same prominence as positive information.** Reason codes
    include warning codes such as stale data and model degradation. Do not visually de-emphasize

@@ -128,8 +128,10 @@ AgentConsolePage
 │       │   │   ├── LogViewer
 │       │   │   └── ArtifactLinks
 │       │   └── ManualRunPanel
-│       │       ├── JobSelect
+│       │       ├── MarketSelect
 │       │       ├── TargetDateInput
+│       │       ├── PipelineRunButton            startup catchup と同じ 6 ジョブ
+│       │       ├── JobSelect
 │       │       ├── ForceRerunSwitch
 │       │       └── RunButton
 │       ├── TabPanel "コスト"
@@ -194,6 +196,18 @@ Status labels use the shared set: 成功 / 部分 / 失敗 / 実行中 / 中断 
 A `partial` card always names what was skipped:
 `部分 · TDnetの取得に失敗（3回試行）`.
 
+### Job run list
+
+The list is sticky on desktop and scrolls internally so the page does not grow with history.
+
+| Element | label_en | label_ja | Example |
+| --- | --- | --- | --- |
+| Heading | Run history | 実行履歴 | |
+| Clear | Clear | クリア | |
+| Clear confirm title | Clear job history? | 実行履歴を削除しますか | |
+| Clear confirm body | | 完了したジョブの実行履歴を削除します。実行中のジョブは残ります。この操作は取り消せません。 | |
+| Clear confirm | Delete | 削除する | |
+
 ### Job run detail
 
 | Element | label_en | label_ja | Example |
@@ -237,16 +251,22 @@ schema_drift_detected   0
 data_gaps_found         12
 ```
 
-`rate_limit_wait_sec` matters on the J-Quants free plan (5 requests per minute), where waiting is
-the dominant cost of the job, so it is shown rather than buried.
+`rate_limit_wait_sec` is more dominant on the J-Quants free plan (5 requests per minute). On Light
+(current, ~60 req/min) it should stay near zero unless upstream throttles; still show the metric.
 
 ### Manual run panel
 
 | Element | label_en | label_ja | Example |
 | --- | --- | --- | --- |
 | Heading | Manual run | 手動実行 | 手動実行 |
-| Job select | Job | ジョブ | データ収集 / 分析 / 資料読解 / 推奨生成 / レビュー / 実績評価 |
+| Market | Market | 市場 | 日本株 / 米国株 |
 | Target date | Target date | 対象日 | 2026-08-22 |
+| Pipeline note | | | 起動時と同じ経路で、データ収集から実績評価まで6ジョブを順に実行します。 |
+| Pipeline run | Run daily pipeline | 日次パイプラインを実行 | |
+| Pipeline confirm title | Run the daily pipeline? | 日次パイプラインを実行しますか | |
+| Pipeline confirm body | | | データ収集 → 分析 → 資料読解 → 推奨生成 → レビュー → 実績評価 を日本株の 2026-08-22 に対して順に実行します。起動時のキャッチアップと同じ経路です。資料読解と推奨生成でLLMコストが発生する場合があります。 |
+| Single job heading | Individual job | 個別のジョブ | |
+| Job select | Job | ジョブ | データ収集 / 分析 / 資料読解 / 推奨生成 / レビュー / 実績評価 / 週次の深掘り / ranker 再学習 / GARCH 再推定 |
 | Force re-run | Force re-run | 完了済みでも再実行 | |
 | Force note | | | 通常は冪等なため、同じ対象日で再実行しても結果は変わりません。強制再実行はLLMコストが再発生する場合があります。 |
 | Run | Run | 実行 | |
@@ -418,8 +438,8 @@ GET /api/v1/agent/jobs → ECONNREFUSED
 エージェントプロセスが停止している可能性があります。
 
 確認手順:
-1. WSL2内で systemctl --user status ai-stock-agent を実行
-2. 停止している場合は systemctl --user start ai-stock-agent
+1. WSL2内で systemctl status ai-stock-api を実行（スケジューラは API に内蔵）
+2. 停止している場合は systemctl start ai-stock-api
 3. WSL2が停止している場合は Windows側で wsl -d Ubuntu
 
 [再試行]
@@ -457,7 +477,9 @@ the switch in its active state with the count of LLM calls skipped today.
 | Checkpoint value | Click | Copies the checkpoint JSON; toast `チェックポイントをコピーしました` |
 | Failed step retry | Click | Re-runs from the checkpoint; the button shows a running state |
 | Cancel running job | Click | Confirm dialog, then `POST /api/v1/agent/jobs/{job_run_id}/cancel` |
-| Manual run | Click | Validates the date, shows the cost estimate for LLM-using jobs, then runs |
+| Clear history | Click | Confirm dialog, then `DELETE /api/v1/agent/jobs`. Running jobs are kept. The list becomes the empty state when nothing remains. |
+| Manual run | Click | Validates the date, shows the cost estimate for LLM-using jobs, then `POST /api/v1/agent/jobs/{job_name}/run` |
+| Daily pipeline | Click | Confirm dialog naming market and date and warning about LLM cost, then `POST /api/v1/agent/jobs/pipeline/run` |
 | Log viewer | Scroll | Loads older lines on demand; supports text search within the loaded buffer |
 | Artifact link | Click | Opens the raw file listing for that run |
 | Kill switch | Toggle | Confirm dialog: enabling requires one confirmation, disabling requires a second confirmation naming today's remaining budget. Then `PATCH /api/v1/settings` with `llm.kill_switch` |
@@ -483,7 +505,9 @@ the switch in its active state with the count of LLM calls skipped today.
 | Job list | `GET /api/v1/agent/jobs?limit=50` |
 | Job detail | `GET /api/v1/agent/jobs/{job_run_id}` |
 | Manual run | `POST /api/v1/agent/jobs/{job_name}/run` |
+| Daily pipeline | `POST /api/v1/agent/jobs/pipeline/run?market=JP&as_of=2026-08-22` |
 | Cancel | `POST /api/v1/agent/jobs/{job_run_id}/cancel` |
+| Clear history | `DELETE /api/v1/agent/jobs` |
 | Live progress | `GET /api/v1/agent/events` (SSE) |
 | Cost | `GET /api/v1/agent/cost?period=daily&days=30` |
 | Critic stats | `GET /api/v1/agent/critic-stats?days=30` |
