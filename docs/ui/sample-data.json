@@ -483,7 +483,7 @@
   "prices": {
     "JP:7203": {
       "research": {
-        "source": "jquants", "plan": "light", "latest_as_of": "2026-05-30", "is_adjusted": true, "delay_note_ja": null,
+        "source": "jquants", "plan": "light", "latest_as_of": "2026-09-03", "is_adjusted": true, "delay_note_ja": null,
         "sample": [
           { "date": "2026-05-26", "open": 2984, "high": 3012, "low": 2971, "close": 3004, "volume": 8124300 },
           { "date": "2026-05-27", "open": 3008, "high": 3042, "low": 2996, "close": 3038, "volume": 7812400 },
