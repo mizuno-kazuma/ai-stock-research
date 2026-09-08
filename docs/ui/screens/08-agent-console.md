@@ -251,8 +251,8 @@ schema_drift_detected   0
 data_gaps_found         12
 ```
 
-`rate_limit_wait_sec` matters on the J-Quants free plan (5 requests per minute), where waiting is
-the dominant cost of the job, so it is shown rather than buried.
+`rate_limit_wait_sec` is more dominant on the J-Quants free plan (5 requests per minute). On Light
+(current, ~60 req/min) it should stay near zero unless upstream throttles; still show the metric.
 
 ### Manual run panel
 

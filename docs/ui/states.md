@@ -146,7 +146,7 @@ Section-level failures render inside the section's own card, with the card borde
 | TDnet fetch failed | TDnetからの取得に失敗しています（3日連続）。適時開示の一部が欠けている可能性があります | warning | Filings from EDINET still shown |
 | TDnet disabled by setting | TDnetの取得は無効に設定されています | info | Same |
 | EDINET fetch failed | EDINETからの取得に失敗しています（最終取得 2026-08-19） | warning | Prices and scores unaffected |
-| yfinance failed | 現在値を取得できませんでした。表示している価格はリサーチ用データ（12週前）です | **error** | Explicitly flag every price as research-date |
+| yfinance failed | 現在値を取得できませんでした。表示している価格はリサーチ用データです（基準日を明示） | **error** | Explicitly flag every price as research-date |
 | Model not trained | 予測モデルが未学習のため、期待リターンは表示できません | warning | Quant score shown, ML prediction shows `—` |
 | GARCH did not converge | 一部銘柄でGARCH推定が収束せず、実現ボラティリティで代替しています | info | Values shown with a substitution note |
 | FX exogenous data missing | 金利データが欠損しているため、ARIMAXモデルは実行できていません。ランダムウォークのみ表示しています | warning | Baseline forecast shown |
@@ -155,7 +155,7 @@ Section-level failures render inside the section's own card, with the card borde
 | Some tickers failed | 4,012銘柄のうち 38銘柄でデータ取得に失敗しました | info | Details behind a link |
 
 The `yfinance failed` case is classified as `error` rather than `warning` because the consequence is
-that every displayed "current" price is actually 12 weeks old. That must be unmissable.
+that every displayed "current" price is actually a research-series date. That must be unmissable.
 
 ### 5.4 Null values within a loaded section
 
@@ -233,23 +233,30 @@ document is worse than losing the summary.
 
 Distinct from an error. The data loaded successfully but is older than expected.
 
-### 7.1 Structural delay (J-Quants free plan)
+### 7.1 Structural delay (J-Quants free plan only)
 
-This is expected, not a failure. It is displayed as a persistent condition rather than a warning.
+Applies only when `data.jquants_plan=free`. On Light (current deployment) this state must not appear;
+a lag behind the expected trading day is **collector stale**, not structural delay (§7.2).
 
-In the header freshness popover:
+In the header freshness popover (free only):
 
 ```
 J-Quants（リサーチ用株価）   2026-05-31   12週遅延（無料プラン）
 ```
 
-On any chart using research prices:
+On any chart using research prices (free only):
 
 ```
 出所: J-Quants（リサーチ用・12週遅延、最新 2026-05-31）
 ```
 
-On any price presented as current:
+On Light, the chart caption is:
+
+```
+出所: J-Quants（リサーチ用、最新 2026-09-03）
+```
+
+On any price presented as current (all plans):
 
 ```
 3,125円  参考値（yfinance、約15-20分遅延）

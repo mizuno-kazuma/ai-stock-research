@@ -4,7 +4,7 @@
     "as_of": "2026-08-22",
     "generated_at": "2026-08-22T09:47:00Z",
     "timezone": "Asia/Tokyo",
-    "note": "All prices in the live series are delayed reference values, not execution prices. The JP research price series is 12 weeks behind because of the J-Quants free plan."
+    "note": "All prices in the live series are delayed reference values, not execution prices. Current deployment uses J-Quants Light (no structural delay on research prices). Free plan remains supported and then research prices lag ~12 weeks."
   },
 
   "settings": {
@@ -17,7 +17,7 @@
     "llm.monthly_cap_usd": 20.0,
     "llm.kill_switch": false,
     "llm.alert_threshold_pct": 80,
-    "data.jquants_plan": "free",
+    "data.jquants_plan": "light",
     "data.tdnet_enabled": false,
     "data.universe": "market_cap_30b_plus",
     "analysis.default_horizon": "H20",
@@ -73,7 +73,7 @@
   },
 
   "data_freshness": [
-    { "source": "jquants", "label_ja": "J-Quants", "latest_as_of": "2026-05-30", "expected_as_of": "2026-05-30", "status": "ok", "note_ja": "無料プランの12週遅延によるものです", "rate_limit": "5 req/min", "credential": "configured" },
+    { "source": "jquants", "label_ja": "J-Quants", "latest_as_of": "2026-09-03", "expected_as_of": "2026-09-03", "status": "ok", "note_ja": "Lightプラン（遅延なし）", "rate_limit": "60 req/min", "credential": "configured" },
     { "source": "yfinance_jp", "label_ja": "yfinance (日本株)", "latest_as_of": "2026-08-22T15:10:00+09:00", "expected_as_of": "2026-08-22T15:10:00+09:00", "status": "ok", "credential": "not_required" },
     { "source": "yfinance_us", "label_ja": "yfinance (米国株)", "latest_as_of": "2026-08-22T05:10:00+09:00", "expected_as_of": "2026-08-22T05:10:00+09:00", "status": "ok", "credential": "not_required" },
     { "source": "edinet", "label_ja": "EDINET", "latest_as_of": "2026-08-22T15:04:00+09:00", "expected_as_of": "2026-08-22T15:04:00+09:00", "status": "ok", "credential": "configured" },
@@ -483,7 +483,7 @@
   "prices": {
     "JP:7203": {
       "research": {
-        "source": "jquants", "plan": "free", "latest_as_of": "2026-05-30", "is_adjusted": true, "delay_note_ja": "無料プランのため12週間遅延しています",
+        "source": "jquants", "plan": "light", "latest_as_of": "2026-05-30", "is_adjusted": true, "delay_note_ja": null,
         "sample": [
           { "date": "2026-05-26", "open": 2984, "high": 3012, "low": 2971, "close": 3004, "volume": 8124300 },
           { "date": "2026-05-27", "open": 3008, "high": 3042, "low": 2996, "close": 3038, "volume": 7812400 },

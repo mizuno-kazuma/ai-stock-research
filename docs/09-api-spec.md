@@ -51,24 +51,25 @@
   "data": { "...": "..." },
   "warnings": [
     {"code": "STALE_DATA", "source": "jquants",
-     "message_ja": "J-Quantsのデータが12週遅延しています（最新: 2026-05-31）",
-     "severity": "info"},
+     "message_ja": "J-Quantsの最新日が期待より遅れています（最新: 2026-09-03、期待: 2026-09-08）。収集バッチの成否を確認してください",
+     "severity": "warning"},
     {"code": "SECTION_UNAVAILABLE", "section": "qualitative",
      "message_ja": "本日のLLM予算に達したため定性分析はありません",
      "severity": "warning"}
   ],
   "meta": {
-    "as_of": "2026-08-22",
-    "computed_at": "2026-08-22T09:35:12Z",
+    "as_of": "2026-09-03",
+    "computed_at": "2026-09-08T13:20:00Z",
     "data_freshness": [
-      {"source": "jquants", "latest_as_of": "2026-05-31"},
-      {"source": "yfinance", "latest_as_of": "2026-08-22"},
-      {"source": "edinet", "latest_as_of": "2026-08-22"}
+      {"source": "jquants", "latest_as_of": "2026-09-03"},
+      {"source": "yfinance", "latest_as_of": "2026-09-03"},
+      {"source": "edinet", "latest_as_of": "2026-09-02"}
     ]
   }
 }
 ```
 
+Free プラン時のみ、構造的遅延を `severity: "info"` の別警告（例: 「無料プランのため約12週遅延」）として添える。Light 運用では構造的遅延警告は出さない。
 `meta.data_freshness` は**全エンドポイントの共通レスポンスに含める**。UIヘッダの鮮度表示に使う。
 
 ## 2. エンドポイント一覧
@@ -319,20 +320,19 @@ GET /api/v1/stocks/{market}/{ticker}/recommendations   # この銘柄の推奨�
 GET /api/v1/stocks/{market}/{ticker}/peers             # 同セクターの比較銘柄
 ```
 
-`prices` の `series` パラメータで**リサーチ用（J-Quants）と現在値（yfinance）を明示的に分離する**。混同を防ぐため、レスポンスに必ず `source` と `is_delayed` を含める。
+`prices` の `series` パラメータで**リサーチ用（J-Quants）と現在値（yfinance）を明示的に分離する**。混同を防ぐため、レスポンスに必ず `source` と `is_delayed` を含める。Light では `is_delayed: false`。Free では `true` と遅延注記を返す。
 
 ```json
 {
   "data": {
     "series": "research", "source": "jquants",
-    "is_delayed": true, "delay_note_ja": "無料プランのため12週遅延",
-    "latest_as_of": "2026-05-31",
-    "bars": [{"date": "2026-05-29", "open": 3080, "high": 3120, "low": 3065,
+    "is_delayed": false, "delay_note_ja": null,
+    "latest_as_of": "2026-09-03",
+    "bars": [{"date": "2026-09-02", "open": 3080, "high": 3120, "low": 3065,
               "close": 3110, "volume": 8234100, "adj_close": 3110}]
   }
 }
 ```
-
 ```
 GET /api/v1/stocks/search?q=トヨタ&market=JP&limit=10
 ```

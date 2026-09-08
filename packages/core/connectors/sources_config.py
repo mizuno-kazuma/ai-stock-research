@@ -22,10 +22,10 @@ SOURCES_YAML = CONFIG_DIR / "sources.yaml"
 DEFAULT_SOURCES: dict[str, dict[str, Any]] = {
     "jquants": {
         "base_url": "https://api.jquants.com",
-        "rate_limit_per_min": 5,  # 既定は free。実効値は jquants_plan_params() が上書き
+        "rate_limit_per_min": 60,  # 現行 light 既定。free は 5。実効値は jquants_plan_params()
         "plan": "${JQUANTS_PLAN}",
-        "delay_weeks": 12,  # 既定は free。light は 0（jquants_plan_params）
-        "history_years": 2,
+        "delay_weeks": 0,  # light=0。free は 12（jquants_plan_params が上書き）
+        "history_years": 5,
         "auth": {"kind": "header", "header_name": "x-api-key", "env_var": "JQUANTS_API_KEY"},
         "retry": {"max_attempts": 5, "backoff_base_sec": 4.0},
         "timeout_sec": 30,
@@ -213,10 +213,10 @@ def default_sources_config() -> SourcesConfig:
 def jquants_plan_params(plan: str) -> dict[str, Any]:
     """プラン名から派生する値。docs/02-data-ingestion.md §2.1。
 
-    Light への移行を `.env` の1行変更で完了させるため、
+    現行運用は Light。Free / Light の切替を `.env` の1行変更で完了させるため、
     プラン依存の値をここ1箇所から導出する。
     """
-    normalized = (plan or "free").strip().lower()
+    normalized = (plan or "light").strip().lower()
     if normalized not in ("free", "light"):
         raise ValueError(f"未知の JQUANTS_PLAN: {plan!r}（free | light）")
     if normalized == "light":

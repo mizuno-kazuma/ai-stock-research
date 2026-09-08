@@ -315,7 +315,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "llm.daily_cap_usd": 1.0,
     "llm.monthly_cap_usd": 20.0,
     "llm.kill_switch": False,
-    "data.jquants_plan": "free",
+    "data.jquants_plan": "light",
     "data.tdnet_enabled": False,
     "agent.auto_activate_weights": False,
     "agent.max_recommendations_per_day": 10,

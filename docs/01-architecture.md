@@ -124,8 +124,8 @@
   Evaluator      → T+5 / T+20 到達した過去推奨の実績評価
 
 [18:30 JST]  JP市場クローズ後のフロー
-  Collector(JP)  → J-Quants 日足（無料プランは12週前まで）
-                 → yfinance で直近ギャップ補完
+  Collector(JP)  → J-Quants 日足（Light: 遅延なし。Free: 約12週前まで）
+                 → Free 時のみ yfinance で直近ギャップを `prices_live` に補完
                  → EDINET 書類一覧、TDnet 適時開示
   Analyst → Researcher → Strategist → Critic → Evaluator  （JP版）
 ```
@@ -144,7 +144,7 @@
 | State | SQLite `state.sqlite` | ジョブ実行履歴、設定、売買日誌、agent_memory、LLMコストログ | 随時更新 |
 | Vector | LanceDB `data/vectors/` | 開示資料チャンクの埋め込み | 追記 |
 
-**Raw層を必ず残すことが再現性の根拠**である。J-Quants無料プランは 5 req/min であり、正規化ロジックのバグ修正のために全銘柄を再取得すると数時間かかる。Raw層があればその再取得が不要になる。
+**Raw層を必ず残すことが再現性の根拠**である。Free では 5 req/min のため正規化ロジック修正後の全銘柄再取得に数時間かかる。Light（約60 req/min）でも再取得は重いので、Raw層があればその再取得が不要になる。
 
 ## 5. 技術選定の理由
 
@@ -226,9 +226,9 @@ Windows ホスト
 | シークレット | `.env`（gitignore） / 環境変数 | `JQUANTS_API_KEY`, `EDINET_SUBSCRIPTION_KEY`, `FRED_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` |
 | 構成（コード管理） | `packages/core/config/*.yaml` | LLMモデル識別子、ファクター定義、ルーティング閾値 |
 | 実行時設定（ユーザー変更可） | SQLite `settings` テーブル | 上昇下落カラー、表示通貨、通知の有無、リスク許容度 |
-| プラン依存の切替 | `.env` | `JQUANTS_PLAN=free|light`（free の場合のみ yfinance ギャップ補完を有効化） |
+| プラン依存の切替 | `.env` | `JQUANTS_PLAN=free|light`（現行は `light`。`free` の場合のみ yfinance ギャップ補完を有効化） |
 
-`JQUANTS_PLAN` を設定値として持つことで、Light プランへの移行がコード変更なしで完了する（D-02 の実装上の担保）。
+`JQUANTS_PLAN` を設定値として持つことで、Free / Light の切替がコード変更なしで完了する（D-02 の実装上の担保）。
 
 ## 8. Phase A / Phase B の差分一覧
 

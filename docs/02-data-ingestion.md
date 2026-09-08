@@ -74,9 +74,9 @@ class TokenBucket:
 ```yaml
 sources:
   jquants:
-    rate_limit_per_min: 5          # free plan. light plan は 60  [要検証]
-    plan: ${JQUANTS_PLAN}
-    delay_weeks: 12                # free plan の遅延。light は 0
+    rate_limit_per_min: 60         # light 既定。free は 5。実効値は jquants_plan_params()  [要検証]
+    plan: ${JQUANTS_PLAN}          # 現行運用: light
+    delay_weeks: 0                 # light=0。free は 12（jquants_plan_params が上書き）
     base_url: https://api.jquants.com
   edinet:
     rate_limit_per_min: 60         # 公式に明示なし。安全側に設定  [要検証]
@@ -131,27 +131,27 @@ data/raw/{source}/{endpoint}/dt={YYYY-MM-DD}/{HHmmss}_{seq:04d}.json.gz
 
 `[要検証]` 価格・履歴期間・レート制限は公式の料金ページで確認する。
 
-**設計方針**: Free プランで構築し、Light への移行を `.env` の `JQUANTS_PLAN=light` への変更だけで完了させる。コードは以下を `plan` から導出する。
+**運用方針（現行）**: `.env` は `JQUANTS_PLAN=light`。リサーチ用価格に構造的遅延はない。Free への降格・再昇格は同キーの変更だけで完了させる。コードは以下を `plan` から導出する。
 
 - `delay_weeks`: Free=12, Light=0
 - `rate_limit_per_min`: Free=5, Light=60
 - `history_years`: Free=2, Light=5
-- **yfinance によるギャップ補完の有効/無効**: Free=有効, Light=無効
+- **yfinance によるギャップ補完の有効/無効**: Free=有効, Light=無効（参考現在値の `prices_live` 取得自体はプランによらず継続）
 
-### 2.2 12週遅延への対処（本ツールで最も事故が起きやすい箇所）
+### 2.2 Free プラン時の12週遅延への対処（混在事故を防ぐ）
 
-Free プランでは「今日」から12週間前までのデータが存在しない。この穴を埋めないと現在値が表示できない。一方で、遅延データと当日データを同じテーブルに混ぜると、**遅延データを最新値として表示する事故**が起きる。
+Free に戻した場合、「今日」から12週間前までのリサーチ用データが存在しない。この穴を埋めないと現在値が表示できない。一方で、遅延データと当日データを同じテーブルに混ぜると、**遅延データを最新値として表示する事故**が起きる。Light 運用でも、確定日足と参考現在値の用途混同を防ぐため、経路分離は維持する。
 
 対策として価格データを2つの経路に完全分離する。
 
 | 経路 | テーブル | ソース | 用途 | UI表示 |
 | --- | --- | --- | --- | --- |
-| リサーチ経路 | `prices_daily` | J-Quants（権利調整済み・確定値） | バックテスト、モデル学習、ファクター計算 | 「リサーチ基準日: 2026-05-31」と明示 |
+| リサーチ経路 | `prices_daily` | J-Quants（権利調整済み・確定値） | バックテスト、モデル学習、ファクター計算 | Light: 直近営業日を表示。Free: 「リサーチ基準日」と遅延注記を明示 |
 | 執行経路 | `prices_live` | yfinance（遅延15-20分程度） | 現在値表示、評価損益、エントリー価格の目安 | 「参考値（遅延あり）」と明示 |
 
 **モデル学習に `prices_live` を使うことをコードレベルで禁止する。** `packages/core/models/` 配下から `prices_live` を参照した場合に失敗するテストを置く（[12-testing-validation.md](12-testing-validation.md)）。
 
-さらに `data_freshness` ビューを用意し、UIヘッダに常時「JP価格: J-Quants 2026-05-31 / yfinance 2026-08-23」を表示する。
+さらに `data_freshness` ビューを用意し、UIヘッダに常時「JP価格: J-Quants {latest} / yfinance {latest}」を表示する。Free 時は J-Quants 側に構造的遅延ラベルを付ける。
 
 ### 2.3 認証
 
@@ -480,7 +480,7 @@ GET https://api.stlouisfed.org/fred/series/observations
 | データ | 第1優先 | 第2優先 | 第3優先 |
 | --- | --- | --- | --- |
 | 日本株 日足（リサーチ用） | J-Quants | （なし。欠損は欠損として扱う） | - |
-| 日本株 日足（現在値） | yfinance | J-Quants（12週前まで） | - |
+| 日本株 日足（現在値・参考） | yfinance | （なし。リサーチ用とは混ぜない） | - |
 | 米国株 日足 | yfinance | Finnhub | Alpha Vantage |
 | 日本株 財務 | J-Quants fins | EDINET XBRL | - |
 | 米国株 財務 | EDGAR companyfacts | Finnhub | - |
@@ -497,9 +497,9 @@ GET https://api.stlouisfed.org/fred/series/observations
 | --- | --- | --- | --- |
 | 1 | 銘柄マスタ（JP: J-Quants、US: company_tickers.json） | 5分 | なし（1リクエスト） |
 | 2 | FRED 全系列 10年分 | 5分 | series_id 単位 |
-| 3 | J-Quants 日足 2年分（営業日ループ） | 約100分（5 req/min） | 営業日単位 |
+| 3 | J-Quants 日足（Light: 約5年 / Free: 約2年。営業日ループ） | Light: 約15分（60 req/min）。Free: 約100分（5 req/min） | 営業日単位 |
 | 4 | yfinance 米国株 5年分（50銘柄ずつ） | 約20分 | バッチ単位 |
-| 5 | yfinance 日本株 直近12週（`prices_live`） | 約10分 | バッチ単位 |
+| 5 | yfinance 日本株 参考現在値（`prices_live`。Free 時は直近12週のギャップ補完も兼ねる） | 約10分 | バッチ単位 |
 | 6 | EDGAR companyfacts（対象1,000銘柄） | 約10分（5 req/s） | CIK単位 |
 | 7 | EDINET 書類一覧 過去1年分（日次ループ） | 約10分 | 日付単位 |
 | 8 | 特徴量の一括計算 | 約15分 | 日付単位 |

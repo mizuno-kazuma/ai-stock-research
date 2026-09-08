@@ -201,13 +201,13 @@ Validation for cap inputs:
 | Element | label_en | label_ja | Example |
 | --- | --- | --- | --- |
 | Section title | Data | データ | データ |
-| J-Quants plan | J-Quants plan | J-Quantsのプラン | 無料プラン / Lightプラン |
+| J-Quants plan | J-Quants plan | J-Quantsのプラン | **Lightプラン**（現行） / 無料プラン |
 | Free plan detail | | | 無料プラン: 費用 ¥0 · 過去2年 · **12週間の遅延** · 5リクエスト/分 |
-| Light plan detail | | | Lightプラン: 月額 ¥1,650 · 過去5年 · 遅延なし · 60リクエスト/分 |
-| Plan change note | | | プランを変更する場合は、J-Quantsのサイトで契約を変更したうえでこの設定を切り替えてください。切り替え後、初回のデータ収集で遅延分のデータが埋まります。 |
+| Light plan detail | | | Lightプラン（現行）: 月額 ¥1,650 · 過去5年 · 遅延なし · 60リクエスト/分 |
+| Plan change note | | | プランを変更する場合は、J-Quantsのサイトで契約を変更したうえでこの設定を切り替えてください。Free→Light 後の初回収集で履歴が伸び、遅延注記が消えます。 |
 | What changes | | | 変更されるもの: 価格データの遅延、取得可能な履歴の長さ、リクエスト間隔。変更されないもの: スキーマ、分析ロジック、参考現在値の取得元（yfinance）。 |
 | Plan verify note | | | プランの内容と価格は変更される可能性があります。契約前に公式サイトで確認してください。 |
-| Delay explanation | | | 無料プランでは、リサーチ用の価格データが約12週間遅れます。直近の値動きは参考現在値（yfinance・15分遅延）で補っていますが、この系列はモデルの学習・検証には使用していません。 |
+| Delay explanation | | | 現行の Light ではリサーチ用価格に構造的遅延はありません。無料プランに戻した場合のみ約12週間遅れます。参考現在値（yfinance・15分遅延）はプランによらず表示専用で、モデルの学習・検証には使用していません。 |
 | TDnet | Timely disclosure (TDnet) | 適時開示 (TDnet) | 無効 |
 | TDnet note | | | TDnetには公開APIがないため、取得は低頻度に制限しています。利用規約を確認したうえで有効にしてください。無効の場合、適時開示は反映されず、EDINETの資料のみを使用します。 |
 | Universe | Universe | 対象銘柄 | 全上場 / 時価総額300億円以上 / TOPIX500 / ウォッチリストのみ |
@@ -219,7 +219,7 @@ Data source status table:
 
 | Source | label_ja | Status example | Latest data |
 | --- | --- | --- | --- |
-| `jquants` | J-Quants | 正常 | 2026-05-30（無料プランの遅延による） |
+| `jquants` | J-Quants | 正常 | 2026-09-03（Light・遅延なし） |
 | `yfinance_jp` | yfinance (日本株) | 正常 | 2026-08-22 15:10 |
 | `yfinance_us` | yfinance (米国株) | 正常 | 2026-08-22 05:10 |
 | `edinet` | EDINET | 正常 | 2026-08-22 15:04 |
@@ -244,6 +244,8 @@ independent of the OS):
 | critic | レビュー | 平日 06:42 (JST) |
 | evaluator | 実績評価 | 平日 06:47 (JST) |
 | weekly_deep | 週次の深掘り | 土曜 09:00 (JST) |
+| model_retrain | ranker 再学習 | 第1土曜 10:00 (JST) |
+| garch_refit | GARCH 再推定 | 月曜 07:00 (JST) |
 
 Caption: `スケジュールはアプリ内のスケジューラで管理しています。OSのタスクスケジューラやcronは
 使用していません。PCがスリープしていた場合、復帰後にまとめて1回だけ実行されます。`
@@ -329,7 +331,7 @@ Diagnostics output example:
   改行コード設定               正常   .gitattributes に eol=lf
 
 外部API
-  J-Quants                     正常   認証成功（無料プラン）
+  J-Quants                     正常   認証成功（Lightプラン）
   EDINET                       正常   認証成功
   SEC EDGAR                    正常   User-Agent 設定済み
   FRED                         正常   認証成功

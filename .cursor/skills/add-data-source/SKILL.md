@@ -53,12 +53,13 @@ sources:
       backoff_base_sec: 2.0
       retry_on: [429, 500, 502, 503, 504]
     timeout_sec: 30
-    plan: "free"
-    delay_note_ja: "無料プランでは12週間遅延"
-    last_verified: "2026-08-22"
+    plan: "light"
+    delay_note_ja: null  # free のときのみ「無料プランでは12週間遅延」
+    last_verified: "2026-09-08"
     enabled: true
 ```
 
+J-Quants 例では現行運用は `light`。プラン依存の遅延・レートは `jquants_plan_params()` で導出する。
 `enabled: false` で起動できることを必ず確認する。新ソースの障害が全体を止めてはいけない。
 
 ### 3. Connector を実装

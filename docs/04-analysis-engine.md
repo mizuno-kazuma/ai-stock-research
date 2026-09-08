@@ -381,7 +381,7 @@ class PurgedWalkForwardCV(BaseCrossValidator):
 | `label_horizon_days` | H5なら5、H20なら20 | 学習データの末尾サンプルのラベルは未来を見ている。ラベル期間分を除外しないと直接リークする |
 | `embargo_days` | 5 | purge だけでは、系列相関のある特徴量（20日移動平均など）を通じた間接的なリークが残る。安全側に営業日1週間分空ける |
 | `min_train_days` | 504（約2年） | これ未満では季節性・レジームの多様性が不足する |
-| `n_splits` | 6 | J-Quants無料プランの2年履歴では 6分割が上限に近い。Light（5年）なら12分割にする |
+| `n_splits` | 12 | 現行 Light（約5年履歴）向け。Free（約2年）に戻す場合は 6 分割が上限に近い |
 | `test_days` | 60（約3ヶ月） | 短すぎると評価が不安定、長すぎると分割数が減る |
 
 **通常の `KFold` / `TimeSeriesSplit` を使わせない仕組み**: `packages/core/models/` 内で `sklearn.model_selection.KFold` を import した場合に失敗するテストを CI に置く（[12-testing-validation.md](12-testing-validation.md) の T-LEAK-01）。

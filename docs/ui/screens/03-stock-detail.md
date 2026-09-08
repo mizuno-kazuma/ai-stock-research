@@ -152,7 +152,7 @@ StockDetailPage
 
 | Option | label_en | label_ja | Caption |
 | --- | --- | --- | --- |
-| `research` | Research series | リサーチ用データ | J-Quants（無料プラン・12週遅延）。分析とバックテストに使用している系列です。 |
+| `research` | Research series | リサーチ用データ | J-Quants（現行 Light・遅延なし）。分析とバックテストに使用している系列です。Free 時のみ約12週遅延の注記を付ける。 |
 | `live` | Reference current | 参考現在値 | yfinance の15分遅延値。表示専用で、分析には使用していません。 |
 
 Switching series changes the chart caption and, when `live` is selected, adds a persistent inline
@@ -325,7 +325,7 @@ Scores for the requested `as_of` are not generated:
 
 | Failing part | Behavior |
 | --- | --- |
-| J-Quants gap (structural) | Research price series ends 12 weeks back. The chart shows a shaded region labeled `無料プランの遅延期間（12週）` and the live series continues past it, visually distinct |
+| J-Quants gap (free plan structural) | Only when plan is free: research series ends ~12 weeks back. Chart shows shaded `無料プランの遅延期間（12週）` and live continues past it. On Light, do not show this shade; a lag is collector stale instead |
 | Financials missing | The financials section renders the periods it has and a row-level note `2026年3月期のXBRL取得に失敗しました` with a retry link |
 | Factor scores unavailable | Factor table renders `—` per missing factor, plus `一部のファクターは入力データが不足しているため算出されていません` |
 | Filing PDF not downloaded | Row shows `提供元サイトで開く` instead of the local link, plus `ローカル保存に失敗しました` |
