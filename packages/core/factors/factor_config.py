@@ -101,6 +101,8 @@ DEFAULT_UNIVERSE_FILTER: dict[str, dict[str, Any]] = {
         "exclude_recently_listed_days": 250,
         "max_price": None,
         "require_features_complete": True,
+        # ETF・REIT・優先出資証券を除外し、個別株（内国株券）のみ残す（docs/05 §7.1a）。
+        "common_stock_only": True,
     },
     "US": {
         "min_adv_20d": 5_000_000,
@@ -109,6 +111,7 @@ DEFAULT_UNIVERSE_FILTER: dict[str, dict[str, Any]] = {
         "exclude_otc": True,
         "exclude_recently_listed_days": 250,
         "require_features_complete": True,
+        "common_stock_only": True,
     },
 }
 

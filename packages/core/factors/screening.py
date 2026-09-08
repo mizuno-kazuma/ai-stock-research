@@ -46,6 +46,10 @@ HIGH_VOL_THRESHOLD = 0.60
 STALE_BUSINESS_DAYS = 3
 EARNINGS_SOON_DAYS = 5
 
+#: J-Quants 商品区分（`ProductCategory`）。個別株（内国株券）以外は ETF・REIT・
+#: 優先出資証券・外国株の預託証券など（docs/03-data-model.md §2.1a）。
+COMMON_STOCK_PRODUCT_CATEGORY = "011"
+
 
 @dataclass(frozen=True)
 class UniverseFilter:
@@ -59,6 +63,9 @@ class UniverseFilter:
     max_price: float | None = None
     require_features_complete: bool = True
     max_missing: int = MAX_MISSING_FEATURES
+    #: ETF・REIT・優先出資証券などを除外し、個別株のみ残す（docs/05 §7.1a）。
+    #: `product_category` 列が無い（または `NULL` の）行は除外しない。
+    common_stock_only: bool = True
 
     @classmethod
     def from_config(cls, market: str, config: FactorConfig | None = None) -> UniverseFilter:
@@ -72,6 +79,7 @@ class UniverseFilter:
             exclude_recently_listed_days=int(raw.get("exclude_recently_listed_days", 250)),
             max_price=raw.get("max_price"),
             require_features_complete=bool(raw.get("require_features_complete", True)),
+            common_stock_only=bool(raw.get("common_stock_only", True)),
         )
 
     def apply(
@@ -95,6 +103,11 @@ class UniverseFilter:
             mask &= ~features["sector_code"].astype(str).isin(self.exclude_sectors)
         if self.max_price is not None and "close" in features.columns:
             mask &= pd.to_numeric(features["close"], errors="coerce") <= self.max_price
+        if self.common_stock_only and "product_category" in features.columns:
+            category = features["product_category"].astype("string")
+            # NULL（銘柄マスタ未収集・対象外市場）は除外しない。データ欠損で
+            # ユニバースが全滅しないようにする（docs/05-scoring-screening.md §7.1a）。
+            mask &= category.isna() | (category == COMMON_STOCK_PRODUCT_CATEGORY)
         if self.require_features_complete and "n_missing" in features.columns:
             mask &= pd.to_numeric(features["n_missing"], errors="coerce") <= self.max_missing
         if (

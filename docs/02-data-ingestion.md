@@ -202,8 +202,11 @@ class RefreshTokenAuth: # v1 互換のフォールバック
 | `AdjustmentClose` 等 | `adj_close` 等 | 権利調整済み。**モデル学習にはこちらを使う** |
 | `Volume` | `volume` | `BIGINT` |
 | `TurnoverValue` | `turnover_value` | `DOUBLE`（売買代金） |
+| `ProductCategory`（`ProdCat`） | `securities.product_category` | 文字列のまま保持。`011`=内国株券（個別株）、`013`=REIT、`014`=ETF 等（docs/03-data-model.md §2.1a）。ETF・REITを推奨・スクリーナーの対象から外す `UniverseFilter.common_stock_only` の判定に使う |
 
 **株式分割の扱い**: 調整済み系列を使うことを原則とするが、調整係数が後から変わる（遡及修正）ことがある。`prices_daily` には `adjustment_factor` と `ingested_at` を保持し、遡及修正が入った場合に検出できるようにする。検出時は該当銘柄の特徴量を再計算する。
+
+**銘柄マスタには ETF・REIT・優先出資証券・外国株の預託証券も含まれる**。J-Quants の `/equities/master` は東証上場の全商品を返す想定で、個別株に絞る場合は取得後に `product_category` で判定する（取得自体は除外しない。値種別ごとの提供停止や区分変更を追跡できるようにするため）。
 
 ## 3. yfinance（米国株の価格、および日本株の直近ギャップ補完）
 

@@ -247,12 +247,21 @@ universe_filter:
     exclude_recently_listed_days: 250  # 上場1年未満は履歴不足
     max_price_jpy: null
     require_features_complete: true     # n_missing <= 15
+    common_stock_only: true             # ETF・REIT・優先出資証券を除外（§7.1a）
   US:
     min_adv_20d_usd: 5_000_000
     min_market_cap_usd: 1_000_000_000
     exclude_otc: true
     exclude_recently_listed_days: 250
 ```
+
+#### 7.1a 個別株のみに絞る（`common_stock_only`）
+
+既定で `true`。`securities.product_category` が `'011'`（内国株券）以外の行、つまり ETF・REIT・優先出資証券・外国株の預託証券（docs/03-data-model.md §2.1a）を推奨・スクリーナー・バックテストの対象から除外する。
+
+- `product_category` が `NULL` の行（銘柄マスタ収集前・米国など対象外市場）は**除外しない**。データが揃うまでの間、この設定を有効にしても対象が全滅しないようにするため
+- `false` にすると ETF・REIT も候補に含める。インデックス連動のヘッジ候補として意図的に含めたい場合はこちらを使う
+- Strategist は `scores_daily` に `securities` の現行 `product_category` を突き合わせてから本フィルタを適用する（`services/agent/jobs/strategist.py`）
 
 ### 7.2 リスク制約
 

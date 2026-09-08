@@ -431,6 +431,22 @@ def _strategist_body(
             work["quant_score"], work["qual_score"], work["qual_confidence"]
         )
 
+    try:
+        securities = warehouse.read_securities(market=market, as_of=as_of)
+    except Exception:
+        securities = None
+    if (
+        securities is not None
+        and not securities.empty
+        and "product_category" in securities.columns
+    ):
+        cat_map = (
+            securities.assign(ticker=securities["ticker"].astype(str))
+            .drop_duplicates(subset=["ticker"], keep="last")
+            .set_index("ticker")["product_category"]
+        )
+        work["product_category"] = work["ticker"].astype(str).map(cat_map)
+
     filt = universe_filter or UniverseFilter(market=market)
     mask = filt.apply(work, as_of=as_of)
     work = work.loc[mask] if mask.any() else work
