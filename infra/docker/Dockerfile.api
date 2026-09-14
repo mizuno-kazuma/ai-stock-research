@@ -23,7 +23,7 @@ COPY scripts ./scripts
 COPY infra/docker/entrypoint-api.sh /entrypoint.sh
 
 RUN chmod +x /entrypoint.sh \
-    && uv sync --frozen --no-dev --extra postgres --extra vectors
+    && uv sync --frozen --no-dev --extra postgres --extra vectors \
     && useradd --create-home --uid 10001 appuser \
     && mkdir -p /data \
     && chown -R appuser:appuser /app /data
