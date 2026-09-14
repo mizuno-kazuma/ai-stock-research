@@ -137,7 +137,11 @@ async def get_current_user(
     creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
     settings: Settings = Depends(get_settings),
 ) -> User:
-    """Phase A は常に固定ユーザー。Phase B でトークン検証に差し替える。"""
+    """Phase A は常に固定ユーザー。Phase B は Bearer トークン。
+
+    EventSource は Authorization ヘッダを付けられないため、
+    `?access_token=` クエリも受け付ける（SSE 専用の回避策）。
+    """
     mode: AuthMode = settings.auth_mode
     if mode == "none":
         return User(id="local", name="local")
@@ -150,7 +154,10 @@ async def get_current_user(
                 status=500,
                 detail="AUTH_MODE=token ですが API_TOKEN が空です。",
             )
-        if creds is None or creds.credentials != expected:
+        provided = creds.credentials if creds is not None else None
+        if not provided:
+            provided = request.query_params.get("access_token")
+        if provided != expected:
             raise ApiError(
                 problem_type=ProblemType.VALIDATION_ERROR,
                 title="認証に失敗しました",
@@ -159,8 +166,13 @@ async def get_current_user(
                 instance=str(request.url.path),
             )
         return User(id="token", name="api")
-    # passkey は Phase B。未実装のうちは固定ユーザー。
-    return User(id="local", name="local")
+    # passkey は将来実装。未実装のうちは拒否する（クラウドで誤って開放しない）。
+    raise ApiError(
+        problem_type=ProblemType.INTERNAL_ERROR,
+        title="認証設定が不正です",
+        status=500,
+        detail="AUTH_MODE=passkey は未実装です。AUTH_MODE=token を使ってください。",
+    )
 
 
 def require_user(_user: User = Depends(get_current_user)) -> User:

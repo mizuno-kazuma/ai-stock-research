@@ -104,8 +104,7 @@ def _start_agent_scheduler(settings: Settings, duck: DuckDBRepo, sqlite: SQLiteR
     from services.agent.main import create_scheduler, set_shared_storage
 
     set_shared_storage(duck, sqlite)
-    url = settings.database_url or f"sqlite:///{settings.state_db_path}"
-    url = url.replace("sqlite+aiosqlite://", "sqlite://")
+    url = settings.scheduler_database_url
     scheduler = create_scheduler(db_url=url, timezone=settings.tz, blocking=False)
     scheduler.start()
     logger.info("embedded agent scheduler started (tz=%s)", settings.tz)
@@ -128,6 +127,9 @@ def create_app(
         lifespan=lifespan,
     )
     cfg = settings or get_settings()
+    if settings is not None:
+        # テスト / 明示注入時に Depends(get_settings) も同じインスタンスを見る
+        app.dependency_overrides[get_settings] = lambda: cfg
     origins = list(cfg.cors_origin_list)
     if "http://localhost:3000" not in origins:
         origins.append("http://localhost:3000")

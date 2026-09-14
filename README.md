@@ -201,3 +201,11 @@ Free に戻す場合はデータソース費用を 0円にできるが、リサ�
 - パスは `pathlib` を使い、`:` `?` `*` を含む名前を作らない
 - リポジトリとデータは WSL2 のホーム配下に置く。`/mnt/c/` 配下は使わない
 - 絵文字は使わない
+
+## クラウド（Phase B・小規模）
+
+自宅 PC の常時起動がつらい場合は、Fly.io + Neon + Vercel への移行手順を用意してある。
+
+- 手順: [docs/10-mobile-pwa.md](docs/10-mobile-pwa.md) §6.6
+- ローカル検証: `docker compose -f docker-compose.cloud.yml up --build`
+

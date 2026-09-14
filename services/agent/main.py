@@ -683,8 +683,7 @@ def main() -> None:
         )
         return
     warehouse.close()
-    url = settings.database_url or f"sqlite:///{settings.state_db_path}"
-    url = url.replace("sqlite+aiosqlite://", "sqlite://")
+    url = settings.scheduler_database_url
     scheduler = create_scheduler(db_url=url, timezone=settings.tz)
     logger.info("agent scheduler starting (tz=%s)", settings.tz)
     scheduler.start()

@@ -240,18 +240,211 @@ class LanceDBVectorStore:
         return out
 
 
+
+
+class PgVectorStore:
+    """Postgres + pgvector 実装（Phase B）。
+
+    埋め込みの再生成は不要。LanceDB から同じベクトルをそのまま移せる。
+    `psycopg` と Postgres の `vector` 拡張が必要。
+    """
+
+    def __init__(self, database_url: str, *, dimensions: int | None = None) -> None:
+        try:
+            from sqlalchemy import create_engine, text
+        except ImportError as exc:  # pragma: no cover
+            raise RuntimeError("SQLAlchemy が必要です") from exc
+        self._dimensions = dimensions
+        self._engine = create_engine(database_url, future=True, pool_pre_ping=True)
+        self._ensure_schema()
+
+    def _ensure_schema(self) -> None:
+        from sqlalchemy import text
+
+        dim = self._dimensions or 1536
+        with self._engine.begin() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            conn.execute(
+                text(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {DOC_CHUNKS_TABLE} (
+                        chunk_id TEXT PRIMARY KEY,
+                        doc_id TEXT NOT NULL,
+                        text TEXT NOT NULL,
+                        embedding vector({dim}),
+                        market TEXT NOT NULL,
+                        ticker TEXT,
+                        doc_type TEXT,
+                        filed_at TIMESTAMPTZ,
+                        fiscal_period TEXT,
+                        page_from INTEGER,
+                        page_to INTEGER,
+                        section TEXT,
+                        token_count INTEGER,
+                        embedding_model TEXT NOT NULL DEFAULT 'unknown',
+                        embedding_version TEXT NOT NULL DEFAULT 'v1',
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    f"CREATE INDEX IF NOT EXISTS idx_{DOC_CHUNKS_TABLE}_doc "
+                    f"ON {DOC_CHUNKS_TABLE} (doc_id)"
+                )
+            )
+
+    def upsert(self, chunks: list[DocChunk]) -> int:
+        if not chunks:
+            return 0
+        from sqlalchemy import text
+
+        if self._dimensions is None and chunks[0].embedding:
+            self._dimensions = len(chunks[0].embedding)
+            self._ensure_schema()
+        sql = text(
+            f"""
+            INSERT INTO {DOC_CHUNKS_TABLE} (
+                chunk_id, doc_id, text, embedding, market, ticker, doc_type,
+                filed_at, fiscal_period, page_from, page_to, section,
+                token_count, embedding_model, embedding_version, created_at
+            ) VALUES (
+                :chunk_id, :doc_id, :text, CAST(:embedding AS vector), :market, :ticker, :doc_type,
+                :filed_at, :fiscal_period, :page_from, :page_to, :section,
+                :token_count, :embedding_model, :embedding_version, :created_at
+            )
+            ON CONFLICT (chunk_id) DO UPDATE SET
+                doc_id = EXCLUDED.doc_id,
+                text = EXCLUDED.text,
+                embedding = EXCLUDED.embedding,
+                market = EXCLUDED.market,
+                ticker = EXCLUDED.ticker,
+                doc_type = EXCLUDED.doc_type,
+                filed_at = EXCLUDED.filed_at,
+                fiscal_period = EXCLUDED.fiscal_period,
+                page_from = EXCLUDED.page_from,
+                page_to = EXCLUDED.page_to,
+                section = EXCLUDED.section,
+                token_count = EXCLUDED.token_count,
+                embedding_model = EXCLUDED.embedding_model,
+                embedding_version = EXCLUDED.embedding_version
+            """
+        )
+        rows = []
+        for c in chunks:
+            rows.append(
+                {
+                    "chunk_id": c.chunk_id,
+                    "doc_id": c.doc_id,
+                    "text": c.text,
+                    "embedding": "[" + ",".join(str(float(x)) for x in c.embedding) + "]",
+                    "market": c.market,
+                    "ticker": c.ticker,
+                    "doc_type": c.doc_type,
+                    "filed_at": c.filed_at,
+                    "fiscal_period": c.fiscal_period,
+                    "page_from": c.page_from,
+                    "page_to": c.page_to,
+                    "section": c.section,
+                    "token_count": c.token_count,
+                    "embedding_model": c.embedding_model,
+                    "embedding_version": c.embedding_version,
+                    "created_at": c.created_at,
+                }
+            )
+        with self._engine.begin() as conn:
+            conn.execute(sql, rows)
+        return len(chunks)
+
+    def search(
+        self, query_vec: list[float], *, k: int, filters: dict[str, Any] | None = None
+    ) -> list[SearchHit]:
+        from sqlalchemy import text
+
+        where = []
+        params: dict[str, Any] = {
+            "embedding": "[" + ",".join(str(float(x)) for x in query_vec) + "]",
+            "k": k,
+        }
+        if filters:
+            for key in ("market", "ticker", "doc_type", "doc_id"):
+                if key in filters and filters[key] is not None:
+                    where.append(f"{key} = :f_{key}")
+                    params[f"f_{key}"] = filters[key]
+        where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+        # cosine distance: smaller is closer. Convert to similarity.
+        sql = text(
+            f"""
+            SELECT chunk_id, doc_id, text, ticker, market, doc_type, filed_at,
+                   page_from, page_to, section,
+                   1 - (embedding <=> CAST(:embedding AS vector)) AS score
+            FROM {DOC_CHUNKS_TABLE}
+            {where_sql}
+            ORDER BY embedding <=> CAST(:embedding AS vector)
+            LIMIT :k
+            """
+        )
+        with self._engine.connect() as conn:
+            result = conn.execute(sql, params)
+            hits = []
+            for row in result.mappings():
+                hits.append(
+                    SearchHit(
+                        chunk_id=row["chunk_id"],
+                        doc_id=row["doc_id"],
+                        text=row["text"],
+                        score=float(row["score"] or 0.0),
+                        ticker=row["ticker"],
+                        market=row["market"],
+                        doc_type=row["doc_type"],
+                        filed_at=row["filed_at"],
+                        page_from=row["page_from"],
+                        page_to=row["page_to"],
+                        section=row["section"],
+                    )
+                )
+            return hits
+
+    def delete_by_doc(self, doc_id: str) -> int:
+        from sqlalchemy import text
+
+        with self._engine.begin() as conn:
+            result = conn.execute(
+                text(f"DELETE FROM {DOC_CHUNKS_TABLE} WHERE doc_id = :doc_id"),
+                {"doc_id": doc_id},
+            )
+            return int(result.rowcount or 0)
+
+    def count(self) -> int:
+        from sqlalchemy import text
+
+        with self._engine.connect() as conn:
+            return int(conn.execute(text(f"SELECT COUNT(*) FROM {DOC_CHUNKS_TABLE}")).scalar_one())
+
+    def close(self) -> None:
+        self._engine.dispose()
+
+
 def get_vector_store(
     settings: Settings | None = None, *, allow_fallback: bool = True
 ) -> VectorStore:
     """設定に従ってベクトルストアを返す。
 
-    LanceDB が使えない環境では `InMemoryVectorStore` に落とす
-    （検索機能は劣化するが API は起動できる）。
+    Phase A: LanceDB（不可時は InMemory）。
+    Phase B: `VECTOR_STORE_BACKEND=pgvector` で Postgres に切り替え。
     """
     s = settings or get_settings()
-    backend = str(getattr(s, "vector_store_backend", "lancedb") or "lancedb")
-    if backend == "memory":
+    backend = str(getattr(s, "vector_store_backend", None) or "lancedb")
+    if backend in {"memory", "inmemory"}:
         return InMemoryVectorStore()
+    if backend == "pgvector":
+        url = getattr(s, "sync_database_url", None) or getattr(s, "sqlite_url", None)
+        if not url or not str(url).startswith("postgresql"):
+            raise RuntimeError(
+                "vector_store_backend=pgvector には Postgres の DATABASE_URL が必要です。"
+            )
+        return PgVectorStore(str(url))
     path = getattr(s, "lancedb_path", None) or getattr(s, "vector_dir", None)
     if path is None:
         path = Path(getattr(s, "data_dir", Path("data"))) / "vectors"
@@ -265,6 +458,7 @@ def get_vector_store(
             "全文検索の再現性は保証されません。"
         )
         return InMemoryVectorStore()
+
 
 
 def _matches(chunk: DocChunk, filters: dict[str, Any] | None) -> bool:
@@ -396,6 +590,7 @@ __all__ = [
     "DocChunk",
     "InMemoryVectorStore",
     "LanceDBVectorStore",
+    "PgVectorStore",
     "SearchHit",
     "VectorStore",
     "chunk_id_for",
