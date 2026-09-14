@@ -71,6 +71,19 @@ class Settings(BaseSettings):
     # DuckDB の実行時上限（docs/15-windows-runtime.md §9.3）。
     duckdb_memory_limit: str | None = "6GB"
     duckdb_threads: int | None = 4
+    # Parquet 圧縮（packages.core.storage.parquet_lake が参照する）
+    parquet_compression: Literal["zstd", "snappy", "gzip", "none"] = "zstd"
+    # Phase B: LanceDB | pgvector | memory
+    vector_store_backend: Literal["lancedb", "pgvector", "memory"] = "lancedb"
+    # Phase B: Cloudflare R2 / S3 互換（未設定ならローカル DATA_DIR）
+    warehouse_uri: str | None = None  # 例: s3://ai-stock/warehouse
+    blob_uri: str | None = None  # 例: s3://ai-stock/blobs
+    s3_endpoint_url: str | None = None  # 例: https://<accountid>.r2.cloudflarestorage.com
+    s3_access_key_id: SecretStr = SecretStr("")
+    s3_secret_access_key: SecretStr = SecretStr("")
+    s3_region: str = "auto"
+    # Fly / コンテナでは DATA_DIR=/data を推奨
+    deployment_profile: Literal["local", "cloud"] = "local"
 
     # ===== アプリ =====
     api_host: str = "0.0.0.0"  # noqa: S104 - WSL2 内で全インターフェースにバインドする
@@ -138,6 +151,13 @@ class Settings(BaseSettings):
             self.backup_dir = self.data_dir.parent / "backups"
         if self.database_url is None:
             self.database_url = f"sqlite+aiosqlite:///{self.state_db_path}"
+        if self.deployment_profile == "cloud" and self.auth_mode == "none":
+            raise ValueError(
+                "deployment_profile=cloud では AUTH_MODE=none は使えません。"
+                "AUTH_MODE=token と API_TOKEN を設定してください。"
+            )
+        if self.auth_mode == "token" and not self.api_token.get_secret_value():
+            raise ValueError("AUTH_MODE=token ですが API_TOKEN が空です。")
         return self
 
     # ------------------------------------------------------------------
@@ -159,9 +179,47 @@ class Settings(BaseSettings):
         return self.state_db_path
 
     @property
+    def sync_database_url(self) -> str:
+        """SQLAlchemy 同期エンジン用 URL。
+
+        Phase A: sqlite+pysqlite。
+        Phase B: DATABASE_URL が Postgres なら postgresql+psycopg に正規化する。
+        """
+        url = self.database_url or f"sqlite+aiosqlite:///{self.state_db_path.as_posix()}"
+        if url.startswith("sqlite+aiosqlite://"):
+            return "sqlite+pysqlite://" + url.removeprefix("sqlite+aiosqlite://")
+        if url.startswith("sqlite://"):
+            return "sqlite+pysqlite://" + url.removeprefix("sqlite://")
+        if url.startswith("postgres://"):
+            return "postgresql+psycopg://" + url.removeprefix("postgres://")
+        if url.startswith("postgresql+asyncpg://"):
+            return "postgresql+psycopg://" + url.removeprefix("postgresql+asyncpg://")
+        if url.startswith("postgresql://"):
+            return "postgresql+psycopg://" + url.removeprefix("postgresql://")
+        return url
+
+    @property
     def sqlite_url(self) -> str:
-        """同期エンジン用（pysqlite）。`database_url` は aiosqlite のまま残す。"""
-        return f"sqlite+pysqlite:///{self.state_db_path.as_posix()}"
+        """後方互換エイリアス。Postgres 利用時も sync_database_url を返す。"""
+        return self.sync_database_url
+
+    @property
+    def scheduler_database_url(self) -> str:
+        """APScheduler SQLAlchemyJobStore 用（同期ドライバ）。"""
+        url = self.sync_database_url
+        if url.startswith("sqlite+pysqlite://"):
+            return "sqlite://" + url.removeprefix("sqlite+pysqlite://")
+        if url.startswith("postgresql+psycopg://"):
+            return "postgresql+psycopg://" + url.removeprefix("postgresql+psycopg://")
+        return url
+
+    @property
+    def uses_postgres(self) -> bool:
+        return self.sync_database_url.startswith("postgresql")
+
+    @property
+    def uses_object_storage(self) -> bool:
+        return bool(self.s3_endpoint_url and self.warehouse_uri)
 
     @property
     def raw_dir(self) -> Path:

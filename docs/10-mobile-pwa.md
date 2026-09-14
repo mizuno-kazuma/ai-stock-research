@@ -314,6 +314,95 @@ class WebhookNotifier:
 
 `[要検証]` 各サービスの料金は変動する。実装時に確認する。
 
+
+
+
+### 6.6 実装済みのデプロイ手順（小規模）
+
+小規模運用の推奨形は **API 1 台（スケジューラ内蔵）+ Neon Postgres + Fly Volume + Vercel Web**。
+DuckDB は単一ライタのため、API と agent を別マシンで同時起動しない。agent 用 Dockerfile は
+バッチ専用・API 停止時の代替として残してある。
+
+#### 前提
+
+- Fly.io アカウント（東京 `nrt`）
+- Neon（または Supabase）の Postgres。`CREATE EXTENSION vector;` を実行
+- Vercel アカウント（Hobby で可）
+- （任意）Cloudflare R2。初期は Fly Volume 40GB で足りる
+
+#### 1. シークレットと DB
+
+```bash
+export DATABASE_URL='postgresql+psycopg://user:pass@host/db?sslmode=require'
+uv sync --extra postgres --extra vectors
+uv run python scripts/cloud_init_db.py
+
+# 既存 SQLite がある場合のみ
+SOURCE_SQLITE_URL='sqlite+pysqlite:////path/to/state.sqlite' \
+  uv run python scripts/migrate_sqlite_to_postgres.py
+```
+
+#### 2. API を Fly.io へ
+
+```bash
+fly apps create ai-stock-api
+fly volumes create ai_stock_data --region nrt --size 40 -a ai-stock-api
+fly secrets set -a ai-stock-api \
+  DEPLOYMENT_PROFILE=cloud \
+  AUTH_MODE=token \
+  API_TOKEN='長いランダム文字列' \
+  DATABASE_URL="$DATABASE_URL" \
+  VECTOR_STORE_BACKEND=pgvector \
+  CORS_ORIGINS='https://your-app.vercel.app' \
+  JQUANTS_API_KEY=... ANTHROPIC_API_KEY=... GEMINI_API_KEY=...
+fly deploy -a ai-stock-api -c infra/fly/api.fly.toml
+curl -fsS https://ai-stock-api.fly.dev/health
+```
+
+#### 3. Web を Vercel へ
+
+Vercel の Root Directory を `apps/web` にし、環境変数を設定する（`apps/web/vercel.json` 参照）。
+
+| 変数 | 例 |
+| --- | --- |
+| `NEXT_PUBLIC_API_BASE_URL` | `https://ai-stock-api.fly.dev/api/v1` |
+| `NEXT_PUBLIC_API_TOKEN` | API と同じ `API_TOKEN` |
+
+#### 4. ローカルでクラウド相当を試す
+
+```bash
+docker compose -f docker-compose.cloud.yml up --build
+# API http://localhost:8000/health
+# Web http://localhost:3000
+```
+
+#### 5. R2 へデータ移行（任意・データ肥大時）
+
+```bash
+export S3_ENDPOINT_URL=https://<accountid>.r2.cloudflarestorage.com
+export S3_ACCESS_KEY_ID=...
+export S3_SECRET_ACCESS_KEY=...
+export WAREHOUSE_URI=s3://your-bucket/warehouse
+export BLOB_URI=s3://your-bucket/blobs
+uv sync --extra cloud
+uv run python scripts/sync_data_to_r2.py --dry-run
+uv run python scripts/sync_data_to_r2.py
+```
+
+#### 構成ファイル
+
+| ファイル | 役割 |
+| --- | --- |
+| `infra/docker/Dockerfile.api` | API + 内蔵スケジューラ |
+| `infra/docker/Dockerfile.agent` | 単独 agent（API と同時起動しない） |
+| `infra/docker/Dockerfile.web` | Next.js standalone |
+| `infra/fly/api.fly.toml` | Fly 常時 1 マシン + Volume |
+| `docker-compose.cloud.yml` | ローカル検証 |
+| `scripts/cloud_init_db.py` | Postgres スキーマ初期化 |
+| `scripts/migrate_sqlite_to_postgres.py` | 状態 DB の移行 |
+| `scripts/sync_data_to_r2.py` | Parquet/blob の R2 同期 |
+
+
 ## 7. 参照
 
 - Windows/WSL2 のネットワーク設定: [15-windows-runtime.md](15-windows-runtime.md) §2, §3

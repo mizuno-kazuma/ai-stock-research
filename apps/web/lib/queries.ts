@@ -20,6 +20,7 @@ import {
 
 import {
   API_BASE_URL,
+  API_TOKEN,
   ApiError,
   USE_MOCK,
   apiDelete,
@@ -575,7 +576,8 @@ export function useAgentJobEvents() {
   const qc = useQueryClient();
   useEffect(() => {
     if (USE_MOCK || typeof EventSource === "undefined") return;
-    const source = new EventSource(`${API_BASE_URL}/agent/events`);
+    const qs = API_TOKEN ? `?access_token=${encodeURIComponent(API_TOKEN)}` : "";
+    const source = new EventSource(`${API_BASE_URL}/agent/events${qs}`);
     const refresh = () => {
       void qc.invalidateQueries({ queryKey: queryKeys.agentJobs() });
     };

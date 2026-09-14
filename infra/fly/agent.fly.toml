@@ -1,0 +1,22 @@
+# 通常は不要。API にスケジューラが内蔵されている。
+# DuckDB 単一ライタ制約のため、API と同時に起動しないこと。
+app = "ai-stock-agent"
+primary_region = "nrt"
+
+[build]
+  dockerfile = "infra/docker/Dockerfile.agent"
+
+[env]
+  DEPLOYMENT_PROFILE = "cloud"
+  AUTH_MODE = "token"
+  DATA_DIR = "/data"
+  TZ = "Asia/Tokyo"
+  PYTHONUTF8 = "1"
+
+[[mounts]]
+  source = "ai_stock_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1024mb"

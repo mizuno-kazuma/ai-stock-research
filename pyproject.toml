@@ -52,6 +52,16 @@ dependencies = [
 # 未インストールでも packages.core.storage.vector_store は import できる
 # （実際に LanceDBVectorStore を生成した時点で明示的なエラーになる）。
 vectors = ["lancedb>=0.15"]
+# Phase B: Neon/Supabase Postgres + pgvector
+postgres = [
+    "psycopg[binary]>=3.2",
+    "pgvector>=0.3",
+]
+# Phase B コンテナ向け（API イメージでまとめて入れる）
+cloud = [
+    "ai-stock-research[vectors,postgres]",
+    "boto3>=1.35",
+]
 
 [dependency-groups]
 dev = [

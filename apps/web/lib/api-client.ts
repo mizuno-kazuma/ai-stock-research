@@ -24,6 +24,9 @@ export const API_BASE_URL = (
 /** モックモード。バックエンド未起動でも全画面を確認できるようにする */
 export const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "1";
 
+/** Phase B: AUTH_MODE=token のとき API に送る Bearer。未設定なら送らない。 */
+export const API_TOKEN = (process.env.NEXT_PUBLIC_API_TOKEN ?? "").trim();
+
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 export type ApiErrorKind =
@@ -229,6 +232,7 @@ async function request<T>(
       headers: {
         Accept: "application/json",
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });

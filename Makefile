@@ -29,3 +29,16 @@ gen-api:
 
 check-api:
 	uv run python scripts/gen_api_types.py --check
+
+.PHONY: cloud-init-db docker-api docker-web compose-cloud
+cloud-init-db:
+	uv run python scripts/cloud_init_db.py
+
+docker-api:
+	docker build -f infra/docker/Dockerfile.api -t ai-stock-api:local .
+
+docker-web:
+	docker build -f infra/docker/Dockerfile.web -t ai-stock-web:local .
+
+compose-cloud:
+	docker compose -f docker-compose.cloud.yml up --build

@@ -1,0 +1,27 @@
+# 任意: Web も Fly に載せる場合。通常は Vercel Hobby で十分。
+#   fly apps create ai-stock-web
+#   fly deploy -a ai-stock-web -c infra/fly/web.fly.toml \
+#     --build-arg NEXT_PUBLIC_API_BASE_URL=https://ai-stock-api.fly.dev/api/v1 \
+#     --build-arg NEXT_PUBLIC_API_TOKEN=...
+
+app = "ai-stock-web"
+primary_region = "nrt"
+
+[build]
+  dockerfile = "infra/docker/Dockerfile.web"
+
+[env]
+  PORT = "3000"
+  HOSTNAME = "0.0.0.0"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

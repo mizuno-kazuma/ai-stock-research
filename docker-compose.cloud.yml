@@ -1,0 +1,56 @@
+# ローカルで Phase B 相当の構成を試す（Postgres + API + Web）
+#   docker compose -f docker-compose.cloud.yml up --build
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: aistock
+      POSTGRES_PASSWORD: aistock
+      POSTGRES_DB: aistock
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aistock -d aistock"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      DEPLOYMENT_PROFILE: cloud
+      AUTH_MODE: token
+      API_TOKEN: local-dev-token-change-me
+      DATABASE_URL: postgresql+psycopg://aistock:aistock@db:5432/aistock
+      DATA_DIR: /data
+      VECTOR_STORE_BACKEND: pgvector
+      CORS_ORIGINS: http://localhost:3000
+      TZ: Asia/Tokyo
+      PYTHONUTF8: "1"
+    volumes:
+      - api_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
+        NEXT_PUBLIC_API_TOKEN: local-dev-token-change-me
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  api_data:

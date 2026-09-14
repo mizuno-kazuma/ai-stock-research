@@ -144,13 +144,18 @@ class DuckDBRepo:
     ) -> Self:
         """`.env` の設定から開く。"""
         s = settings or get_settings()
-        return cls(
+        repo = cls(
             s.duckdb_path,
             read_only=read_only,
             memory_limit=s.duckdb_memory_limit,
             threads=s.duckdb_threads,
             temp_directory=s.duckdb_temp_dir,
         )
+        # Phase B: R2/S3 が設定されていれば httpfs を有効化（未設定なら no-op）
+        from packages.core.storage.object_storage import configure_duckdb_s3
+
+        configure_duckdb_s3(repo.connection, s)
+        return repo
 
     @classmethod
     def in_memory(cls) -> Self:
